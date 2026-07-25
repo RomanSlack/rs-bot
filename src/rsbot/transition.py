@@ -100,8 +100,10 @@ class DeployMachine:
         step = rate * dt
         return value + np.clip(target - value, -step, step)
 
-    def __call__(self, obs, dt):
+    def __call__(self, obs, dt, v_des=0.0):
         c = self.cfg
+        if self.state != WHEEL:
+            v_des = 0.0
         self.t += dt
         self.t_state += dt
 
@@ -170,7 +172,7 @@ class DeployMachine:
         if self.state in (SHIFT, STAND):
             return np.array([hip, knee, ankle, 0.0, hip, knee, ankle, 0.0])
 
-        ctrl = self.bal(obs, dt, v_des=0.0)
+        ctrl = self.bal(obs, dt, v_des=v_des)
         ctrl[0] = ctrl[4] = hip
         ctrl[1] = ctrl[5] = knee
         ctrl[2] = ctrl[6] = ankle

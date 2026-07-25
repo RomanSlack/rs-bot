@@ -85,12 +85,11 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None):
     }
 
 
-def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=12.0, viewer=None,
-                   sole=None):
+def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None):
     """Balance, deploy the feet, then stand there. Returns metrics + state log."""
     from .transition import DeployMachine, STAND, NAMES
 
-    m, d = load(**(sole or {}))
+    m, d = load()
     mach = DeployMachine(gains, cfg)
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     wheel_l = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "wheel_l")

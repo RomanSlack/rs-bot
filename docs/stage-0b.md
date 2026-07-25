@@ -1,80 +1,98 @@
 # Stage 0b: the transition
 
-**Status: deploy does not work with a flat-plate sole. The destination works;
-the journey does not.**
+**Status: mechanism redesigned and mostly working. The robot now reaches foot
+mode with the wheels never leaving the ground, but still tips forward during
+the final body shift.**
 
-## What was built
+## Attempt 1: rocker sole on the wheel axle. Dead.
 
-`transition.py` is a state machine over the balancer:
+60 valid sole geometries x deploy rates, zero reached STAND. The cause is
+geometric, not tuning: `corner_radius = hypot(face_r, half_len)`, and
+`face_r >= 46 mm` because the plate must cradle the wheel without intersecting
+it. So the plate always jacked the robot 11-21 mm onto a single edge ~53 mm
+behind the axle, wheels airborne, balancer powerless. It pitched 57 deg in
+0.4 s against a 0.17 s pendulum time constant. No deploy rate fits; at
+60 rad/s the plate slams the floor and launches the robot 135 mm.
 
-    WHEEL -> SQUAT -> SETTLE -> DEPLOY -> LOAD -> STAND
+## The rule that was being broken
 
-Contact is inferred from ankle servo position error, not from simulator contact
-forces, because an STS3215 has no force sensing. When the sole starts carrying
-the robot the servo stops reaching its commanded angle, and that tracking error
-is the signal. It works: first contact is detected within 0.13 rad of where
-kinematics says the sole touches.
+Wheel-biped transformation work is explicit about this: the transition must
+pass through a **critical state where wheel and foot are both in ground
+contact**. BHR-W uses its knees as the second contact. The axle-pivoted sole
+had no such state - it went straight from wheel-only to foot-only via an
+airborne jack, and no controller can survive that.
 
-## The result
+## Attempt 2: outrigger struts
 
-Every configuration falls. 60 physically valid combinations of sole
-half-length (20-60 mm), face radius (47-65 mm) and deploy rate (1.5-6 rad/s):
-**0 reached STAND.**
+A strut on a pivot 55 mm down the shin, swinging down inboard of the wheel,
+with a pad on the end. Moving the pivot off the axle removes the cradling
+constraint, so the pivot-to-pad distance is free, and dig scales as
+roughly L^2/2R.
 
-Controller-side fixes were tried first and none helped: unloading the wheels at
-flat instead of at contact, deploy rates from 1.5 to 200 rad/s, and squatting to
-140 mm before committing. At 60 rad/s the plate slams the floor and launches the
-robot 135 mm into the air, so faster is actively worse.
+The sequence is built entirely around never being airborne:
 
-## Why, precisely
+    WHEEL -> EXTEND -> SETTLE -> SWING -> PLANT -> LOAD -> SHIFT -> STAND
 
-A flat plate on a revolute pivot at the wheel axle has corners farther from that
-pivot than its face: `corner_radius = hypot(face_radius, half_length)`. The face
-radius has a hard floor, because the plate has to cradle the wheel without
-intersecting it (`face_r >= wheel_r + 2 * thickness`, i.e. >= 46 mm). So the
-smallest achievable "jack" - how far the plate lifts the robot above its final
-resting height while sweeping through - is about 11 mm, and 21 mm for a sole
-long enough to be worth having.
+- **EXTEND** to 213 mm. This raises the strut pivot to 93 mm.
+- **SWING** the struts down. The pad's furthest corner is 43.4 mm from the
+  pivot, so it clears the floor by 7.2 mm at every angle and cannot dig. The
+  balancer is fully in charge the whole time.
+- **PLANT** by squatting to 170 mm, where `STRUT_LEN` equals the pivot height
+  and the pad lands exactly co-planar with the wheel contact. Critical state.
+- **LOAD** brakes the wheels *before* shifting, then **SHIFT** walks the torso
+  back over the pads quasi-statically.
 
-During that jack the wheels are off the ground and the balancer has no
-authority at all. Worse, the contact is a single edge sitting ~53 mm *behind*
-the axle, which applies a strong forward pitching moment. The robot pitches
-through 57 degrees in 0.4 s. The pendulum time constant is 0.17 s and the
-unavoidable sweep is ~1.6 rad, so there is no deploy rate that fits.
+## What works
 
-This is geometry, not tuning. Flat and constant-radius are incompatible.
+- Swing clearance 7.2 mm, verified across the whole sweep at every squat depth.
+- The pad lands at 0.0 mm with the wheels still down: `wheel_clear = 0.0 mm`
+  through the entire transition. **The robot is never airborne.**
+- **Foot mode itself is solid.** Placed in the deployed pose with the balancer
+  completely off and the wheels braked, it stands the full 10 s test for body
+  shifts of +50 and +65 mm, settling at 4.0 and -1.3 deg. The stable band is
+  CoM x in about [-67, -33] mm.
+- SETTLE now fires in 0.32 s instead of timing out, because "quiet" is judged
+  against the balancer's learned trim lean rather than against zero.
 
-## The part that does work
+## What still fails
 
-Started already in foot mode - soles deployed, wheels off the ground, balancer
-completely off - the robot stands indefinitely and tolerates real tilt:
+It tips forward during SHIFT. Drift is down from 4.1 m to 0.42 m, but the
+handover pose is still marginal.
 
-| sole half-length | polygon | survives initial tilt |
-|---|---|---|
-| 60 mm | 120 mm | 8.0 deg, stood 8 s |
-| 40 mm | 80 mm | 8.0 deg, stood 8 s |
-| 30 mm | 60 mm | 5.7 deg (fails at 8.0) |
+The reason is a hard cap. The balancer necessarily hands over with the CoM
+above the wheel contact at x=0, so the pad polygon has to straddle x=0. How far
+forward the pad can reach is limited by the swing: no pad corner may sit
+further from the pivot than the pivot's height during the swing, which is
+43.4 mm. With the pivot 34.9 mm behind the axle that buys only
+**+8.5 mm of forward margin, about 1.8 deg** - not enough to absorb the
+residual pitch and momentum at handover.
 
-It settles at about 3.4 degrees of forward lean, resting on the toe. So foot
-mode itself is sound, and the tilt tolerance at touchdown is ~8 degrees. The
-whole problem is arriving there with less than 8 degrees of pitch error.
+## Three ways to buy forward margin
 
-## Two bugs found on the way
+1. **A second, forward-facing strut per leg.** Definitive: the polygon
+   straddles the CoM by construction. Costs 2 more servos and ~120 g.
+2. **Stand deeper.** Forward reach grows as the stand height drops, because
+   the pivot travel between swing and stand grows. Rough numbers: +13.8 mm at
+   a 140 mm stand height, +16.4 mm at 120 mm.
+3. **Swing with the legs straighter.** Small gain, ~+3 mm, and it pushes the
+   leg IK toward its singularity.
 
-- **Invalid geometry looked like a control failure.** Face radii of 41.5 and
-  44 mm put the plate *inside* the wheel, and MuJoCo generated sole-wheel
-  contacts that threw the robot during SETTLE. `model.load()` now refuses to
-  build a sole that intersects the wheel.
-- **SETTLE never fires; it times out.** The quiet test compares pitch against
-  zero, but the balancer's steady-state lean is not zero and moves with squat
-  depth. So the machine commits to deploying with ~2.5 deg of pitch error
-  instead of ~0. That error is the initial condition for the whole airborne
-  phase, so it matters a lot. Not yet fixed.
+## Bugs found and fixed on the way
 
-## Where it goes next
-
-The fix has to make the contact point stay under the axle during the rise, so
-there is no driving moment and the robot only drifts. Drifting from a
-well-settled 0.6 deg over a 0.4 s rise lands around 3 deg, inside the 8 deg
-polygon. Options are in the handoff notes; the leading candidate is a spiral
-cam sole whose contact radius grows smoothly from the wheel radius.
+- **Invalid geometry masqueraded as a control failure.** Face radii of 41.5 and
+  44 mm put the old plate *inside* the wheel; MuJoCo generated sole-wheel
+  contacts that threw the robot during SETTLE. `load()` now refuses.
+- **The contact latch was never reset between states,** so the swing ramp's
+  tracking error counted as pad contact and PLANT exited 0.04 s in, before the
+  pads were near the floor.
+- **Unloaded wheels free-spin and poison the odometry.** When the pads first
+  took load and lifted the wheels 1.5 mm, wheel-derived velocity read -1.4 m/s
+  of motion that was not happening, and the balancer ran away. The outer loop
+  is now disabled once the pads carry load.
+- **Shifting the body changed the shin angle,** dropping the strut pivot 10 mm
+  and gouging the pads into the floor (26.8 mm of wheel lift). Both contacts
+  co-planar pins the shin angle; `foot_pose()` holds it.
+- **Braking after shifting drove the robot 4 m across the room.** With the legs
+  shifted, holding the torso upright puts the CoM permanently behind the wheels,
+  so the balancer accelerates forever chasing an equilibrium that no longer
+  exists. LOAD now comes before SHIFT.

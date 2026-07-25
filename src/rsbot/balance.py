@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .model import WHEEL_R, RETRACT_SWEEP, leg_ik, sole_angle
+from .model import WHEEL_R, RETRACT_PHI, leg_ik, sole_angle
 
 
 @dataclass
@@ -45,14 +45,22 @@ class Balancer:
         self.v_filt = 0.0
         self.x = 0.0
         self.x_ref = 0.0
+        self.outer_enabled = True
 
     def reset(self):
         self.v_filt = 0.0
         self.x = 0.0
         self.x_ref = 0.0
+        self.outer_enabled = True
 
-    def __call__(self, obs, dt, v_des=0.0):
-        """obs: dict with quat(4), gyro(3), wheel_vel(2). Returns ctrl(8)."""
+    def __call__(self, obs, dt, v_des=0.0, pitch_bias=0.0):
+        """obs: dict with quat(4), gyro(3), wheel_vel(2). Returns ctrl(8).
+
+        `pitch_bias` offsets the commanded lean. The transition uses it to rock
+        the robot back onto its pads: the inner loop drives the wheels forward
+        until the body reaches the biased lean, and past that the CoM is behind
+        the axle and the pads catch the fall.
+        """
         g = self.g
         pitch = pitch_from_quat(obs["quat"])
         pitch_rate = obs["gyro"][1]
@@ -68,9 +76,14 @@ class Balancer:
         # Driving is a moving setpoint, so the position term never fights it.
         self.x_ref += v_des * dt
 
-        # Outer: to go forward, lean forward.
-        pitch_des = g.kv * (v_des - self.v_filt) + g.kx * (self.x_ref - self.x)
-        pitch_des = max(-g.pitch_max, min(g.pitch_max, pitch_des))
+        # Outer: to go forward, lean forward. Disabled once the pads carry
+        # load, because unloaded wheels free-spin and the odometry derived from
+        # them is meaningless -- it reads over 1 m/s of motion that isn't there.
+        if self.outer_enabled:
+            pitch_des = g.kv * (v_des - self.v_filt) + g.kx * (self.x_ref - self.x)
+        else:
+            pitch_des = 0.0
+        pitch_des = max(-g.pitch_max, min(g.pitch_max, pitch_des)) + pitch_bias
 
         # Inner: catch the lean by driving the wheels under the CoM.
         w_cmd = (g.kp * (pitch - pitch_des) + g.kd * pitch_rate) / WHEEL_R
@@ -78,6 +91,6 @@ class Balancer:
         hip, knee = leg_ik(self.height)
         # Held retracted in wheel mode. Referenced to the world, not the shin,
         # so squatting doesn't swing the sole down into the floor.
-        ankle = sole_angle(hip, knee, RETRACT_SWEEP)
+        ankle = sole_angle(hip, knee, RETRACT_PHI)
         return np.array([hip, knee, ankle, w_cmd,
                          hip, knee, ankle, w_cmd])

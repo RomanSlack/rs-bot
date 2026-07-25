@@ -1,4 +1,6 @@
-"""Render the full round trip to MP4.  uv run python render.py [out.mp4]
+"""Render the full round trip to MP4.
+
+    uv run python render.py [out.mp4] [backlash_degrees]
 
 Drive forward -> flip the wheels flat -> stand with the controller off ->
 flip back -> keep driving. Offscreen via EGL, so it needs no window.
@@ -7,6 +9,7 @@ Captions are driven off the state machine itself rather than a fixed timeline,
 so what the video says is what the controller is actually doing.
 """
 
+import math
 import os
 import subprocess
 import sys
@@ -21,7 +24,7 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 from src.rsbot.model import load  # noqa: E402
 from src.rsbot.sim import CTRL_HZ, obs  # noqa: E402
-from src.rsbot.balance import pitch_from_quat  # noqa: E402
+from src.rsbot.balance import LASH_GAINS, pitch_from_quat  # noqa: E402
 from src.rsbot.transition import (DeployMachine, DeployCfg, NAMES, STAND,
                                   WHEEL)  # noqa: E402
 
@@ -32,7 +35,7 @@ CAPTION = {
     "WHEEL":  "wheel mode - actively balancing",
     "SETTLE": "stopping, waiting for a quiet moment",
     "FLIP":   "FLIP - ankles roll 90 degrees",
-    "STAND":  "foot mode - balancer OFF, standing on the wheel faces",
+    "STAND":  "foot mode - standing on the wheel faces, weak ankle loop only",
     "UNFLIP": "UNFLIP - rolling back upright",
 }
 
@@ -55,10 +58,13 @@ def default_out():
     return f"renders/rsbot-cycle-{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
 
 
-def main(out=None):
+def main(out=None, lash_deg=0.0):
     out = out or default_out()
-    m, d = load()
-    mach = DeployMachine(cfg=DeployCfg(flip_rate=2.0))
+    lash = math.radians(lash_deg)
+    m, d = load(backlash=lash)
+    # The rigid defaults survive no lash at all, so switch gain sets with it.
+    mach = DeployMachine(gains=LASH_GAINS if lash else None,
+                         cfg=DeployCfg(flip_rate=2.0))
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     wheel = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "wheel_l")
 
@@ -114,6 +120,8 @@ def main(out=None):
                     f"axle {d.xpos[wheel][2]*1000:5.1f} mm",
                     f"pitch {pitch:+5.1f} deg",
                     f"x {d.xpos[torso][0]:+5.2f} m"]
+            if lash_deg:
+                rows.append(f"backlash {lash_deg:g} deg")
             frame = annotate(renderer.render(), CAPTION[NAMES[mach.state]], rows)
             ff.stdin.write(frame.tobytes())
 
@@ -124,4 +132,5 @@ def main(out=None):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else None)
+    main(sys.argv[1] if len(sys.argv) > 1 else None,
+         float(sys.argv[2]) if len(sys.argv) > 2 else 0.0)

@@ -11,6 +11,7 @@ here is something the test suite can reproduce.
 
 import io
 import json
+import math
 import os
 import threading
 import time
@@ -27,6 +28,7 @@ from src.rsbot.model import WHEEL_HALF_W, load  # noqa: E402
 from src.rsbot.sim import CTRL_HZ, obs  # noqa: E402
 from src.rsbot.balance import pitch_from_quat  # noqa: E402
 from src.rsbot.transition import DeployMachine, NAMES, STAND  # noqa: E402
+from src.rsbot.balance import LASH_GAINS  # noqa: E402
 
 W, H, FPS = 900, 520, 30
 PORT = 8781
@@ -42,11 +44,12 @@ class Sim:
         self.v_des = 0.0
         self.shove = 0.0
         self.follow = True
+        self.lash = 0.0
         self._reset()
 
     def _reset(self):
-        self.m, self.d = load()
-        self.mach = DeployMachine()
+        self.m, self.d = load(backlash=self.lash)
+        self.mach = DeployMachine(gains=LASH_GAINS if self.lash else None)
         self.torso = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, "torso")
         self.wheel = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, "wheel_l")
         self.decim = int(round(1.0 / (CTRL_HZ * self.m.opt.timestep)))
@@ -79,6 +82,9 @@ class Sim:
                                                  + float(q.get("el", ["0"])[0])))
                 self.cam.distance = max(0.3, min(3.0, self.cam.distance
                                                 * float(q.get("dz", ["1"])[0])))
+            elif a == "lash":
+                self.lash = math.radians(v)
+                self._reset()
             elif a == "follow":
                 self.follow = not self.follow
 
@@ -91,6 +97,7 @@ class Sim:
                 "x": round(float(self.d.xpos[self.torso][0]), 3),
                 "axle_mm": round(float(self.d.xpos[self.wheel][2]) * 1000, 1),
                 "roll_deg": round(float(np.degrees(self.mach.roll)), 1),
+                "lash_deg": round(float(np.degrees(self.lash)), 2),
                 "v_des": self.v_des,
                 "speed": self.speed,
                 "standing": self.mach.state == STAND,
@@ -184,12 +191,15 @@ button.hot{background:#5e3527;border-color:#7d4633}
   <button onclick="c('speed',0.15)">0.15x</button>
   <button onclick="c('speed',0.5)">0.5x</button>
   <button onclick="c('speed',1)">1x</button>
+  <button onclick="c('lash',0)">lash 0</button>
+  <button onclick="c('lash',1)">lash 1&deg;</button>
+  <button onclick="c('lash',2)">lash 2&deg;</button>
 </div>
 <div id=tel></div>
 </div><script>
-const F=['state','t','pitch','x','axle_mm','roll_deg','speed'];
+const F=['state','t','pitch','x','axle_mm','roll_deg','lash_deg','speed'];
 const L={t:'sim time',pitch:'pitch deg',x:'x m',axle_mm:'axle height mm',
-         roll_deg:'wheel roll deg',speed:'rate'};
+         roll_deg:'wheel roll deg',lash_deg:'backlash deg',speed:'rate'};
 function c(a,v){fetch(`/cmd?a=${a}&v=${v??0}`)}
 function cam(az,el,dz){fetch(`/cmd?a=cam&az=${az}&el=${el}&dz=${dz}`)}
 async function tick(){

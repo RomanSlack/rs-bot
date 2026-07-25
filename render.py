@@ -1,11 +1,16 @@
 """Render a demo run to MP4.  uv run python render.py [out.mp4]
 
 Offscreen via EGL, so it works without a window. The camera tracks the torso.
+
+Output defaults to renders/rsbot-stage0-<timestamp>.mp4 so runs accumulate
+instead of overwriting each other.
 """
 
 import os
 import subprocess
 import sys
+from datetime import datetime
+from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "egl")
 
@@ -40,7 +45,14 @@ def cue(t):
     return SCRIPT[0]
 
 
-def main(out="rsbot-stage0.mp4"):
+def default_out():
+    Path("renders").mkdir(exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return f"renders/rsbot-stage0-{ts}.mp4"
+
+
+def main(out=None):
+    out = out or default_out()
     m, d = load()
     bal = Balancer()
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
@@ -103,4 +115,4 @@ def main(out="rsbot-stage0.mp4"):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "rsbot-stage0.mp4")
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

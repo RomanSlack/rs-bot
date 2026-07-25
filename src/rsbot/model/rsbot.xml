@@ -81,11 +81,15 @@
             <geom class="wheel" name="wheel_l" zaxis="0 1 0" mass="0.060"/>
           </body>
 
-          <!-- Rocker sole. Pivots on the wheel axle; flat plate at r=49 mm so
-               deploying lifts the wheel 15 mm and gives a static support
-               polygon. 0 rad = deployed (down), 2.27 rad = retracted (fore/up). -->
+          <!-- Rocker sole. Pivots on the wheel axle; flat plate at r=52 mm so
+               deploying lifts the wheel off the ground and gives a static
+               support polygon.  NOTE the ankle encoder is relative to the
+               SHIN, which pitches as the robot squats, so the deploy/retract
+               commands are leg-configuration dependent -- see
+               model.sole_angle(). A constant ankle angle is not a constant
+               sole angle. -->
           <body name="foot_l" pos="0 0 -0.110">
-            <joint name="ankle_l" axis="0 1 0" range="-0.20 2.40"/>
+            <joint name="ankle_l" axis="0 1 0" range="-0.30 3.30"/>
             <geom class="sole" name="sole_l" size="0.040 0.016 0.003"
                   pos="0 0 -0.052" mass="0.020"/>
           </body>
@@ -105,7 +109,7 @@
           </body>
 
           <body name="foot_r" pos="0 0 -0.110">
-            <joint name="ankle_r" axis="0 1 0" range="-0.20 2.40"/>
+            <joint name="ankle_r" axis="0 1 0" range="-0.30 3.30"/>
             <geom class="sole" name="sole_r" size="0.040 0.016 0.003"
                   pos="0 0 -0.052" mass="0.020"/>
           </body>
@@ -117,12 +121,12 @@
   <actuator>
     <position class="servo_pos" name="hip_l"   joint="hip_l"   ctrlrange="-0.60 1.40"/>
     <position class="servo_pos" name="knee_l"  joint="knee_l"  ctrlrange="-2.00 0.05"/>
-    <position class="servo_pos" name="ankle_l" joint="ankle_l" ctrlrange="-0.20 2.40"/>
+    <position class="servo_pos" name="ankle_l" joint="ankle_l" ctrlrange="-0.30 3.30"/>
     <velocity class="servo_vel" name="wheel_l" joint="wheel_l" ctrlrange="-40 40"/>
 
     <position class="servo_pos" name="hip_r"   joint="hip_r"   ctrlrange="-0.60 1.40"/>
     <position class="servo_pos" name="knee_r"  joint="knee_r"  ctrlrange="-2.00 0.05"/>
-    <position class="servo_pos" name="ankle_r" joint="ankle_r" ctrlrange="-0.20 2.40"/>
+    <position class="servo_pos" name="ankle_r" joint="ankle_r" ctrlrange="-0.30 3.30"/>
     <velocity class="servo_vel" name="wheel_r" joint="wheel_r" ctrlrange="-40 40"/>
   </actuator>
 
@@ -144,7 +148,7 @@
     <!-- stance: root(7) + [hip knee wheel ankle] x2  (qpos follows body/joint
          declaration order; ctrl follows actuator order, which differs) -->
     <key name="stance"
-         qpos="0 0 0.247 1 0 0 0   0.35 -0.70 0 2.27   0.35 -0.70 0 2.27"
-         ctrl="0.35 -0.70 2.27 0   0.35 -0.70 2.27 0"/>
+         qpos="0 0 0.247 1 0 0 0   0.35 -0.70 0 2.62   0.35 -0.70 0 2.62"
+         ctrl="0.35 -0.70 2.62 0   0.35 -0.70 2.62 0"/>
   </keyframe>
 </mujoco>

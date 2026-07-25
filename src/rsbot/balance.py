@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .model import WHEEL_R, leg_ik
+from .model import WHEEL_R, RETRACT_SWEEP, leg_ik, sole_angle
 
 
 @dataclass
@@ -76,6 +76,8 @@ class Balancer:
         w_cmd = (g.kp * (pitch - pitch_des) + g.kd * pitch_rate) / WHEEL_R
 
         hip, knee = leg_ik(self.height)
-        ankle = 2.27  # retracted; feet are stage 2
+        # Held retracted in wheel mode. Referenced to the world, not the shin,
+        # so squatting doesn't swing the sole down into the floor.
+        ankle = sole_angle(hip, knee, RETRACT_SWEEP)
         return np.array([hip, knee, ankle, w_cmd,
                          hip, knee, ankle, w_cmd])

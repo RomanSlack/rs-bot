@@ -9,8 +9,19 @@ XML = Path(__file__).parent / "model" / "rsbot.xml"
 WHEEL_R = 0.040
 THIGH_L = 0.110
 SHIN_L = 0.110
-ANKLE_RETRACTED = 2.27
-ANKLE_DEPLOYED = 0.0
+
+# How far the sole swings between deployed and retracted, in world terms.
+RETRACT_SWEEP = 2.27
+
+
+def sole_angle(hip, knee, phi):
+    """Ankle command that holds the sole at world angle `phi`.
+
+    The ankle encoder is relative to the shin, and the shin pitches as the
+    robot squats, so a constant ankle angle is NOT a constant sole angle.
+    phi = 0 puts the plate flat on the ground; phi = RETRACT_SWEEP tucks it up.
+    """
+    return phi - (hip + knee)
 
 # Joint/actuator names in the order the controller uses them.
 LEGS = ("l", "r")

@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  rs-bot: desk-scale wheeled biped with deployable rocker feet.
+
+  Sized and mass-budgeted for the FINAL robot (arms, head, compute all present
+  as ballast in the torso) so the stage-1 legs are tuned against real inertia.
+  See docs/mass-budget.md.
+
+  Frame: robot faces +x, pitch is about +y, gravity -z.
+  Nominal stance: hip = +0.35, knee = -0.70  ->  hip 247 mm, head 427 mm.
+-->
+<mujoco model="rsbot">
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.001" integrator="implicitfast" gravity="0 0 -9.81"/>
+
+  <default>
+    <geom friction="1.0 0.005 0.0001" solref="0.008 1" density="0"/>
+    <joint damping="0.02" armature="0.002" frictionloss="0.008"/>
+
+    <!-- STS3215-class serial bus servo: 2.9 N.m stall, 12 V.
+         Leg joints run position mode, wheels run velocity mode (which is
+         what the servo firmware actually gives you in continuous rotation). -->
+    <default class="servo_pos">
+      <position kp="12" kv="0.35" forcerange="-2.9 2.9"/>
+    </default>
+    <default class="servo_vel">
+      <velocity kv="0.20" forcerange="-2.9 2.9"/>
+    </default>
+
+    <default class="leg">
+      <geom type="capsule" size="0.014" rgba="0.75 0.76 0.78 1"/>
+    </default>
+    <default class="wheel">
+      <geom type="cylinder" size="0.040 0.012" friction="1.6 0.02 0.002"
+            rgba="0.15 0.15 0.17 1"/>
+    </default>
+    <default class="sole">
+      <geom type="box" friction="1.1 0.01 0.001" rgba="0.85 0.35 0.15 1"/>
+    </default>
+  </default>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512"
+             rgb1="0.22 0.23 0.25" rgb2="0.28 0.29 0.31"/>
+    <material name="grid" texture="grid" texrepeat="12 12" reflectance="0.05"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 2" dir="0 0 -1" diffuse="0.7 0.7 0.7"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="grid"
+          friction="1.0 0.005 0.0001"/>
+
+    <body name="torso" pos="0 0 0.247">
+      <freejoint name="root"/>
+      <!-- 1.25 kg: structure + Pi + battery + ballast standing in for the
+           arms (0.48), head (0.12) and harness that arrive at stage 4.
+           Sits 8.5 mm forward of the hip axis: the retracted soles hang
+           behind the wheel, and without this trim the stance CoM lands
+           5.7 mm aft of the axle and the robot has to lean 1.2 deg to
+           stand. On the real build this is where the battery goes. -->
+      <geom name="torso" type="box" size="0.045 0.035 0.090" pos="0.0085 0 0.090"
+            mass="1.25" rgba="0.30 0.55 0.85 1"/>
+      <site name="imu" pos="0 0 0.02"/>
+
+      <body name="thigh_l" pos="0 0.060 0">
+        <joint name="hip_l" axis="0 1 0" range="-0.60 1.40"/>
+        <geom class="leg" name="thigh_l" fromto="0 0 0  0 0 -0.110" mass="0.130"/>
+        <body name="shin_l" pos="0 0 -0.110">
+          <joint name="knee_l" axis="0 1 0" range="-2.00 0.05"/>
+          <geom class="leg" name="shin_l" fromto="0 0 0  0 0 -0.110" mass="0.100"/>
+
+          <body name="wheel_l" pos="0 0 -0.110">
+            <joint name="wheel_l" axis="0 1 0"/>
+            <geom class="wheel" name="wheel_l" zaxis="0 1 0" mass="0.060"/>
+          </body>
+
+          <!-- Rocker sole. Pivots on the wheel axle; flat plate at r=49 mm so
+               deploying lifts the wheel 15 mm and gives a static support
+               polygon. 0 rad = deployed (down), 2.27 rad = retracted (fore/up). -->
+          <body name="foot_l" pos="0 0 -0.110">
+            <joint name="ankle_l" axis="0 1 0" range="-0.20 2.40"/>
+            <geom class="sole" name="sole_l" size="0.040 0.016 0.003"
+                  pos="0 0 -0.052" mass="0.020"/>
+          </body>
+        </body>
+      </body>
+
+      <body name="thigh_r" pos="0 -0.060 0">
+        <joint name="hip_r" axis="0 1 0" range="-0.60 1.40"/>
+        <geom class="leg" name="thigh_r" fromto="0 0 0  0 0 -0.110" mass="0.130"/>
+        <body name="shin_r" pos="0 0 -0.110">
+          <joint name="knee_r" axis="0 1 0" range="-2.00 0.05"/>
+          <geom class="leg" name="shin_r" fromto="0 0 0  0 0 -0.110" mass="0.100"/>
+
+          <body name="wheel_r" pos="0 0 -0.110">
+            <joint name="wheel_r" axis="0 1 0"/>
+            <geom class="wheel" name="wheel_r" zaxis="0 1 0" mass="0.060"/>
+          </body>
+
+          <body name="foot_r" pos="0 0 -0.110">
+            <joint name="ankle_r" axis="0 1 0" range="-0.20 2.40"/>
+            <geom class="sole" name="sole_r" size="0.040 0.016 0.003"
+                  pos="0 0 -0.052" mass="0.020"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position class="servo_pos" name="hip_l"   joint="hip_l"   ctrlrange="-0.60 1.40"/>
+    <position class="servo_pos" name="knee_l"  joint="knee_l"  ctrlrange="-2.00 0.05"/>
+    <position class="servo_pos" name="ankle_l" joint="ankle_l" ctrlrange="-0.20 2.40"/>
+    <velocity class="servo_vel" name="wheel_l" joint="wheel_l" ctrlrange="-40 40"/>
+
+    <position class="servo_pos" name="hip_r"   joint="hip_r"   ctrlrange="-0.60 1.40"/>
+    <position class="servo_pos" name="knee_r"  joint="knee_r"  ctrlrange="-2.00 0.05"/>
+    <position class="servo_pos" name="ankle_r" joint="ankle_r" ctrlrange="-0.20 2.40"/>
+    <velocity class="servo_vel" name="wheel_r" joint="wheel_r" ctrlrange="-40 40"/>
+  </actuator>
+
+  <sensor>
+    <framequat     name="imu_quat"  objtype="site" objname="imu"/>
+    <gyro          name="imu_gyro"  site="imu"/>
+    <accelerometer name="imu_acc"   site="imu"/>
+    <jointpos name="hip_l_pos"   joint="hip_l"/>
+    <jointpos name="knee_l_pos"  joint="knee_l"/>
+    <jointpos name="ankle_l_pos" joint="ankle_l"/>
+    <jointvel name="wheel_l_vel" joint="wheel_l"/>
+    <jointpos name="hip_r_pos"   joint="hip_r"/>
+    <jointpos name="knee_r_pos"  joint="knee_r"/>
+    <jointpos name="ankle_r_pos" joint="ankle_r"/>
+    <jointvel name="wheel_r_vel" joint="wheel_r"/>
+  </sensor>
+
+  <keyframe>
+    <!-- stance: root(7) + [hip knee wheel ankle] x2  (qpos follows body/joint
+         declaration order; ctrl follows actuator order, which differs) -->
+    <key name="stance"
+         qpos="0 0 0.247 1 0 0 0   0.35 -0.70 0 2.27   0.35 -0.70 0 2.27"
+         ctrl="0.35 -0.70 2.27 0   0.35 -0.70 2.27 0"/>
+  </keyframe>
+</mujoco>

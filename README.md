@@ -1,18 +1,22 @@
 # rs-bot
 
-A desk-scale wheeled biped with deployable rocker feet. ~43 cm tall, ~1.9 kg.
+A desk-scale wheeled biped whose wheels rotate flat to become its feet.
+~43 cm tall, ~2.05 kg.
 
-It balances on two wheels like a tiny Handle, and when it needs to hold still or
-manipulate something, it flips a sole down over each wheel and becomes a
-statically stable standing robot. That transition is the point of the project:
-a wheeled biped that can stop fighting its own balance loop before it reaches
-for something.
+It balances on two wheels like a tiny Handle, and when it needs to hold still
+or manipulate something, each ankle rolls 90 degrees: the wheels lie down and
+their 80 mm faces become the soles. It then stands there statically with the
+balance loop switched off. That transition is the point of the project - a
+wheeled biped that can stop fighting its own balance loop before it reaches for
+something - and the wheel-as-foot trick means it costs one joint per leg and no
+extra parts.
 
 Nothing here is bought yet. Everything runs in MuJoCo.
 
 ## Status
 
-**Stage 0 (sim balancer) - done.** Stands, drives, rejects shoves.
+**Stages 0 and 0b (sim) - done.** Balances, drives, rejects shoves, and
+flips its wheels flat to stand statically for 87 s with the controller off.
 Stage 1 hardware has not started.
 
 ## Roadmap
@@ -23,9 +27,9 @@ because stage N+1 is scary.
 | # | Stage | Exit criterion | State |
 |---|-------|----------------|-------|
 | 0 | Sim balancer | Rejects a shove, attitude recovery < 1 s | **done** |
-| 0b | Sim foot transition | 20 consecutive transitions both ways, no falls | next |
+| 0b | Sim foot transition | Flips to foot mode and stands, balancer off | **done** |
 | 1 | Legs in hardware | Stands 5 min unattended, survives a poke, drives, squats | |
-| 2 | Rocker feet | 20 consecutive transitions both directions, zero falls | |
+| 2 | Feet in hardware | 20 consecutive transitions both directions, zero falls | |
 | 3 | Head camera | Teleop drive from the camera feed alone | |
 | 4 | One arm | Picks up a can, 8/10 attempts | |
 | 5 | Second arm | Autonomous policies | |
@@ -36,11 +40,15 @@ These are fixed up front so stage 4 doesn't invalidate stage 1.
 
 - **The whole skeleton is designed now, built in pieces.** The sim model already
   carries the arms, head and compute as torso ballast, so the legs are tuned
-  against final inertia (1.87 kg) rather than a bare stage-1 mass.
+  against final inertia (2.05 kg) rather than a bare stage-1 mass.
 - **STS3215-class serial bus servos throughout.** 2.9 N.m stall. The leg joints
   run position mode; the wheels run continuous rotation, which means the
   balancer gets a *velocity* command, not a torque. The controller is built
   around that constraint rather than pretending otherwise.
+- **The wheel is the foot.** 5 DOF per leg: hip pitch, knee pitch, ankle pitch,
+  ankle roll, wheel. Nothing deploys, nothing folds out. Two earlier mechanisms
+  with separate feet both failed for the same reason, recorded in
+  docs/stage-0b.md.
 - **No hopping.** Bouncing needs real torque control at ~1 kHz and QDD ankles.
   Static feet mode gets most of the value; hopping is a different robot.
 
@@ -48,21 +56,27 @@ These are fixed up front so stage 4 doesn't invalidate stage 1.
 
 ```
 src/rsbot/model/rsbot.xml   MJCF model
-src/rsbot/model.py          loading, leg IK, geometry constants
+src/rsbot/model.py          loading, leg IK, foot geometry
 src/rsbot/balance.py        the balancer
+src/rsbot/transition.py     wheel mode <-> foot mode state machine
 src/rsbot/sim.py            headless rollouts, shove test
+serve.py                    live sim in the browser, with controls
+render.py                   render a demo run to renders/*.mp4
 tune.py                     coordinate-descent gain search
-view.py                     interactive viewer (needs a display)
-tests/test_stage0.py        exit criteria as executable checks
+view.py                     native viewer (needs a working GLX display)
+tests/                      exit criteria as executable checks
 ```
 
 ## Run it
 
 ```bash
-uv run python -m pytest tests -q   # stage-0 exit criteria, ~3 s
-uv run python view.py              # watch it. W/S drive, SPACE shove, R reset
-uv run python tune.py              # re-tune gains
+uv run python -m pytest tests -q   # all exit criteria, ~8 s
+uv run python serve.py             # live sim at localhost:8781, drive it around
+uv run python render.py            # render a demo to renders/
+uv run python tune.py              # re-tune balancer gains
 ```
 
-See [docs/stage-0.md](docs/stage-0.md) for measured numbers and
-[docs/mass-budget.md](docs/mass-budget.md) for where the 1.87 kg goes.
+See [docs/stage-0.md](docs/stage-0.md) for the balancer numbers,
+[docs/stage-0b.md](docs/stage-0b.md) for the transition and the two mechanisms
+that failed first, and [docs/mass-budget.md](docs/mass-budget.md) for where the
+2.05 kg goes.

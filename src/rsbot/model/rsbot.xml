@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  rs-bot: desk-scale wheeled biped with deployable rocker feet.
+  rs-bot: desk-scale wheeled biped whose wheels rotate flat to become its feet.
 
-  Sized and mass-budgeted for the FINAL robot (arms, head, compute all present
-  as ballast in the torso) so the stage-1 legs are tuned against real inertia.
-  See docs/mass-budget.md.
+  Each leg is hip pitch, knee pitch, ankle pitch, ankle ROLL, wheel. The roll
+  joint is the whole trick: turning it 90 deg stands the wheel's spin axis
+  vertical, so the disc lies flat and its 80 mm face becomes the foot. No
+  separate foot part, and the support polygon is centred under the axle, which
+  is what the two earlier mechanisms could not achieve (docs/stage-0b.md).
 
+  Ankle pitch keeps that face level as the leg pitches, and biasing it is the
+  "bend in the ankle" that gives foot mode some compliance.
+
+  Sized and mass-budgeted for the FINAL robot; see docs/mass-budget.md.
   Frame: robot faces +x, pitch is about +y, gravity -z.
-  Nominal stance: hip = +0.35, knee = -0.70  ->  hip 247 mm, head 427 mm.
 -->
 <mujoco model="rsbot">
   <compiler angle="radian" autolimits="true"/>
@@ -30,12 +35,17 @@
     <default class="leg">
       <geom type="capsule" size="0.014" rgba="0.75 0.76 0.78 1"/>
     </default>
+    <!-- Ankle servo block. Must sit ABOVE the axle: the wheel face is only
+         12 mm below it in foot mode, so anything hanging lower becomes the
+         real ground contact and steals the 80 mm foot. -->
+    <default class="ankle">
+      <geom type="box" size="0.015 0.014 0.017" pos="0 0 0.020"
+            rgba="0.85 0.35 0.15 1"/>
+    </default>
+    <!-- The tyre is the foot, so it needs grip in both roles. -->
     <default class="wheel">
       <geom type="cylinder" size="0.040 0.012" friction="1.6 0.02 0.002"
             rgba="0.15 0.15 0.17 1"/>
-    </default>
-    <default class="sole">
-      <geom type="box" friction="1.1 0.01 0.001" rgba="0.85 0.35 0.15 1"/>
     </default>
   </default>
 
@@ -59,14 +69,11 @@
 
     <body name="torso" pos="0 0 0.247">
       <freejoint name="root"/>
-      <!-- 1.25 kg: structure + Pi + battery + ballast standing in for the
-           arms (0.48), head (0.12) and harness that arrive at stage 4.
-           Sits 8.5 mm forward of the hip axis: the retracted soles hang
-           behind the wheel, and without this trim the stance CoM lands
-           5.7 mm aft of the axle and the robot has to lean 1.2 deg to
-           stand. On the real build this is where the battery goes. -->
+      <!-- Structure, Pi, battery, plus ballast for the arms and head that
+           arrive at stage 4. The x offset is solved for at load time so the
+           standing CoM sits over the axle; see model.load(). -->
       <geom name="torso" type="box" size="0.045 0.035 0.090" pos="0.0085 0 0.090"
-            mass="1.25" rgba="0.30 0.55 0.85 1"/>
+            mass="1.230" rgba="0.30 0.55 0.85 1"/>
       <site name="imu" pos="0 0 0.02"/>
 
       <body name="thigh_l" pos="0 0.060 0">
@@ -74,14 +81,22 @@
         <geom class="leg" name="thigh_l" fromto="0 0 0  0 0 -0.110" mass="0.130"/>
         <body name="shin_l" pos="0 0 -0.110">
           <joint name="knee_l" axis="0 1 0" range="-2.00 0.05"/>
-          <geom class="leg" name="shin_l" fromto="0 0 0  0 0 -0.110" mass="0.100"/>
+          <geom class="leg" name="shin_l" fromto="0 0 0  0 0 -0.094" mass="0.100"/>
 
-          <body name="wheel_l" pos="0 0 -0.110">
-            <joint name="wheel_l" axis="0 1 0"/>
-            <geom class="wheel" name="wheel_l" zaxis="0 1 0" mass="0.060"/>
+          <body name="ankle_l" pos="0 0 -0.110">
+            <joint name="ankle_pitch_l" axis="0 1 0" range="-1.60 1.60"/>
+            <geom class="ankle" name="ankle_l" mass="0.120"/>
+            <!-- Axis is +x on the left and -x on the right, so a single
+                 positive roll command flips both wheels outward-mirrored and
+                 their contact patches shift symmetrically. -->
+            <!-- Roll and spin stack on one body: roll is listed first so it
+                 is the proximal joint, standing the spin axis upright. -->
+            <body name="wheel_l" pos="0 0 0">
+              <joint name="ankle_roll_l" axis="1 0 0" range="-0.10 1.75"/>
+              <joint name="wheel_l" axis="0 1 0"/>
+              <geom class="wheel" name="wheel_l" zaxis="0 1 0" mass="0.060"/>
+            </body>
           </body>
-
-          <!--FOOT_L-->
         </body>
       </body>
 
@@ -90,28 +105,45 @@
         <geom class="leg" name="thigh_r" fromto="0 0 0  0 0 -0.110" mass="0.130"/>
         <body name="shin_r" pos="0 0 -0.110">
           <joint name="knee_r" axis="0 1 0" range="-2.00 0.05"/>
-          <geom class="leg" name="shin_r" fromto="0 0 0  0 0 -0.110" mass="0.100"/>
+          <geom class="leg" name="shin_r" fromto="0 0 0  0 0 -0.094" mass="0.100"/>
 
-          <body name="wheel_r" pos="0 0 -0.110">
-            <joint name="wheel_r" axis="0 1 0"/>
-            <geom class="wheel" name="wheel_r" zaxis="0 1 0" mass="0.060"/>
+          <body name="ankle_r" pos="0 0 -0.110">
+            <joint name="ankle_pitch_r" axis="0 1 0" range="-1.60 1.60"/>
+            <geom class="ankle" name="ankle_r" mass="0.120"/>
+            <!-- Roll and spin stack on one body: roll is listed first so it
+                 is the proximal joint, standing the spin axis upright. -->
+            <body name="wheel_r" pos="0 0 0">
+              <joint name="ankle_roll_r" axis="-1 0 0" range="-0.10 1.75"/>
+              <joint name="wheel_r" axis="0 1 0"/>
+              <geom class="wheel" name="wheel_r" zaxis="0 1 0" mass="0.060"/>
+            </body>
           </body>
-
-          <!--FOOT_R-->
         </body>
       </body>
     </body>
   </worldbody>
 
+  <!-- The ankle body sits between shin and wheel, so shin<->wheel are
+       grandparent/grandchild and MuJoCo does NOT auto-exclude them. Without
+       this the shin capsule collides with its own wheel, 26 mm deep. -->
+  <contact>
+    <exclude body1="shin_l" body2="wheel_l"/>
+    <exclude body1="shin_r" body2="wheel_r"/>
+    <exclude body1="thigh_l" body2="wheel_l"/>
+    <exclude body1="thigh_r" body2="wheel_r"/>
+  </contact>
+
   <actuator>
     <position class="servo_pos" name="hip_l"   joint="hip_l"   ctrlrange="-0.60 1.40"/>
     <position class="servo_pos" name="knee_l"  joint="knee_l"  ctrlrange="-2.00 0.05"/>
-    <position class="servo_pos" name="ankle_l" joint="ankle_l" ctrlrange="-3.00 1.00"/>
+    <position class="servo_pos" name="apit_l"  joint="ankle_pitch_l" ctrlrange="-1.60 1.60"/>
+    <position class="servo_pos" name="aroll_l" joint="ankle_roll_l"  ctrlrange="-0.10 1.75"/>
     <velocity class="servo_vel" name="wheel_l" joint="wheel_l" ctrlrange="-40 40"/>
 
     <position class="servo_pos" name="hip_r"   joint="hip_r"   ctrlrange="-0.60 1.40"/>
     <position class="servo_pos" name="knee_r"  joint="knee_r"  ctrlrange="-2.00 0.05"/>
-    <position class="servo_pos" name="ankle_r" joint="ankle_r" ctrlrange="-3.00 1.00"/>
+    <position class="servo_pos" name="apit_r"  joint="ankle_pitch_r" ctrlrange="-1.60 1.60"/>
+    <position class="servo_pos" name="aroll_r" joint="ankle_roll_r"  ctrlrange="-0.10 1.75"/>
     <velocity class="servo_vel" name="wheel_r" joint="wheel_r" ctrlrange="-40 40"/>
   </actuator>
 
@@ -119,21 +151,18 @@
     <framequat     name="imu_quat"  objtype="site" objname="imu"/>
     <gyro          name="imu_gyro"  site="imu"/>
     <accelerometer name="imu_acc"   site="imu"/>
-    <jointpos name="hip_l_pos"   joint="hip_l"/>
-    <jointpos name="knee_l_pos"  joint="knee_l"/>
-    <jointpos name="ankle_l_pos" joint="ankle_l"/>
+    <jointpos name="apit_l_pos"  joint="ankle_pitch_l"/>
+    <jointpos name="aroll_l_pos" joint="ankle_roll_l"/>
     <jointvel name="wheel_l_vel" joint="wheel_l"/>
-    <jointpos name="hip_r_pos"   joint="hip_r"/>
-    <jointpos name="knee_r_pos"  joint="knee_r"/>
-    <jointpos name="ankle_r_pos" joint="ankle_r"/>
+    <jointpos name="apit_r_pos"  joint="ankle_pitch_r"/>
+    <jointpos name="aroll_r_pos" joint="ankle_roll_r"/>
     <jointvel name="wheel_r_vel" joint="wheel_r"/>
   </sensor>
 
   <keyframe>
-    <!-- stance: root(7) + [hip knee wheel ankle] x2  (qpos follows body/joint
-         declaration order; ctrl follows actuator order, which differs) -->
+    <!-- qpos: root(7) + [hip knee ankle_pitch ankle_roll wheel] x2 -->
     <key name="stance"
-         qpos="0 0 0.247 1 0 0 0   0.35 -0.70 0 -1.95   0.35 -0.70 0 -1.95"
-         ctrl="0.35 -0.70 -1.95 0   0.35 -0.70 -1.95 0"/>
+         qpos="0 0 0.247 1 0 0 0   0.35 -0.70 0.35 0 0   0.35 -0.70 0.35 0 0"
+         ctrl="0.35 -0.70 0.35 0 0   0.35 -0.70 0.35 0 0"/>
   </keyframe>
 </mujoco>

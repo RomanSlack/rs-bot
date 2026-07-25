@@ -3,7 +3,7 @@
 import numpy as np
 import mujoco
 
-from .model import load, WHEEL_R
+from .model import load, WHEEL_R, WHEEL_HALF_W
 from .balance import Balancer, Gains, pitch_from_quat
 
 CTRL_HZ = 200
@@ -21,8 +21,10 @@ def obs(m, d):
         "gyro": np.array(_sensor(m, d, "imu_gyro")),
         "wheel_vel": np.array([_sensor(m, d, "wheel_l_vel")[0],
                                _sensor(m, d, "wheel_r_vel")[0]]),
-        "ankle_pos": np.array([_sensor(m, d, "ankle_l_pos")[0],
-                               _sensor(m, d, "ankle_r_pos")[0]]),
+        "roll_pos": np.array([_sensor(m, d, "aroll_l_pos")[0],
+                              _sensor(m, d, "aroll_r_pos")[0]]),
+        "apitch_pos": np.array([_sensor(m, d, "apit_l_pos")[0],
+                                _sensor(m, d, "apit_r_pos")[0]]),
     }
 
 
@@ -125,8 +127,10 @@ def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None
             fell = True
             break
 
-    # Wheel off the ground = the soles really are carrying the robot.
-    wheel_clear = d.geom_xpos[wheel_l][2] - WHEEL_R
+    # In foot mode the axle sits at the wheel's half-width, not its radius.
+    axle_z = float(d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY,
+                                            "wheel_l")][2])
+    wheel_clear = axle_z - WHEEL_HALF_W
 
     return {
         "fell": fell,

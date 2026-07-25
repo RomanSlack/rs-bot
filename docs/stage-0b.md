@@ -1,98 +1,95 @@
 # Stage 0b: the transition
 
-**Status: mechanism redesigned and mostly working. The robot now reaches foot
-mode with the wheels never leaving the ground, but still tips forward during
-the final body shift.**
+**Status: DONE. The robot flips its wheels flat and stands on them with the
+balancer completely off.**
 
-## Attempt 1: rocker sole on the wheel axle. Dead.
+## Result
 
-60 valid sole geometries x deploy rates, zero reached STAND. The cause is
-geometric, not tuning: `corner_radius = hypot(face_r, half_len)`, and
-`face_r >= 46 mm` because the plate must cradle the wheel without intersecting
-it. So the plate always jacked the robot 11-21 mm onto a single edge ~53 mm
-behind the axle, wheels airborne, balancer powerless. It pitched 57 deg in
-0.4 s against a 0.17 s pendulum time constant. No deploy rate fits; at
-60 rad/s the plate slams the floor and launches the robot 135 mm.
+    2.00s  WHEEL  -> SETTLE
+    2.00s  SETTLE -> FLIP
+    2.79s  FLIP   -> STAND      flip takes 0.79 s
+    stands 87.2 s of a 90 s run, 7.8 mm drift, balancer off throughout
 
-## The rule that was being broken
+| | |
+|---|---|
+| Flip rates that work | 0.5 to 8 rad/s (16x range) |
+| Axle at rest | 11.8 mm, i.e. flat on the faces, not perched on the rims |
+| Ground contacts in foot mode | `wheel_l`, `wheel_r` only |
+| Static tilt margin | 9.1 deg |
+| Tips at | 0.35-0.45 N.s fore/aft, 1-2 N.s sideways |
 
-Wheel-biped transformation work is explicit about this: the transition must
-pass through a **critical state where wheel and foot are both in ground
-contact**. BHR-W uses its knees as the second contact. The axle-pivoted sole
-had no such state - it went straight from wheel-only to foot-only via an
-airborne jack, and no controller can survive that.
+## The mechanism
 
-## Attempt 2: outrigger struts
+The wheel **is** the foot. A 90 deg ankle roll stands the spin axis vertical,
+the disc lies down, and its 80 mm face becomes the sole. Each leg is hip pitch,
+knee pitch, ankle pitch, ankle roll, wheel.
 
-A strut on a pivot 55 mm down the shin, swinging down inboard of the wheel,
-with a pad on the end. Moving the pivot off the axle removes the cradling
-constraint, so the pivot-to-pad distance is free, and dig scales as
-roughly L^2/2R.
+This is the third mechanism tried and the first that works, because it is the
+only one whose support polygon is **centred under the axle** - which is exactly
+where the CoM already is when the balancer hands over. The two earlier designs
+both died trying to buy fore/aft margin they could not afford.
 
-The sequence is built entirely around never being airborne:
+| | flat plate on the axle | outrigger struts | wheel flip |
+|---|---|---|---|
+| dig during deploy | 11-28 mm | 0 mm | **1.76 mm** |
+| goes airborne | yes | no | no |
+| polygon vs CoM | behind it | +8.5 mm forward | **centred, +/-40 mm** |
+| extra parts | sole + servo | strut + pad + servo | **none, just a joint** |
+| result | falls, 60/60 configs | falls during shift | **stands 87 s** |
 
-    WHEEL -> EXTEND -> SETTLE -> SWING -> PLANT -> LOAD -> SHIFT -> STAND
+The 1.76 mm dig is the rim corner briefly leading as the disc tips. It peaks at
+16.7 deg of roll, and after that the axle descends monotonically from 40 mm to
+12 mm, so the robot simply settles 28 mm as it goes. Contact is never broken
+and the balancer keeps authority the whole way down.
 
-- **EXTEND** to 213 mm. This raises the strut pivot to 93 mm.
-- **SWING** the struts down. The pad's furthest corner is 43.4 mm from the
-  pivot, so it clears the floor by 7.2 mm at every angle and cannot dig. The
-  balancer is fully in charge the whole time.
-- **PLANT** by squatting to 170 mm, where `STRUT_LEN` equals the pivot height
-  and the pad lands exactly co-planar with the wheel contact. Critical state.
-- **LOAD** brakes the wheels *before* shifting, then **SHIFT** walks the torso
-  back over the pads quasi-statically.
+Ankle pitch holds the face level as the leg pitches, and `ankle_bias` tips it
+deliberately - the ankle flex available in foot mode.
 
-## What works
+## Cost
 
-- Swing clearance 7.2 mm, verified across the whole sweep at every squat depth.
-- The pad lands at 0.0 mm with the wheels still down: `wheel_clear = 0.0 mm`
-  through the entire transition. **The robot is never airborne.**
-- **Foot mode itself is solid.** Placed in the deployed pose with the balancer
-  completely off and the wheels braked, it stands the full 10 s test for body
-  shifts of +50 and +65 mm, settling at 4.0 and -1.3 deg. The stable band is
-  CoM x in about [-67, -33] mm.
-- SETTLE now fires in 0.32 s instead of timing out, because "quiet" is judged
-  against the balancer's learned trim lean rather than against zero.
++120 g, two extra servos (one ankle roll per leg). Total 1.93 -> 2.05 kg. That
+buys the deletion of every separate foot part: no soles, no struts, no pads.
 
-## What still fails
+## The honest limitation
 
-It tips forward during SHIFT. Drift is down from 4.1 m to 0.42 m, but the
-handover pose is still marginal.
+Foot mode is **passively** stable. It tips at 0.35-0.45 N.s fore/aft, while
+wheel mode survives 1.4 N.s, because wheel mode can actively catch itself and a
+rigid stance cannot. Measured peak lean before tipping is 8.3 deg against a
+9.1 deg geometric limit, so the model matches the energy calculation exactly:
+this is a real property, not a tuning failure.
 
-The reason is a hard cap. The balancer necessarily hands over with the CoM
-above the wheel contact at x=0, so the pad polygon has to straddle x=0. How far
-forward the pad can reach is limited by the swing: no pad corner may sit
-further from the pivot than the pivot's height during the swing, which is
-43.4 mm. With the pivot 34.9 mm behind the axle that buys only
-**+8.5 mm of forward margin, about 1.8 deg** - not enough to absorb the
-residual pitch and momentum at handover.
+The fix is an ankle strategy - use the ankle pitch servos to shift the centre
+of pressure inside the foot, which is what a person does when nudged. The DOF
+is already there. Stage 2 work, on hardware.
 
-## Three ways to buy forward margin
+## Bugs found while building this
 
-1. **A second, forward-facing strut per leg.** Definitive: the polygon
-   straddles the CoM by construction. Costs 2 more servos and ~120 g.
-2. **Stand deeper.** Forward reach grows as the stand height drops, because
-   the pivot travel between swing and stand grows. Rough numbers: +13.8 mm at
-   a 140 mm stand height, +16.4 mm at 120 mm.
-3. **Swing with the legs straighter.** Small gain, ~+3 mm, and it pushes the
-   leg IK toward its singularity.
+- **The shin collided with its own wheel, 26 mm deep.** Inserting the ankle body
+  between shin and wheel made them grandparent/grandchild, and MuJoCo only
+  auto-excludes direct parent-child pairs. Explicit `<exclude>` now.
+- **The robot stood on its ankle brackets, not its feet.** The bracket geom hung
+  16 mm below the axle; the wheel face is only 12 mm below. Anything lower than
+  the face silently steals the entire 80 mm foot.
+- **Capsule end caps count.** The shin capsule ran to the axle, and its 14 mm
+  end cap reached below the wheel face. Trimmed to stop at the axle.
 
-## Bugs found and fixed on the way
+Each of these presented as a control failure and was really a geometry error.
+That is the recurring lesson of this stage: when the robot falls over, check
+what is actually touching the floor before touching a gain.
 
-- **Invalid geometry masqueraded as a control failure.** Face radii of 41.5 and
-  44 mm put the old plate *inside* the wheel; MuJoCo generated sole-wheel
-  contacts that threw the robot during SETTLE. `load()` now refuses.
-- **The contact latch was never reset between states,** so the swing ramp's
-  tracking error counted as pad contact and PLANT exited 0.04 s in, before the
-  pads were near the floor.
-- **Unloaded wheels free-spin and poison the odometry.** When the pads first
-  took load and lifted the wheels 1.5 mm, wheel-derived velocity read -1.4 m/s
-  of motion that was not happening, and the balancer ran away. The outer loop
-  is now disabled once the pads carry load.
-- **Shifting the body changed the shin angle,** dropping the strut pivot 10 mm
-  and gouging the pads into the floor (26.8 mm of wheel lift). Both contacts
-  co-planar pins the shin angle; `foot_pose()` holds it.
-- **Braking after shifting drove the robot 4 m across the room.** With the legs
-  shifted, holding the torso upright puts the CoM permanently behind the wheels,
-  so the balancer accelerates forever chasing an equilibrium that no longer
-  exists. LOAD now comes before SHIFT.
+## Superseded designs
+
+Attempt 1, a rocker sole pivoting on the wheel axle, is dead for a geometric
+reason worth keeping: `corner_radius = hypot(face_r, half_len)`, and
+`face_r >= 46 mm` because the plate had to cradle the wheel, so it always
+jacked the robot 11-21 mm onto a single edge behind the axle, airborne, with
+the balancer powerless. 60 valid configurations, zero survived.
+
+Attempt 2, outrigger struts beside the wheel, fixed the dig completely and held
+the critical state (wheel and foot in contact simultaneously, never airborne)
+but capped forward margin at +8.5 mm and tipped during the body shift.
+
+The rule both attempts taught, which the wheel-biped literature states
+directly: a wheel-to-foot transition must pass through a state where wheel and
+foot are both in ground contact. The wheel flip satisfies it trivially, because
+the wheel and the foot are the same object.

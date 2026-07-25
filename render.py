@@ -19,23 +19,23 @@ import numpy as np  # noqa: E402
 
 from src.rsbot.model import load  # noqa: E402
 from src.rsbot.sim import CTRL_HZ, obs  # noqa: E402
-from src.rsbot.balance import Balancer, pitch_from_quat  # noqa: E402
+from src.rsbot.transition import DeployMachine  # noqa: E402
+from src.rsbot.balance import pitch_from_quat  # noqa: E402
 
 W, H, FPS = 960, 540, 60
 
 # (t_start, label, v_des, shove_impulse)
 SCRIPT = [
-    (0.0, "standing", 0.0, None),
-    (2.5, "drive forward 0.35 m/s", 0.35, None),
-    (6.0, "stop", 0.0, None),
-    (7.5, "drive back", -0.35, None),
-    (10.0, "stop", 0.0, None),
-    (11.5, "SHOVE  0.7 N.s", 0.0, 0.7),
-    (15.0, "recovered", 0.0, None),
-    (16.5, "SHOVE  1.4 N.s", 0.0, 1.4),
-    (20.0, "recovered", 0.0, None),
+    (0.0, "wheel mode - balancing", 0.0, None),
+    (2.0, "drive forward", 0.35, None),
+    (5.0, "stop", 0.0, None),
+    (6.5, "SHOVE 0.7 N.s", 0.0, 0.7),
+    (9.5, "recovered", 0.0, None),
+    (11.0, "FLIP - wheels roll 90 deg", 0.0, "deploy"),
+    (13.0, "foot mode - balancer OFF", 0.0, None),
+    (18.0, "still standing, nothing running", 0.0, None),
 ]
-DURATION = 22.0
+DURATION = 24.0
 
 
 def cue(t):
@@ -54,7 +54,7 @@ def default_out():
 def main(out=None):
     out = out or default_out()
     m, d = load()
-    bal = Balancer()
+    bal = DeployMachine()
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))
     dt = decim * m.opt.timestep
@@ -94,9 +94,12 @@ def main(out=None):
         d.xfrc_applied[torso] = 0.0
         if imp is not None and t0 not in fired:
             fired.add(t0)
-            shove_until = t + 0.010
-            d.xfrc_applied[torso, 0] = imp / 0.010
-        elif t < shove_until:
+            if imp == "deploy":
+                bal.start_deploy()
+            else:
+                shove_until = t + 0.010
+                d.xfrc_applied[torso, 0] = imp / 0.010
+        elif isinstance(imp, float) and t < shove_until:
             d.xfrc_applied[torso, 0] = imp / 0.010
 
         mujoco.mj_step(m, d)

@@ -23,7 +23,7 @@ import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
-from src.rsbot.model import WHEEL_R, load  # noqa: E402
+from src.rsbot.model import WHEEL_HALF_W, load  # noqa: E402
 from src.rsbot.sim import CTRL_HZ, obs  # noqa: E402
 from src.rsbot.balance import pitch_from_quat  # noqa: E402
 from src.rsbot.transition import DeployMachine, NAMES, STAND  # noqa: E402
@@ -48,7 +48,7 @@ class Sim:
         self.m, self.d = load()
         self.mach = DeployMachine()
         self.torso = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-        self.wheel = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_GEOM, "wheel_l")
+        self.wheel = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, "wheel_l")
         self.decim = int(round(1.0 / (CTRL_HZ * self.m.opt.timestep)))
         self.k = 0
         self.shove_until = -1.0
@@ -85,10 +85,8 @@ class Sim:
                 "t": round(self.d.time, 2),
                 "pitch": round(float(np.degrees(self.pitch)), 2),
                 "x": round(float(self.d.xpos[self.torso][0]), 3),
-                "wheel_clear": round(
-                    float(self.d.geom_xpos[self.wheel][2] - WHEEL_R) * 1000, 1),
-                "shift": round(self.mach.shift * 1000, 1),
-                "phi": round(self.mach.phi, 2),
+                "axle_mm": round(float(self.d.xpos[self.wheel][2]) * 1000, 1),
+                "roll_deg": round(float(np.degrees(self.mach.roll)), 1),
                 "v_des": self.v_des,
                 "speed": self.speed,
                 "standing": self.mach.state == STAND,
@@ -167,7 +165,7 @@ button.hot{background:#5e3527;border-color:#7d4633}
   <button onclick="c('drive',0)">stop</button>
   <button class=hot onclick="c('shove',1.0)">shove &rarr;</button>
   <button class=hot onclick="c('shove',-1.0)">&larr; shove</button>
-  <button class=go onclick="c('deploy')">deploy feet</button>
+  <button class=go onclick="c('deploy')">flip wheels to feet</button>
   <button onclick="c('reset')">reset</button>
 </div>
 <div class=row>
@@ -184,9 +182,9 @@ button.hot{background:#5e3527;border-color:#7d4633}
 </div>
 <div id=tel></div>
 </div><script>
-const F=['state','t','pitch','x','wheel_clear','shift','phi','speed'];
-const L={t:'sim time',pitch:'pitch deg',x:'x m',wheel_clear:'wheel clear mm',
-         shift:'body shift mm',phi:'strut rad',speed:'rate'};
+const F=['state','t','pitch','x','axle_mm','roll_deg','speed'];
+const L={t:'sim time',pitch:'pitch deg',x:'x m',axle_mm:'axle height mm',
+         roll_deg:'wheel roll deg',speed:'rate'};
 function c(a,v){fetch(`/cmd?a=${a}&v=${v??0}`)}
 function cam(az,el,dz){fetch(`/cmd?a=cam&az=${az}&el=${el}&dz=${dz}`)}
 async function tick(){
@@ -194,7 +192,7 @@ async function tick(){
     document.getElementById('tel').innerHTML=F.map(k=>{
       let cl='';
       if(k=='state')cl=d.standing?'ok':'';
-      if(k=='wheel_clear')cl=Math.abs(d[k])>2?'warn':'ok';
+      if(k=='axle_mm')cl=d[k]<20?'ok':'';
       return `<div class=c><b>${L[k]||k}</b><span class="${cl}">${d[k]}</span></div>`}).join('');
   }catch(e){}
 }

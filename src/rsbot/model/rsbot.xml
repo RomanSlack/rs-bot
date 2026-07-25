@@ -76,62 +76,11 @@
             mass="1.230" rgba="0.30 0.55 0.85 1"/>
       <site name="imu" pos="0 0 0.02"/>
 
-      <body name="thigh_l" pos="0 0.060 0">
-        <joint name="hip_l" axis="0 1 0" range="-0.60 1.40"/>
-        <geom class="leg" name="thigh_l" fromto="0 0 0  0 0 -0.110" mass="0.130"/>
-        <body name="shin_l" pos="0 0 -0.110">
-          <joint name="knee_l" axis="0 1 0" range="-2.00 0.05"/>
-          <geom class="leg" name="shin_l" fromto="0 0 0  0 0 -0.094" mass="0.100"/>
-
-          <body name="ankle_l" pos="0 0 -0.110">
-            <joint name="ankle_pitch_l" axis="0 1 0" range="-1.60 1.60"/>
-            <geom class="ankle" name="ankle_l" mass="0.120"/>
-            <!-- Axis is +x on the left and -x on the right, so a single
-                 positive roll command flips both wheels outward-mirrored and
-                 their contact patches shift symmetrically. -->
-            <!-- Roll and spin stack on one body: roll is listed first so it
-                 is the proximal joint, standing the spin axis upright. -->
-            <body name="wheel_l" pos="0 0 0">
-              <joint name="ankle_roll_l" axis="1 0 0" range="-0.10 1.75"/>
-              <joint name="wheel_l" axis="0 1 0"/>
-              <geom class="wheel" name="wheel_l" zaxis="0 1 0" mass="0.060"/>
-            </body>
-          </body>
-        </body>
-      </body>
-
-      <body name="thigh_r" pos="0 -0.060 0">
-        <joint name="hip_r" axis="0 1 0" range="-0.60 1.40"/>
-        <geom class="leg" name="thigh_r" fromto="0 0 0  0 0 -0.110" mass="0.130"/>
-        <body name="shin_r" pos="0 0 -0.110">
-          <joint name="knee_r" axis="0 1 0" range="-2.00 0.05"/>
-          <geom class="leg" name="shin_r" fromto="0 0 0  0 0 -0.094" mass="0.100"/>
-
-          <body name="ankle_r" pos="0 0 -0.110">
-            <joint name="ankle_pitch_r" axis="0 1 0" range="-1.60 1.60"/>
-            <geom class="ankle" name="ankle_r" mass="0.120"/>
-            <!-- Roll and spin stack on one body: roll is listed first so it
-                 is the proximal joint, standing the spin axis upright. -->
-            <body name="wheel_r" pos="0 0 0">
-              <joint name="ankle_roll_r" axis="-1 0 0" range="-0.10 1.75"/>
-              <joint name="wheel_r" axis="0 1 0"/>
-              <geom class="wheel" name="wheel_r" zaxis="0 1 0" mass="0.060"/>
-            </body>
-          </body>
-        </body>
-      </body>
+      <!--LEGS-->
     </body>
   </worldbody>
 
-  <!-- The ankle body sits between shin and wheel, so shin<->wheel are
-       grandparent/grandchild and MuJoCo does NOT auto-exclude them. Without
-       this the shin capsule collides with its own wheel, 26 mm deep. -->
-  <contact>
-    <exclude body1="shin_l" body2="wheel_l"/>
-    <exclude body1="shin_r" body2="wheel_r"/>
-    <exclude body1="thigh_l" body2="wheel_l"/>
-    <exclude body1="thigh_r" body2="wheel_r"/>
-  </contact>
+  <!--EXCLUDES-->
 
   <actuator>
     <position class="servo_pos" name="hip_l"   joint="hip_l"   ctrlrange="-0.60 1.40"/>

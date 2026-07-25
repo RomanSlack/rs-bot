@@ -15,8 +15,14 @@ Nothing here is bought yet. Everything runs in MuJoCo.
 
 ## Status
 
-**Stages 0 and 0b (sim) - done.** Balances, drives, rejects shoves, and
-flips its wheels flat to stand statically for 87 s with the controller off.
+**Stages 0 and 0b (sim) - done.** Balances, drives, rejects shoves, and flips
+its wheels flat to stand for 87 s with the controller off.
+
+That last claim is a **rigid-model** result. With realistic gear backlash the
+robot still balances, but it wobbles and it cannot hold the passive foot stance
+without a low-gain ankle loop. See [docs/backlash.md](docs/backlash.md); it is
+the finding that most changes the hardware plan.
+
 Stage 1 hardware has not started.
 
 ## Roadmap
@@ -76,8 +82,9 @@ uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```
 
-See [docs/hardware-readiness.md](docs/hardware-readiness.md) for what to buy
-and what sim still cannot tell you,
+See [docs/hardware-readiness.md](docs/hardware-readiness.md) for what to buy,
+[docs/backlash.md](docs/backlash.md) for the gear-lash results (the one that
+changes the plan),
 [docs/stage-0.md](docs/stage-0.md) for the balancer numbers,
 [docs/stage-0b.md](docs/stage-0b.md) for the transition and the two mechanisms
 that failed first, and [docs/mass-budget.md](docs/mass-budget.md) for where the

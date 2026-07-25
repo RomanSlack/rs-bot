@@ -28,12 +28,13 @@ def obs(m, d):
     }
 
 
-def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None):
+def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
+            backlash=0.0):
     """Run the balancer. `shove` is (time_s, impulse_N_s) applied to the torso +x.
 
     Returns a metrics dict: fell, max_pitch, drift, recovery time.
     """
-    m, d = load()
+    m, d = load(backlash=backlash)
     bal = Balancer(gains)
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
 
@@ -87,11 +88,12 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None):
     }
 
 
-def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None):
+def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None,
+                   backlash=0.0):
     """Balance, deploy the feet, then stand there. Returns metrics + state log."""
     from .transition import DeployMachine, STAND, NAMES
 
-    m, d = load()
+    m, d = load(backlash=backlash)
     mach = DeployMachine(gains, cfg)
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     wheel_l = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "wheel_l")
@@ -146,7 +148,7 @@ def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None
 
 
 def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0,
-                  duration=26.0, v_des=0.35, viewer=None):
+                  duration=26.0, v_des=0.35, viewer=None, backlash=0.0):
     """Drive, flip to feet, stand, flip back, drive on. Returns metrics.
 
     This is the round trip: the exit criterion for stage 0b is not just
@@ -154,7 +156,7 @@ def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0,
     """
     from .transition import DeployMachine, STAND, WHEEL, NAMES
 
-    m, d = load()
+    m, d = load(backlash=backlash)
     mach = DeployMachine(gains, cfg)
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))
@@ -216,7 +218,7 @@ def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0,
     }
 
 
-def cost(gains, duration=8.0):
+def cost(gains, duration=8.0, backlash=0.0):
     """Scalar score for tuning. Lower is better; falling is heavily penalised."""
     total = 0.0
     trials = [
@@ -226,7 +228,7 @@ def cost(gains, duration=8.0):
         dict(duration=duration, v_des=lambda t: 0.25 if 2.0 < t < 5.0 else 0.0),
     ]
     for kw in trials:
-        r = rollout(gains, **kw)
+        r = rollout(gains, backlash=backlash, **kw)
         if r["fell"]:
             total += 100.0 + 10.0 * (duration - r["t_end"])
             continue

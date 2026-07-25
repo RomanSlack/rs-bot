@@ -129,3 +129,41 @@ def test_twenty_consecutive_transitions():
         assert abs(pitch_from_quat(obs(m, d)["quat"])) < 1.0, f"fell, cycle {cycles+1}"
         assert d.xpos[torso][2] > 0.12
     assert cycles == 20
+
+
+# --- backlash ---------------------------------------------------------------
+
+def test_backlash_zero_is_the_rigid_model():
+    """backlash=0 must add no bodies, so every index-based test still holds."""
+    a, _ = load()
+    b, _ = load(backlash=0.0)
+    assert a.nq == b.nq == 17 and a.nbody == b.nbody == 10
+
+
+def test_backlash_adds_one_lash_joint_per_actuator():
+    import mujoco
+    m, _ = load(backlash=0.02)
+    names = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, i)
+             for i in range(m.njnt)]
+    assert sum(1 for n in names if n and n.endswith("_lash")) == m.nu
+
+
+def test_lashed_leg_does_not_collide_with_itself():
+    """Drive bodies break MuJoCo's parent-child exclusions; without the full
+    exclude list the leg self-collides at rest."""
+    m, d = load(backlash=0.05)
+    assert d.ncon == 0
+
+
+def test_stance_is_addressed_by_name_not_index():
+    """Lash joints interleave into the ordering, so an index-written keyframe
+    silently scrambles. Both models must reach the same physical stance."""
+    import mujoco
+    for bl in (0.0, 0.05):
+        m, d = load(backlash=bl)
+        for j, want in (("hip_l", 0.35), ("knee_l", -0.70),
+                        ("ankle_pitch_l", 0.35), ("ankle_roll_l", 0.0)):
+            i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, j)
+            assert d.qpos[m.jnt_qposadr[i]] == pytest.approx(want, abs=1e-9)
+        torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
+        assert d.xpos[torso][2] == pytest.approx(0.247, abs=1e-3)

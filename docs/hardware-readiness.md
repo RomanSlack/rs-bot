@@ -48,9 +48,9 @@ into the 33 Hz danger zone.
 
 Listed so nobody mistakes a green test suite for a working robot:
 
-- **Backlash.** Not modelled at all. 1-2 deg per joint is the single most
-  likely reason the real thing feels mushy, and it is the main open risk to the
-  whole desk-scale premise.
+- ~~Backlash~~ **now modelled** - see [backlash.md](backlash.md). Short version:
+  wheel mode survives 1-2 deg after re-tuning but wobbles badly, and foot mode
+  falls over while standing. Lash is a purchasing spec, not a detail.
 - **Serial bus latency and jitter.** Modelled only as a control rate, not as
   variable delay.
 - **Speed-dependent servo torque.** The model is a flat 2.9 N.m clamp; real

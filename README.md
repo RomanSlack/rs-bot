@@ -76,7 +76,9 @@ uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```
 
-See [docs/stage-0.md](docs/stage-0.md) for the balancer numbers,
+See [docs/hardware-readiness.md](docs/hardware-readiness.md) for what to buy
+and what sim still cannot tell you,
+[docs/stage-0.md](docs/stage-0.md) for the balancer numbers,
 [docs/stage-0b.md](docs/stage-0b.md) for the transition and the two mechanisms
 that failed first, and [docs/mass-budget.md](docs/mass-budget.md) for where the
 2.05 kg goes.

@@ -39,6 +39,13 @@
     </default>
   </default>
 
+  <visual>
+    <global offwidth="1280" offheight="720"/>
+    <quality shadowsize="4096"/>
+    <headlight ambient="0.45 0.45 0.45" diffuse="0.55 0.55 0.55" specular="0.1 0.1 0.1"/>
+    <map znear="0.02" zfar="30"/>
+  </visual>
+
   <asset>
     <texture name="grid" type="2d" builtin="checker" width="512" height="512"
              rgb1="0.22 0.23 0.25" rgb2="0.28 0.29 0.31"/>

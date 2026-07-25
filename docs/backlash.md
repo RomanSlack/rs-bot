@@ -58,19 +58,61 @@ So the headline claim from stage 0b - "stands with the controller completely
 off" - is a rigid-model result. On real servos it will need a controller, just
 a weak one.
 
-## What to do about it
+## The fix: a low-gain ankle loop in foot mode. Built, and it works.
 
-1. **Do not switch the controller fully off in foot mode.** Keep a low-gain
-   ankle-pitch loop on the IMU. The support polygon means it only needs to be
-   weak, but it cannot be nothing: something has to take up the lash. This is
-   the same ankle strategy already noted as the fix for foot-mode disturbance
-   rejection, and it is now load-bearing rather than a nice-to-have.
-2. **Treat lash as a purchasing spec, not a detail.** The difference between
-   0.5 and 3 deg is the difference between a robot that works and one that
-   cannot stand up. Worth paying for lower-backlash servos, or preloading the
-   ankle joints against a spring.
-3. **Re-tune on hardware, not in sim.** The gains here are tuned against a lash
-   figure that is a guess.
+Foot mode no longer switches the controller fully off. It runs a weak
+PID on ankle pitch against IMU pitch - the support polygon still does the
+work, but *something* has to take up the lash:
+
+    apitch += stand_kp * pitch + stand_kd * pitch_rate + integral
+    stand_kp 1.2   stand_kd 0.12   stand_ki 0.6
+
+Positive ankle pitch tips the toe down, and the reaction rotates the body
+back, so a forward lean wants more ankle pitch. The integral absorbs the
+steady offset from the CoM not sitting dead centre on the foot, which leaves
+the P term free to fight disturbances.
+
+**Standing, 15 s:**
+
+| lash | loop off | loop on |
+|---|---|---|
+| 0 | stands, 3.6 deg wobble | stands, **1.1 deg** |
+| 0.5 deg | stands, 11.9 deg | stands, **3.1 deg** |
+| 1 deg | stands, 13.8 deg | stands, **3.8 deg** |
+| 2 deg | **falls at 1.1 s** | stands, **4.7 deg** |
+| 3 deg | **falls at 1.0 s** | stands, **5.5 deg** |
+
+**Largest shove survived:**
+
+| lash | loop off | loop on |
+|---|---|---|
+| 0 | 0.4 N.s | 0.5 N.s |
+| 1 deg | 0.2 N.s | **0.5 N.s** |
+| 2 deg | falls unshoved | **0.5 N.s** |
+
+Disturbance rejection becomes lash-independent, and 0.5 N.s is close to the
+geometric ceiling - tipping over the 40 mm foot edge takes about 0.58 N.s of
+energy, so there is little left to win without a bigger foot or a step.
+
+**Full round trip** (drive, flip, stand, flip back, drive on):
+
+| lash | loop off | loop on |
+|---|---|---|
+| 0.5 deg | ok | ok |
+| 1 deg | **falls in STAND** | ok |
+| 2 deg | **falls in STAND** | ok |
+
+The gains sit right at the stability edge: anything above `stand_kp` 1.2
+chatters through the deadzone and is unstable. Do not turn it up.
+
+## Still to do about it
+
+1. **Treat lash as a purchasing spec, not a detail.** The loop rescues foot
+   mode, but wheel mode still degrades from 1.2 deg of pitch swing to 20-25 at
+   1-2 deg of lash, and 3 deg falls. Worth paying for lower-backlash servos, or
+   preloading joints against a spring.
+2. **Re-tune on hardware.** `balance.LASH_GAINS` is a starting point tuned
+   against a guessed lash figure, not an answer.
 
 ## Bugs this exposed
 

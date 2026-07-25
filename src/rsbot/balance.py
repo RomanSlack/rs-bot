@@ -32,6 +32,12 @@ class Gains:
     tau_odom: float = 0.05   # s, low-pass on wheel-derived speed
 
 
+# Gains re-tuned against 1 deg of gear lash. The rigid-model defaults above
+# survive NO backlash at all, so this is the set to start from on hardware.
+# It is mostly the outer loop that has to change. See docs/backlash.md.
+LASH_GAINS = Gains(kp=48.0, kd=1.719, kv=0.640, kx=0.537, tau_odom=0.0312)
+
+
 def pitch_from_quat(q):
     """Pitch about +y from a wxyz quaternion. Positive = leaning forward."""
     w, x, y, z = q

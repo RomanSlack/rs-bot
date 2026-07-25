@@ -167,3 +167,73 @@ def test_stance_is_addressed_by_name_not_index():
             assert d.qpos[m.jnt_qposadr[i]] == pytest.approx(want, abs=1e-9)
         torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
         assert d.xpos[torso][2] == pytest.approx(0.247, abs=1e-3)
+
+
+# --- foot-mode ankle loop ----------------------------------------------------
+
+def _stand_in_foot_mode(backlash, cfg, impulse=0.0, duration=9.0):
+    """Drop the robot straight into foot mode and see if it stays there."""
+    import mujoco
+    from src.rsbot.model import ROLL_FOOT, WHEEL_HALF_W, ankle_pitch_level
+    from src.rsbot.sim import CTRL_HZ, obs
+    from src.rsbot.transition import DeployMachine, STAND
+    from src.rsbot.balance import pitch_from_quat
+
+    m, d = load(backlash=backlash)
+    mach = DeployMachine(cfg=cfg)
+    mach.state, mach.roll, mach.unload = STAND, ROLL_FOOT, 0.0
+    mach.bal.height = cfg.stand_height
+    hip, knee = leg_ik(cfg.stand_height)
+    pose = {"hip": hip, "knee": knee,
+            "ankle_pitch": ankle_pitch_level(hip, knee), "ankle_roll": ROLL_FOOT}
+
+    d.qpos[:] = 0
+    d.qpos[2], d.qpos[3] = cfg.stand_height + WHEEL_HALF_W, 1.0
+    for i in range(m.njnt):
+        n = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, i)
+        if not n or n == "root":
+            continue
+        key = n.rsplit("_", 1)[0] if n.endswith(("_l", "_r")) else None
+        d.qpos[m.jnt_qposadr[i]] = pose.get(key, 0.0)
+    mujoco.mj_forward(m, d)
+
+    decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))
+    dt = decim * m.opt.timestep
+    torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
+    for j in range(int(duration / m.opt.timestep)):
+        t = j * m.opt.timestep
+        if j % decim == 0:
+            d.ctrl[:] = mach(obs(m, d), dt)
+        d.xfrc_applied[torso] = 0.0
+        if impulse and 3.0 <= t < 3.010:
+            d.xfrc_applied[torso, 0] = impulse / 0.010
+        mujoco.mj_step(m, d)
+        if abs(pitch_from_quat(obs(m, d)["quat"])) > 0.8 or d.xpos[torso][2] < 0.10:
+            return False
+    return True
+
+
+def _no_loop(cfg):
+    from dataclasses import replace
+    return replace(cfg, stand_kp=0.0, stand_kd=0.0, stand_ki=0.0)
+
+
+@pytest.mark.parametrize("deg", [1.0, 2.0, 3.0])
+def test_ankle_loop_is_what_makes_foot_mode_survive_backlash(deg):
+    """Passive stance depends on rigidity, so lash breaks it. The loop only has
+    to take up the lash, not balance."""
+    cfg = DeployCfg(flip_rate=2.0)
+    assert _stand_in_foot_mode(math.radians(deg), cfg), f"loop failed at {deg} deg"
+
+
+def test_foot_mode_falls_without_the_loop_once_lash_is_real():
+    """Guards the claim above: at 2 deg the loop is load-bearing, not cosmetic."""
+    cfg = DeployCfg(flip_rate=2.0)
+    assert not _stand_in_foot_mode(math.radians(2.0), _no_loop(cfg))
+
+
+def test_round_trip_survives_backlash():
+    from src.rsbot.balance import LASH_GAINS
+    r = rollout_cycle(cfg=DeployCfg(flip_rate=2.0), gains=LASH_GAINS,
+                      stand_for=3.0, duration=30.0, backlash=math.radians(1.0))
+    assert not r["fell"] and r["back_on_wheels"]

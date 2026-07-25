@@ -10,7 +10,12 @@ where the CoM already is. No fore/aft margin to scrounge for.
     FLIP    roll both wheels to 90 deg. The disc's low point falls from 40 mm
             to 12 mm (after a 1.76 mm bump at 16.7 deg), so the robot simply
             settles 28 mm as it goes. Contact is never broken.
-    STAND   flat on both faces, wheels braked, balancer off
+    STAND   flat on both faces, wheels braked, and a LOW-GAIN ankle loop
+            holding pitch. Not a balancer - the support polygon does the
+            work - but it cannot be nothing, because gear lash lets the body
+            rotate 2-3 deg for free before any servo can feel it. On a rigid
+            model this loop is unnecessary; on real servos it is what keeps
+            the robot up. See docs/backlash.md.
     UNFLIP  roll back to upright and hand control back to the balancer
 
 Wheel drive authority falls off as cos(roll), so the balancer is fading out
@@ -41,6 +46,12 @@ class DeployCfg:
     settle_timeout: float = 4.0
     trim_tau: float = 0.5
     unload_time: float = 0.20     # s to ramp the wheel command out
+    # Foot-mode ankle hold. Deliberately weak: it only has to take up the lash
+    # and damp, not balance an inverted pendulum.
+    stand_kp: float = 1.2
+    stand_kd: float = 0.12
+    stand_ki: float = 0.6
+    stand_i_clamp: float = 0.25   # rad of accumulated ankle offset
     reload_time: float = 0.30     # s to ramp it back in on the way up
 
 
@@ -55,6 +66,7 @@ class DeployMachine:
         self.roll = ROLL_WHEEL
         self.unload = 1.0
         self.trim = 0.0
+        self.stand_i = 0.0
         self.cruise_height = cruise_height
         self.timed_out = False
         self.log = []
@@ -70,6 +82,7 @@ class DeployMachine:
 
     def start_retract(self):
         if self.state == STAND:
+            self.stand_i = 0.0
             # The balancer has been idle and its odometry is stale: x still
             # holds wherever the robot was when it stopped balancing. Clearing
             # it stops the position term yanking the robot back there.
@@ -123,6 +136,10 @@ class DeployMachine:
 
         elif self.state == STAND:
             self.unload = max(0.0, self.unload - dt / c.unload_time)
+            # Integral absorbs the steady offset from the CoM not sitting dead
+            # centre on the foot, so the P term is free to fight disturbances.
+            self.stand_i = float(np.clip(self.stand_i + c.stand_ki * pitch * dt,
+                                         -c.stand_i_clamp, c.stand_i_clamp))
 
         elif self.state == UNFLIP:
             self.roll = self._ramp(self.roll, ROLL_WHEEL, c.flip_rate, dt)
@@ -142,6 +159,9 @@ class DeployMachine:
         apitch = ankle_pitch_level(hip, knee, c.ankle_bias)
 
         if self.state == STAND:
+            # Positive ankle pitch tips the toe down, whose reaction rotates
+            # the body back, so a forward lean wants MORE ankle pitch.
+            apitch += c.stand_kp * pitch + c.stand_kd * rate + self.stand_i
             return make_ctrl(hip, knee, apitch, self.roll, 0.0)
 
         ctrl = self.bal(obs, dt, v_des=v_des,

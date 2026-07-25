@@ -18,10 +18,10 @@ Nothing here is bought yet. Everything runs in MuJoCo.
 **Stages 0 and 0b (sim) - done.** Balances, drives, rejects shoves, and flips
 its wheels flat to stand for 87 s with the controller off.
 
-That last claim is a **rigid-model** result. With realistic gear backlash the
-robot still balances, but it wobbles and it cannot hold the passive foot stance
-without a low-gain ankle loop. See [docs/backlash.md](docs/backlash.md); it is
-the finding that most changes the hardware plan.
+Gear backlash is modelled, and it is the finding that most changed the plan:
+the passive foot stance needs a low-gain ankle loop to survive it, and wheel
+mode needs different gains. Both are built. With 2 deg of lash the full round
+trip still works. See [docs/backlash.md](docs/backlash.md).
 
 Stage 1 hardware has not started.
 

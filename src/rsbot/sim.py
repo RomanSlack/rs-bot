@@ -145,6 +145,77 @@ def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None
     }
 
 
+def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0,
+                  duration=26.0, v_des=0.35, viewer=None):
+    """Drive, flip to feet, stand, flip back, drive on. Returns metrics.
+
+    This is the round trip: the exit criterion for stage 0b is not just
+    reaching foot mode but getting back out of it and still being useful.
+    """
+    from .transition import DeployMachine, STAND, WHEEL, NAMES
+
+    m, d = load()
+    mach = DeployMachine(gains, cfg)
+    torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
+    decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))
+    dt = decim * m.opt.timestep
+
+    fired = stood_at = retracted = None
+    fell = False
+    x_flip = x_back = x_stand0 = x_stand1 = None
+    pitch = 0.0
+
+    for k in range(int(duration / m.opt.timestep)):
+        t = k * m.opt.timestep
+
+        if fired is None and t >= flip_at:
+            mach.start_deploy()
+            fired = t
+            x_flip = float(d.xpos[torso][0])
+        if (stood_at is not None and retracted is None
+                and t >= stood_at + stand_for):
+            mach.start_retract()
+            retracted = t
+        if mach.state == STAND and stood_at is None:
+            stood_at = t
+            x_stand0 = float(d.xpos[torso][0])
+        if retracted is not None and x_stand1 is None:
+            x_stand1 = float(d.xpos[torso][0])
+        if retracted is not None and mach.state == WHEEL and x_back is None:
+            x_back = t
+
+        drive = v_des if (fired is None or x_back is not None) else 0.0
+        if k % decim == 0:
+            d.ctrl[:] = mach(obs(m, d), dt, v_des=drive)
+
+        mujoco.mj_step(m, d)
+        if viewer is not None:
+            viewer(m, d, t)
+
+        pitch = pitch_from_quat(obs(m, d)["quat"])
+        if d.xpos[torso][2] < 0.12 or abs(pitch) > 1.0:
+            fell = True
+            break
+
+    return {
+        "fell": fell,
+        "state": NAMES[mach.state],
+        "reached_stand": stood_at is not None,
+        "back_on_wheels": x_back is not None,
+        "x_at_flip": round(x_flip, 3) if x_flip is not None else None,
+        "x_end": round(float(d.xpos[torso][0]), 3),
+        # How far it wandered while it was supposed to be standing still.
+        "slip_while_standing": (round(x_stand1 - x_stand0, 4)
+                                if x_stand0 is not None and x_stand1 is not None
+                                else None),
+        "stand_seconds": (round(retracted - stood_at, 2)
+                          if stood_at is not None and retracted is not None
+                          else None),
+        "final_pitch": round(pitch, 4),
+        "log": mach.log,
+    }
+
+
 def cost(gains, duration=8.0):
     """Scalar score for tuning. Lower is better; falling is heavily penalised."""
     total = 0.0

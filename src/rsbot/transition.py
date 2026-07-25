@@ -11,9 +11,11 @@ where the CoM already is. No fore/aft margin to scrounge for.
             to 12 mm (after a 1.76 mm bump at 16.7 deg), so the robot simply
             settles 28 mm as it goes. Contact is never broken.
     STAND   flat on both faces, wheels braked, balancer off
+    UNFLIP  roll back to upright and hand control back to the balancer
 
 Wheel drive authority falls off as cos(roll), so the balancer is fading out
-exactly as the polygon appears. That handover is what FLIP_RATE trades against.
+exactly as the polygon appears. That handover is what flip_rate trades against,
+and UNFLIP runs it in reverse: authority grows back as the polygon shrinks.
 """
 
 from dataclasses import dataclass
@@ -24,8 +26,8 @@ from .balance import Balancer, Gains, pitch_from_quat
 from .model import (ROLL_FOOT, ROLL_WHEEL, ankle_pitch_level, leg_ik,
                     make_ctrl)
 
-WHEEL, SETTLE, FLIP, STAND = range(4)
-NAMES = ["WHEEL", "SETTLE", "FLIP", "STAND"]
+WHEEL, SETTLE, FLIP, STAND, UNFLIP = range(5)
+NAMES = ["WHEEL", "SETTLE", "FLIP", "STAND", "UNFLIP"]
 
 
 @dataclass
@@ -39,6 +41,7 @@ class DeployCfg:
     settle_timeout: float = 4.0
     trim_tau: float = 0.5
     unload_time: float = 0.20     # s to ramp the wheel command out
+    reload_time: float = 0.30     # s to ramp it back in on the way up
 
 
 class DeployMachine:
@@ -52,6 +55,7 @@ class DeployMachine:
         self.roll = ROLL_WHEEL
         self.unload = 1.0
         self.trim = 0.0
+        self.cruise_height = cruise_height
         self.timed_out = False
         self.log = []
 
@@ -63,6 +67,22 @@ class DeployMachine:
     def start_deploy(self):
         if self.state == WHEEL:
             self._go(SETTLE)
+
+    def start_retract(self):
+        if self.state == STAND:
+            # The balancer has been idle and its odometry is stale: x still
+            # holds wherever the robot was when it stopped balancing. Clearing
+            # it stops the position term yanking the robot back there.
+            self.bal.reset()
+            self.bal.outer_enabled = False
+            self.bal.height = self.cfg.stand_height
+            self._go(UNFLIP)
+
+    def toggle(self):
+        if self.state == WHEEL:
+            self.start_deploy()
+        elif self.state == STAND:
+            self.start_retract()
 
     def _ramp(self, value, target, rate, dt):
         return value + np.clip(target - value, -rate * dt, rate * dt)
@@ -103,6 +123,20 @@ class DeployMachine:
 
         elif self.state == STAND:
             self.unload = max(0.0, self.unload - dt / c.unload_time)
+
+        elif self.state == UNFLIP:
+            self.roll = self._ramp(self.roll, ROLL_WHEEL, c.flip_rate, dt)
+            # Feed the wheels back in as the disc comes upright, since a
+            # near-flat disc just scrubs rather than driving.
+            self.unload = min(1.0, self.unload + dt / c.reload_time)
+            if self.roll < ROLL_FOOT * 0.5:
+                self.bal.outer_enabled = True
+            if self.roll <= ROLL_WHEEL + 1e-4:
+                self._go(WHEEL)
+
+        elif self.state == WHEEL:
+            self.bal.height = self._ramp(self.bal.height, self.cruise_height,
+                                         0.10, dt)
 
         hip, knee = leg_ik(self.bal.height)
         apitch = ankle_pitch_level(hip, knee, c.ankle_bias)

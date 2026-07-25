@@ -8,7 +8,7 @@ import pytest
 
 from src.rsbot.model import (ROLL_FOOT, ROLL_WHEEL, WHEEL_HALF_W, WHEEL_R,
                             ankle_pitch_level, axle_height, leg_ik, load)
-from src.rsbot.sim import rollout_deploy
+from src.rsbot.sim import rollout_cycle, rollout_deploy
 from src.rsbot.transition import DeployCfg
 
 
@@ -82,3 +82,50 @@ def test_transition_is_robust_across_flip_rates(rate):
     r = rollout_deploy(cfg=DeployCfg(flip_rate=rate), duration=25.0)
     assert not r["fell"]
     assert r["state"] == "STAND"
+
+
+def test_round_trip_and_keeps_driving():
+    """Stage 0b is only done if it can get back OUT of foot mode and stay
+    useful, not just get into it."""
+    r = rollout_cycle(cfg=DeployCfg(flip_rate=2.0), stand_for=4.0, duration=30.0)
+    assert not r["fell"]
+    assert r["reached_stand"] and r["back_on_wheels"]
+    assert r["state"] == "WHEEL"
+    # It stood still while standing, then carried on well past where it flipped.
+    assert abs(r["slip_while_standing"]) < 0.02
+    assert r["x_end"] > r["x_at_flip"] + 1.0
+
+
+def test_twenty_consecutive_transitions():
+    """The stage-2 hardware criterion, run in sim."""
+    import mujoco
+    from src.rsbot.sim import CTRL_HZ, obs
+    from src.rsbot.transition import DeployMachine, STAND, WHEEL
+    from src.rsbot.balance import pitch_from_quat
+
+    m, d = load()
+    mach = DeployMachine(cfg=DeployCfg(flip_rate=2.0))
+    torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
+    decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))
+    dt = decim * m.opt.timestep
+
+    cycles, phase, mark = 0, "drive", 2.0
+    for k in range(int(400 / m.opt.timestep)):
+        t = k * m.opt.timestep
+        if phase == "drive" and t >= mark and mach.state == WHEEL:
+            mach.start_deploy(); phase = "toFoot"
+        elif phase == "toFoot" and mach.state == STAND:
+            phase, mark = "standing", t + 1.5
+        elif phase == "standing" and t >= mark:
+            mach.start_retract(); phase = "toWheel"
+        elif phase == "toWheel" and mach.state == WHEEL:
+            cycles += 1; phase, mark = "drive", t + 1.5
+            if cycles >= 20:
+                break
+        if k % decim == 0:
+            d.ctrl[:] = mach(obs(m, d), dt,
+                             v_des=0.30 if phase == "drive" else 0.0)
+        mujoco.mj_step(m, d)
+        assert abs(pitch_from_quat(obs(m, d)["quat"])) < 1.0, f"fell, cycle {cycles+1}"
+        assert d.xpos[torso][2] > 0.12
+    assert cycles == 20

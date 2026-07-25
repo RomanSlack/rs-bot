@@ -1,9 +1,10 @@
-"""Render a demo run to MP4.  uv run python render.py [out.mp4]
+"""Render the full round trip to MP4.  uv run python render.py [out.mp4]
 
-Offscreen via EGL, so it works without a window. The camera tracks the torso.
+Drive forward -> flip the wheels flat -> stand with the controller off ->
+flip back -> keep driving. Offscreen via EGL, so it needs no window.
 
-Output defaults to renders/rsbot-stage0-<timestamp>.mp4 so runs accumulate
-instead of overwriting each other.
+Captions are driven off the state machine itself rather than a fixed timeline,
+so what the video says is what the controller is actually doing.
 """
 
 import os
@@ -16,105 +17,110 @@ os.environ.setdefault("MUJOCO_GL", "egl")
 
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
+from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 from src.rsbot.model import load  # noqa: E402
 from src.rsbot.sim import CTRL_HZ, obs  # noqa: E402
-from src.rsbot.transition import DeployMachine  # noqa: E402
 from src.rsbot.balance import pitch_from_quat  # noqa: E402
+from src.rsbot.transition import (DeployMachine, DeployCfg, NAMES, STAND,
+                                  WHEEL)  # noqa: E402
 
-W, H, FPS = 960, 540, 60
+W, H, FPS = 1280, 720, 60
+CRUISE = 0.35
 
-# (t_start, label, v_des, shove_impulse)
-SCRIPT = [
-    (0.0, "wheel mode - balancing", 0.0, None),
-    (2.0, "drive forward", 0.35, None),
-    (5.0, "stop", 0.0, None),
-    (6.5, "SHOVE 0.7 N.s", 0.0, 0.7),
-    (9.5, "recovered", 0.0, None),
-    (11.0, "FLIP - wheels roll 90 deg", 0.0, "deploy"),
-    (13.0, "foot mode - balancer OFF", 0.0, None),
-    (18.0, "still standing, nothing running", 0.0, None),
-]
-DURATION = 24.0
+CAPTION = {
+    "WHEEL":  "wheel mode - actively balancing",
+    "SETTLE": "stopping, waiting for a quiet moment",
+    "FLIP":   "FLIP - ankles roll 90 degrees",
+    "STAND":  "foot mode - balancer OFF, standing on the wheel faces",
+    "UNFLIP": "UNFLIP - rolling back upright",
+}
+
+FONT = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
+SMALL = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
 
 
-def cue(t):
-    for i in range(len(SCRIPT) - 1, -1, -1):
-        if t >= SCRIPT[i][0]:
-            return SCRIPT[i]
-    return SCRIPT[0]
+def annotate(rgb, caption, rows):
+    im = Image.fromarray(rgb)
+    dr = ImageDraw.Draw(im, "RGBA")
+    dr.rectangle([0, 0, W, 66], fill=(0, 0, 0, 150))
+    dr.text((26, 18), caption, font=FONT, fill=(255, 255, 255, 255))
+    dr.rectangle([0, H - 46, W, H], fill=(0, 0, 0, 140))
+    dr.text((26, H - 36), "     ".join(rows), font=SMALL, fill=(210, 216, 226, 255))
+    return im
 
 
 def default_out():
     Path("renders").mkdir(exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return f"renders/rsbot-stage0-{ts}.mp4"
+    return f"renders/rsbot-cycle-{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
 
 
 def main(out=None):
     out = out or default_out()
     m, d = load()
-    bal = DeployMachine()
+    mach = DeployMachine(cfg=DeployCfg(flip_rate=2.0))
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
+    wheel = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "wheel_l")
+
     decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))
     dt = decim * m.opt.timestep
     frame_every = int(round(1.0 / (FPS * m.opt.timestep)))
 
     renderer = mujoco.Renderer(m, H, W)
     cam = mujoco.MjvCamera()
-    cam.distance, cam.elevation, cam.azimuth = 0.95, -8, 132
-    cam.lookat[:] = [0, 0, 0.20]
-
-    # One drawtext per cue, switched on over that cue's time window.
-    draws = []
-    for i, (t0, label, _, _) in enumerate(SCRIPT):
-        t1 = SCRIPT[i + 1][0] if i + 1 < len(SCRIPT) else DURATION
-        txt = label.replace(":", r"\:").replace("'", "")
-        draws.append(
-            f"drawtext=text='{txt}':x=28:y=28:fontsize=30:fontcolor=white:"
-            f"box=1:boxcolor=black@0.55:boxborderw=10:"
-            f"enable='between(t,{t0},{t1})'")
-    vf = ",".join(draws) + ",format=yuv420p"
+    cam.distance, cam.elevation, cam.azimuth = 1.05, -9, 128
 
     ff = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
          "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-         "-vf", vf, "-crf", "20", out],
-        stdin=subprocess.PIPE)
+         "-vf", "format=yuv420p", "-crf", "19", out], stdin=subprocess.PIPE)
 
-    fired = set()
-    shove_until = -1.0
-    for k in range(int(DURATION / m.opt.timestep)):
+    FLIP_AT, STAND_FOR, DRIVE_AFTER = 4.0, 5.0, 6.0
+    fired = stood_at = retracted = back_at = None
+    duration = 40.0
+
+    for k in range(int(duration / m.opt.timestep)):
         t = k * m.opt.timestep
-        t0, label, v_des, imp = cue(t)
+
+        if fired is None and t >= FLIP_AT:
+            mach.start_deploy()
+            fired = t
+        if mach.state == STAND and stood_at is None:
+            stood_at = t
+        if stood_at is not None and retracted is None and t >= stood_at + STAND_FOR:
+            mach.start_retract()
+            retracted = t
+        if retracted is not None and mach.state == WHEEL and back_at is None:
+            back_at = t
+        if back_at is not None and t >= back_at + DRIVE_AFTER:
+            duration = t
+            break
+
+        # Drive before the flip and again once it is back on its wheels. The
+        # machine gates this to zero in every other state by itself.
+        drive = CRUISE if (fired is None or back_at is not None) else 0.0
 
         if k % decim == 0:
-            d.ctrl[:] = bal(obs(m, d), dt, v_des)
-
-        d.xfrc_applied[torso] = 0.0
-        if imp is not None and t0 not in fired:
-            fired.add(t0)
-            if imp == "deploy":
-                bal.start_deploy()
-            else:
-                shove_until = t + 0.010
-                d.xfrc_applied[torso, 0] = imp / 0.010
-        elif isinstance(imp, float) and t < shove_until:
-            d.xfrc_applied[torso, 0] = imp / 0.010
-
+            d.ctrl[:] = mach(obs(m, d), dt, v_des=drive)
         mujoco.mj_step(m, d)
 
         if k % frame_every == 0:
             cam.lookat[0] = d.xpos[torso][0]
+            cam.lookat[2] = 0.20
             renderer.update_scene(d, camera=cam)
-            ff.stdin.write(renderer.render().tobytes())
+            pitch = np.degrees(pitch_from_quat(obs(m, d)["quat"]))
+            rows = [f"state {NAMES[mach.state]}",
+                    f"roll {np.degrees(mach.roll):5.1f} deg",
+                    f"axle {d.xpos[wheel][2]*1000:5.1f} mm",
+                    f"pitch {pitch:+5.1f} deg",
+                    f"x {d.xpos[torso][0]:+5.2f} m"]
+            frame = annotate(renderer.render(), CAPTION[NAMES[mach.state]], rows)
+            ff.stdin.write(frame.tobytes())
 
     ff.stdin.close()
     ff.wait()
-
-    pitch = pitch_from_quat(obs(m, d)["quat"])
-    print(f"wrote {out}  ({DURATION:.0f} s)  final pitch {np.degrees(pitch):+.2f} deg, "
-          f"x {d.xpos[torso][0]:+.3f} m, upright={d.xpos[torso][2] > 0.20}")
+    print(f"wrote {out}  ({duration:.1f} s)  travelled {d.xpos[torso][0]:+.2f} m, "
+          f"upright={d.xpos[torso][2] > 0.18}, state={NAMES[mach.state]}")
 
 
 if __name__ == "__main__":

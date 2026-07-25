@@ -1,14 +1,21 @@
 # Stage 0b: the transition
 
-**Status: DONE. The robot flips its wheels flat and stands on them with the
-balancer completely off.**
+**Status: DONE, both directions. The robot drives, flips its wheels flat,
+stands with the balancer off, flips back, and drives on.**
 
 ## Result
 
-    2.00s  WHEEL  -> SETTLE
-    2.00s  SETTLE -> FLIP
-    2.79s  FLIP   -> STAND      flip takes 0.79 s
-    stands 87.2 s of a 90 s run, 7.8 mm drift, balancer off throughout
+    4.00s  WHEEL  -> SETTLE     decelerates, waits for a quiet moment
+    5.43s  SETTLE -> FLIP
+    6.22s  FLIP   -> STAND      flip takes 0.79 s
+   10.22s  STAND  -> UNFLIP
+   11.01s  UNFLIP -> WHEEL      and it drives away
+
+**20 consecutive round trips, zero falls**, over 120 s of sim, travelling
+8.67 m between transitions. That is the stage-2 hardware criterion, met in sim.
+
+Standing still, it stands 87.2 s of a 90 s run with 7.8 mm of drift and the
+balancer off. Slip during a stand is 2-4 mm.
 
 | | |
 |---|---|
@@ -44,6 +51,19 @@ and the balancer keeps authority the whole way down.
 
 Ankle pitch holds the face level as the leg pitches, and `ankle_bias` tips it
 deliberately - the ankle flex available in foot mode.
+
+## Getting back out
+
+`UNFLIP` runs the handover in reverse: authority grows back as cos(roll) while
+the support polygon shrinks. Two things it has to get right, both of which are
+the kind of bug that only shows up on the return trip:
+
+- **Reset the balancer's odometry.** It has been idle through STAND, so its
+  integrated position still holds wherever the robot stopped. Without a reset
+  the position term hauls the robot back there the instant it re-engages.
+- **Feed the wheels back in gradually** (`reload_time`). A near-flat disc
+  scrubs rather than drives, so commanding full wheel speed at 90 deg of roll
+  just fights the floor.
 
 ## Cost
 

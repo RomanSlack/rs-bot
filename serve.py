@@ -67,6 +67,10 @@ class Sim:
                 self.shove_until = self.d.time + 0.010
             elif a == "deploy":
                 self.mach.start_deploy()
+            elif a == "retract":
+                self.mach.start_retract()
+            elif a == "toggle":
+                self.mach.toggle()
             elif a == "speed":
                 self.speed = max(0.05, min(2.0, v))
             elif a == "cam":
@@ -165,7 +169,8 @@ button.hot{background:#5e3527;border-color:#7d4633}
   <button onclick="c('drive',0)">stop</button>
   <button class=hot onclick="c('shove',1.0)">shove &rarr;</button>
   <button class=hot onclick="c('shove',-1.0)">&larr; shove</button>
-  <button class=go onclick="c('deploy')">flip wheels to feet</button>
+  <button class=go onclick="c('deploy')">flip to feet</button>
+  <button class=go onclick="c('retract')">back to wheels</button>
   <button onclick="c('reset')">reset</button>
 </div>
 <div class=row>
@@ -200,7 +205,7 @@ setInterval(tick,200);tick();
 document.addEventListener('keydown',e=>{
   if(e.repeat)return;
   if(e.key=='w')c('drive',0.35); if(e.key=='s')c('drive',-0.35);
-  if(e.key==' ')c('shove',1.0); if(e.key=='d')c('deploy'); if(e.key=='r')c('reset');
+  if(e.key==' ')c('shove',1.0); if(e.key=='d')c('toggle'); if(e.key=='r')c('reset');
 });
 document.addEventListener('keyup',e=>{if(e.key=='w'||e.key=='s')c('drive',0)});
 </script></body></html>"""

@@ -49,8 +49,8 @@ def seg_dist(pts, a, b):
     return np.linalg.norm(pts - (a + t[:, None] * ab), axis=1)
 
 
-def sweep(height=0.207, verbose=True):
-    m, d = load()
+def sweep(height=0.207, verbose=True, sole=None):
+    m, d = load(**(sole or {}))
     i = _ids(m)
     hip, knee = leg_ik(height)
 

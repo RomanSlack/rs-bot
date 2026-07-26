@@ -57,6 +57,37 @@ def make_ctrl(hip, knee, apitch, aroll, wheel):
                      hip, knee, apitch, aroll, wheel])
 
 
+# --- Real part dimensions, metres --------------------------------------------
+#
+# Visual-only geometry built from the actual parts, so the render shows what
+# would really be bolted together. It carries no mass and no collision: mass
+# lives on the simple collision shapes, which are moved to geom group 4 and
+# hidden. Nothing here changes the dynamics. See docs/bom.md.
+
+SERVO = (0.0452, 0.0247, 0.0354)      # STS3215 body, L x W x H
+SERVO_HORN_R = 0.0100                 # 25T output horn
+PI5 = (0.085, 0.056, 0.017)
+BATT_3S = (0.105, 0.034, 0.024)       # 2200 mAh 3S pack
+DRIVER = (0.050, 0.030, 0.010)        # TTL bus adapter
+WHEEL_TIRE_T = 0.008                  # tyre wall thickness
+
+C_SERVO = "0.13 0.13 0.15 1"
+C_HORN = "0.72 0.73 0.76 1"
+C_PRINT = "0.88 0.45 0.13 1"          # printed PETG
+C_TIRE = "0.09 0.09 0.10 1"
+C_HUB = "0.55 0.56 0.60 1"
+C_PCB = "0.05 0.33 0.17 1"
+C_BATT = "0.16 0.16 0.38 1"
+C_PLATE = "0.62 0.64 0.68 0.30"   # translucent, so the internals show
+
+
+def _v(name, gtype, size, pos, rgba, euler=None):
+    """A visual-only geom: no mass, no collision, hidden group for the solids."""
+    e = f' euler="{euler}"' if euler else ""
+    return (f'<geom name="{name}" type="{gtype}" size="{size}" pos="{pos}"'
+            f'{e} rgba="{rgba}" contype="0" conaffinity="0" mass="0" group="0"/>')
+
+
 # --- Leg construction, with optional gear backlash ----------------------------
 #
 # Backlash is modelled physically, not as a command deadband: each actuated
@@ -74,81 +105,145 @@ LASH_DAMPING = 0.001
 LASH_ARMATURE = 0.0001
 LASH_FRICTION = 0.0005
 
-_LINKS = {
-    "hip": ("thigh", '<geom class="leg" name="thigh_{s}" '
-                     'fromto="0 0 0  0 0 -0.110" mass="0.130"/>'),
-    "knee": ("shin", '<geom class="leg" name="shin_{s}" '
-                     'fromto="0 0 0  0 0 -0.094" mass="0.100"/>'),
-    "ankle_pitch": ("ankle", '<geom class="ankle" name="ankle_{s}" mass="0.120"/>'),
-}
+SEG_MASS = {"thigh": 0.130, "shin": 0.100, "ankle": 0.060,
+            "rollbracket": 0.060, "wheel": 0.060}
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
 
 
-def _seg(joint, side, axis, body, pos, backlash, depth):
-    """One joint plus its link body, with a lash joint spliced in if asked."""
-    ind = "  " * depth
-    jn = f"{joint}_{side}"
-    rng = f' range="{_RANGE[joint]}"' if joint in _RANGE else ""
-    j = f'<joint name="{jn}" axis="{axis}"{rng}/>'
-    if backlash <= 0:
-        return f'{ind}<body name="{body}" pos="{pos}">\n{ind}  {j}\n', f"{ind}</body>\n"
-    b = backlash / 2.0
-    head = (f'{ind}<body name="{jn}_drv" pos="{pos}">\n{ind}  {j}\n'
-            f'{ind}  <inertial pos="0 0 0" mass="{GEAR_MASS}" '
-            f'diaginertia="1e-6 1e-6 1e-6"/>\n'
-            f'{ind}  <body name="{body}" pos="0 0 0">\n'
-            f'{ind}    <joint name="{jn}_lash" axis="{axis}" '
-            f'range="{-b:.6f} {b:.6f}" damping="{LASH_DAMPING}" '
-            f'armature="{LASH_ARMATURE}" frictionloss="{LASH_FRICTION}"/>\n')
-    return head, f"{ind}  </body>\n{ind}</body>\n"
+def _link_geoms(link, side, sgn):
+    """Collision shape (group 4, carries the mass) plus the visual build."""
+    L, W, H = SERVO
+    sl, sw, sh = L / 2, W / 2, H / 2
+    m = SEG_MASS[link]
+    col, vis = [], []
+
+    if link == "thigh":
+        col.append(f'<geom class="leg" name="thigh_{side}" fromto="0 0 0  0 0 -0.110" '
+                   f'mass="{m}" group="4"/>')
+        vis += [_v(f"vhipsv_{side}", "box", f"{sh:.5f} {sw:.5f} {sl:.5f}",
+                   f"0 0 {-sl:.5f}", C_SERVO),
+                _v(f"vhiphorn_{side}", "cylinder", f"{SERVO_HORN_R} 0.004",
+                   f"0 {sgn*0.016:.4f} 0", C_HORN, euler="1.5708 0 0"),
+                _v(f"vthighbr_{side}", "box", f"0.010 0.016 0.0324",
+                   "0 0 -0.0776", C_PRINT)]
+    elif link == "shin":
+        col.append(f'<geom class="leg" name="shin_{side}" fromto="0 0 0  0 0 -0.094" '
+                   f'mass="{m}" group="4"/>')
+        vis += [_v(f"vkneesv_{side}", "box", f"{sh:.5f} {sw:.5f} {sl:.5f}",
+                   f"0 0 {-sl:.5f}", C_SERVO),
+                _v(f"vkneehorn_{side}", "cylinder", f"{SERVO_HORN_R} 0.004",
+                   f"0 {sgn*0.016:.4f} 0", C_HORN, euler="1.5708 0 0"),
+                _v(f"vshinbr_{side}", "box", f"0.010 0.016 0.0324",
+                   "0 0 -0.0776", C_PRINT)]
+    elif link == "ankle":
+        # Ankle-pitch servo. Must sit ABOVE the axle: in foot mode the wheel
+        # face is only 12 mm below it, and anything lower becomes the contact.
+        col.append(f'<geom class="ankle" name="ankle_{side}" '
+                   f'size="{sh:.5f} {sw:.5f} {sl:.5f}" pos="0 0 {sl:.5f}" '
+                   f'mass="{m}" group="4"/>')
+        vis.append(_v(f"vanksv_{side}", "box", f"{sh:.5f} {sw:.5f} {sl:.5f}",
+                      f"0 0 {sl:.5f}", C_SERVO))
+    elif link == "rollbracket":
+        col.append(f'<inertial pos="0 0 0.01" mass="{m}" '
+                   f'diaginertia="4e-5 4e-5 4e-5"/>')
+        # Roll servo: output on the fore/aft axis, so the body runs fore/aft.
+        # Offset OUTBOARD in y, because the 90 deg roll maps y onto z: anything
+        # sitting at y=0 ends up level with the axle and grazes the floor.
+        vis.append(_v(f"vrollsv_{side}", "box", f"{sl:.5f} {sw:.5f} {sh:.5f}",
+                      f"-0.034 {sgn*0.022:.4f} 0.020", C_SERVO))
+        # Wheel-drive servo, OUTBOARD so the 90 deg roll swings it up, not
+        # down into the floor.
+        vis.append(_v(f"vwhlsv_{side}", "box", f"{sh:.5f} {sl:.5f} {sw:.5f}",
+                      f"0 {sgn*(0.012+sl):.5f} 0", C_SERVO))
+        # Compact and hugging the axle. A plate reaching 45 mm up swings 18 mm
+        # BELOW the floor once the ankle rolls, which the abstract model hid.
+        vis.append(_v(f"vrollbr_{side}", "box", "0.018 0.010 0.010",
+                      f"0 {sgn*0.006:.4f} 0.018", C_PRINT))
+    elif link == "wheel":
+        col.append(f'<geom class="wheel" name="wheel_{side}" zaxis="0 1 0" '
+                   f'mass="{m}" group="4"/>')
+        vis += [_v(f"vtire_{side}", "cylinder", "0.040 0.012", "0 0 0", C_TIRE,
+                   euler="1.5708 0 0"),
+                _v(f"vhub_{side}", "cylinder", "0.024 0.0115", "0 0 0", C_HUB,
+                   euler="1.5708 0 0")]
+    return col + vis
+
+
+# joint, link body, offset from the parent
+CHAIN = [("hip", "thigh", None), ("knee", "shin", "0 0 -0.110"),
+         ("ankle_pitch", "ankle", "0 0 -0.110"),
+         ("ankle_roll", "rollbracket", "0 0 0"), ("wheel", "wheel", "0 0 0")]
 
 
 def _leg(side, backlash):
-    y = 0.060 if side == "l" else -0.060
-    roll_axis = "1 0 0" if side == "l" else "-1 0 0"
+    """One leg: hip pitch, knee pitch, ankle pitch, ankle ROLL, wheel.
+
+    The roll bracket is its own body because the wheel-drive servo bolts to it
+    and must NOT spin with the wheel.
+    """
+    sgn = 1 if side == "l" else -1
+    y = sgn * 0.060
+    b = backlash / 2.0
+    lash_attrs = (f'damping="{LASH_DAMPING}" armature="{LASH_ARMATURE}" '
+                  f'frictionloss="{LASH_FRICTION}"')
+    stub = f'<inertial pos="0 0 0" mass="{GEAR_MASS}" diaginertia="1e-6 1e-6 1e-6"/>'
+
     opens, closes = [], []
+    depth = 3
+    for joint, link, pos in CHAIN:
+        pos = pos or f"0 {y} 0"
+        axis = ("1 0 0" if side == "l" else "-1 0 0") if joint == "ankle_roll" else "0 1 0"
+        jn = f"{joint}_{side}"
+        rng = f' range="{_RANGE[joint]}"' if joint in _RANGE else ""
+        ind = "  " * depth
+        joint_xml = f'<joint name="{jn}" axis="{axis}"{rng}/>'
+        body = f"{link}_{side}"
 
-    for joint, pos in (("hip", f"0 {y} 0"), ("knee", "0 0 -0.110"),
-                       ("ankle_pitch", "0 0 -0.110")):
-        body, geom = _LINKS[joint]
-        depth = 3 + len(opens) * (2 if backlash > 0 else 1)
-        h, t = _seg(joint, side, "0 1 0", f"{body}_{side}", pos, backlash, depth)
-        ind = "  " * (depth + (2 if backlash > 0 else 1))
-        opens.append(h + ind + geom.format(s=side) + "\n")
-        closes.append(t)
+        if backlash > 0:
+            opens.append(
+                f'{ind}<body name="{jn}_drv" pos="{pos}">\n{ind}  {joint_xml}\n'
+                f'{ind}  {stub}\n'
+                f'{ind}  <body name="{body}" pos="0 0 0">\n'
+                f'{ind}    <joint name="{jn}_lash" axis="{axis}" '
+                f'range="{-b:.6f} {b:.6f}" {lash_attrs}/>\n')
+            closes.append(f"{ind}  </body>\n{ind}</body>\n")
+            gind = "  " * (depth + 2)
+            depth += 2
+        else:
+            opens.append(f'{ind}<body name="{body}" pos="{pos}">\n{ind}  {joint_xml}\n')
+            closes.append(f"{ind}</body>\n")
+            gind = "  " * (depth + 1)
+            depth += 1
 
-    depth = 3 + len(opens) * (2 if backlash > 0 else 1)
-    ind = "  " * depth
-    if backlash > 0:
-        # Roll lash and the spin drive share one body, then the spin lash
-        # carries the wheel. Every jointed body needs its own inertia, so a
-        # bare carrier body is not an option.
-        b = backlash / 2.0
-        lash = (f'damping="{LASH_DAMPING}" armature="{LASH_ARMATURE}" '
-                f'frictionloss="{LASH_FRICTION}"')
-        stub = f'<inertial pos="0 0 0" mass="{GEAR_MASS}" diaginertia="1e-6 1e-6 1e-6"/>'
-        body = (
-            f'{ind}<body name="ankle_roll_{side}_drv" pos="0 0 0">\n'
-            f'{ind}  <joint name="ankle_roll_{side}" axis="{roll_axis}" range="{_RANGE["ankle_roll"]}"/>\n'
-            f'{ind}  {stub}\n'
-            f'{ind}  <body name="wheel_{side}_drv" pos="0 0 0">\n'
-            f'{ind}    <joint name="ankle_roll_{side}_lash" axis="{roll_axis}" range="{-b:.6f} {b:.6f}" {lash}/>\n'
-            f'{ind}    <joint name="wheel_{side}" axis="0 1 0"/>\n'
-            f'{ind}    {stub}\n'
-            f'{ind}    <body name="wheel_{side}" pos="0 0 0">\n'
-            f'{ind}      <joint name="wheel_{side}_lash" axis="0 1 0" range="{-b:.6f} {b:.6f}" {lash}/>\n'
-            f'{ind}      <geom class="wheel" name="wheel_{side}" zaxis="0 1 0" mass="0.060"/>\n'
-            f'{ind}    </body>\n{ind}  </body>\n{ind}</body>\n')
-    else:
-        body = (
-            f'{ind}<body name="wheel_{side}" pos="0 0 0">\n'
-            f'{ind}  <joint name="ankle_roll_{side}" axis="{roll_axis}" range="{_RANGE["ankle_roll"]}"/>\n'
-            f'{ind}  <joint name="wheel_{side}" axis="0 1 0"/>\n'
-            f'{ind}  <geom class="wheel" name="wheel_{side}" zaxis="0 1 0" mass="0.060"/>\n'
-            f'{ind}</body>\n')
+        for g in _link_geoms(link, side, sgn):
+            opens[-1] += gind + g + "\n"
 
-    return "".join(opens) + body + "".join(reversed(closes))
+    return "".join(opens) + "".join(reversed(closes))
+
+
+def _torso_visual():
+    """Chassis and the parts inside it, drawn at real size.
+
+    Two things this makes obvious that a plain box did not: the 3S pack is
+    105 mm long and will not lie flat in a 90 mm bay, so it stands upright;
+    and once the Pi and the pack are in, the bay is essentially full.
+    """
+    x = 0.0085
+    g = []
+    for sgn in (1, -1):
+        g.append(_v(f"vside{sgn}", "box", "0.045 0.0015 0.090",
+                    f"{x} {sgn*0.0345:.4f} 0.090", C_PLATE))
+    g.append(_v("vtop", "box", "0.045 0.035 0.0015", f"{x} 0 0.1785", C_PLATE))
+    g.append(_v("vfloor", "box", "0.045 0.035 0.0015", f"{x} 0 0.0015", C_PLATE))
+    g.append(_v("vpi", "box", f"{PI5[0]/2} {PI5[1]/2} {PI5[2]/2}",
+                f"{x} 0 0.030", C_PCB))
+    # Stood on end: 105 mm will not fit across a 90 mm bay.
+    g.append(_v("vbatt", "box", f"{BATT_3S[2]/2} {BATT_3S[1]/2} {BATT_3S[0]/2}",
+                f"{x} 0 0.115", C_BATT))
+    g.append(_v("vdriver", "box", f"{DRIVER[0]/2} {DRIVER[1]/2} {DRIVER[2]/2}",
+                f"{x} 0 0.058", C_PCB))
+    return "\n      ".join(g)
 
 
 def _excludes():
@@ -160,7 +255,7 @@ def _excludes():
     these the leg collides with itself: 14 contacts at rest and qacc of 2e4.
     Listing them all is cheap and does not depend on the chain's shape.
     """
-    links = ["thigh", "shin", "ankle", "wheel"]
+    links = ["thigh", "shin", "ankle", "rollbracket", "wheel"]
     out = []
     for s in ("l", "r"):
         out.append(f'    <exclude body1="torso" body2="thigh_{s}"/>')
@@ -222,7 +317,8 @@ def load(trim=None, backlash=0.0):
     """
     base = (XML.read_text()
             .replace("<!--LEGS-->", _leg("l", backlash) + _leg("r", backlash))
-            .replace("<!--EXCLUDES-->", _excludes()))
+            .replace("<!--EXCLUDES-->", _excludes())
+            .replace("<!--TORSO_VIS-->", _torso_visual()))
     marker = 'pos="0.0085 0 0.090"'
     assert marker in base
 

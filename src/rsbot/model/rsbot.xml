@@ -73,8 +73,9 @@
            arrive at stage 4. The x offset is solved for at load time so the
            standing CoM sits over the axle; see model.load(). -->
       <geom name="torso" type="box" size="0.045 0.035 0.090" pos="0.0085 0 0.090"
-            mass="1.230" rgba="0.30 0.55 0.85 1"/>
+            mass="1.230" rgba="0.30 0.55 0.85 1" group="4"/>
       <site name="imu" pos="0 0 0.02"/>
+      <!--TORSO_VIS-->
 
       <!--LEGS-->
     </body>

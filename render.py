@@ -74,7 +74,7 @@ def main(out=None, lash_deg=0.0):
 
     renderer = mujoco.Renderer(m, H, W)
     cam = mujoco.MjvCamera()
-    cam.distance, cam.elevation, cam.azimuth = 1.05, -9, 128
+    cam.distance, cam.elevation, cam.azimuth = 0.82, -10, 128
 
     ff = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -113,6 +113,7 @@ def main(out=None, lash_deg=0.0):
         if k % frame_every == 0:
             cam.lookat[0] = d.xpos[torso][0]
             cam.lookat[2] = 0.20
+            cam.azimuth = 128 + 14.0 * np.sin(t * 0.30)   # slow drift
             renderer.update_scene(d, camera=cam)
             pitch = np.degrees(pitch_from_quat(obs(m, d)["quat"]))
             rows = [f"state {NAMES[mach.state]}",

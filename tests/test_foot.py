@@ -140,7 +140,7 @@ def test_backlash_zero_is_the_rigid_model():
     """backlash=0 must add no bodies, so every index-based test still holds."""
     a, _ = load()
     b, _ = load(backlash=0.0)
-    assert a.nq == b.nq == 17 and a.nbody == b.nbody == 10
+    assert a.nq == b.nq == 17 and a.nbody == b.nbody == 12
 
 
 def test_backlash_adds_one_lash_joint_per_actuator():
@@ -240,3 +240,59 @@ def test_round_trip_survives_backlash():
     r = rollout_cycle(cfg=DeployCfg(flip_rate=2.0), gains=LASH_GAINS,
                       stand_for=3.0, duration=30.0, backlash=math.radians(1.0))
     assert not r["fell"] and r["back_on_wheels"]
+
+
+# --- real-part packaging -----------------------------------------------------
+
+def test_visual_parts_carry_no_mass_or_collision():
+    """The real-part geometry must stay decorative: mass and contacts live on
+    the simple shapes, or every dynamics result we have is invalid."""
+    import mujoco
+    m, _ = load()
+    for i in range(m.ngeom):
+        name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i)
+        if m.geom_group[i] == 0 and name != "floor":   # visual build
+            assert m.geom_contype[i] == 0 and m.geom_conaffinity[i] == 0, name
+    assert m.body_subtreemass[1] == pytest.approx(2.050, abs=1e-3)
+
+
+def test_no_real_part_hits_the_floor_in_either_mode():
+    """The ankle roll maps y onto z, so anything mounted on the roll bracket
+    has to be checked in BOTH orientations."""
+    import mujoco
+    from src.rsbot.model import (ROLL_FOOT, ROLL_WHEEL, WHEEL_HALF_W, WHEEL_R,
+                                 ankle_pitch_level)
+    m, d = load()
+
+    def lowest_point(i):
+        R = d.geom_xmat[i].reshape(3, 3)
+        c, sz, t = d.geom_xpos[i], m.geom_size[i], m.geom_type[i]
+        if t == mujoco.mjtGeom.mjGEOM_BOX:
+            return min((c + R @ np.array([sx * sz[0], sy * sz[1], sz2 * sz[2]]))[2]
+                       for sx in (-1, 1) for sy in (-1, 1) for sz2 in (-1, 1))
+        if t == mujoco.mjtGeom.mjGEOM_CYLINDER:
+            az = R[2, 2]
+            return c[2] - abs(sz[1] * az) - sz[0] * math.sqrt(max(0.0, 1 - az * az))
+        if t == mujoco.mjtGeom.mjGEOM_CAPSULE:
+            ends = [c + R @ np.array([0, 0, s * sz[1]]) for s in (-1, 1)]
+            return min(e[2] for e in ends) - sz[0]
+        return c[2]
+
+    for height, roll, z in ((0.207, ROLL_WHEEL, 0.207 + WHEEL_R),
+                            (0.195, ROLL_FOOT, 0.195 + WHEEL_HALF_W)):
+        hip, knee = leg_ik(height)
+        pose = {"hip": hip, "knee": knee,
+                "ankle_pitch": ankle_pitch_level(hip, knee), "ankle_roll": roll}
+        d.qpos[:] = 0
+        d.qpos[2], d.qpos[3] = z, 1.0
+        for j in range(m.njnt):
+            n = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j)
+            if not n or n == "root":
+                continue
+            d.qpos[m.jnt_qposadr[j]] = pose.get(n.rsplit("_", 1)[0], 0.0)
+        mujoco.mj_forward(m, d)
+        for i in range(m.ngeom):
+            n = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i)
+            if n in (None, "floor") or n.startswith(("vtire", "vhub", "wheel")):
+                continue                     # the wheel IS the contact
+            assert lowest_point(i) > -1e-3, f"{n} below the floor at roll={roll:.2f}"

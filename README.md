@@ -83,7 +83,10 @@ uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```
 
-See [docs/hardware-readiness.md](docs/hardware-readiness.md) for what to buy,
+See [docs/bom.md](docs/bom.md) for the real parts, costs and what modelling
+them at full size revealed,
+[docs/hardware-readiness.md](docs/hardware-readiness.md) for the actuator and
+control-rate margins,
 [docs/backlash.md](docs/backlash.md) for the gear-lash results (the one that
 changes the plan),
 [docs/stage-0.md](docs/stage-0.md) for the balancer numbers,

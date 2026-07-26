@@ -17,6 +17,7 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
     "build123d",
+    "gmsh>=4.15.2",
 ]
 
 # build123d is vendored as a submodule under vendor/ and installed editable,

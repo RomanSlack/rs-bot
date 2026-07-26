@@ -227,6 +227,66 @@ nothing changes, and the measured STS3215 figure is 0.87 deg, so this sits
 inside the design target - but it is a real narrowing and the margin at 2 deg
 is gone.
 
+## Ankle yoke and roll bracket
+
+The tightest region in the robot, and it produced the biggest finding so far.
+
+### The ankle-pitch bearing has exactly one valid home, and it forces a belt
+
+The pitch axis is a line through the axle, so every point on it has x = 0 and
+z = 0 relative to the axle. Checking whether a bearing can sit anywhere on it:
+
+| y on the axis | clears upright wheel | clears flat wheel |
+|---|---|---|
+| 8 mm | no | no |
+| 15 mm | yes | **no** |
+| 25 mm | yes | **no** |
+| 45 mm | yes | yes |
+
+Outboard of the tyre clears it upright, but flat the wheel becomes an 80 mm
+platter and everything inside radius 40 is inside it. **The only valid location
+is y ~ 45**, and the ankle servo cannot reach there directly - so the belt is
+not a convenience, it is forced by the geometry.
+
+### Belt sizing, pinned from both sides
+
+Belt tension is torque over pitch radius, and the obvious choice fails badly:
+
+| arrangement | driver torque | tension | vs GT2 6 mm (90 N) |
+|---|---|---|---|
+| 20:20 (1:1) | 1.63 N.m | 256 N | 0.35x |
+| 40:40 (1:1) | 1.63 N.m | 128 N | 0.70x |
+| 20:40 (2:1) | 0.81 N.m | 128 N | 0.70x |
+| **20:40 (2:1) on 15 mm belt** | 0.81 N.m | 128 N | **1.76x** |
+| 20:60 (3:1) | 0.54 N.m | 85 N | 1.05x |
+
+And the servo's travel closes it from the other side. Ankle pitch needs
+0.69 rad, so 1:1 needs 0.69, 2:1 needs 1.38, and 3:1 needs 2.07 against a
++/-1.60 range. **3:1 runs out of travel; below 2:1 the belt is overloaded.**
+2:1 on a 15 mm GT2 belt is the only arrangement that satisfies both.
+
+### A checker fault, and six collisions it was hiding
+
+Skipping same-body pairs as lap joints is right for two printed pieces bolted
+together. It is wrong when one of them is a **bought part**: a bracket cannot
+lap-joint into a servo case. That rule was hiding the ankle yoke sitting
+**2597 mm3 inside the roll servo**, and once fixed it immediately surfaced five
+more - the knee servo inside the thigh spine, the roll arm inside the wheel
+servo, and the tie through the bearing carrier.
+
+All fixed. The knee servo also moved inboard in the sim to match what
+`cad/thigh.py` was already built around; they had silently disagreed.
+
+### The annulus has a hole, again
+
+The roll bracket's tie sweeps a band 8.7-19.6 mm from the roll axis. The
+yoke's servo mounting face reached into it and was struck partway through the
+flip. Keeping the face within 8.5 mm of the axis - inside the annulus - clears
+it. Same trick as the bearing carrier.
+
+Yoke is 1.1 g, roll bracket 4.4 g. Both trivially strong; in this region
+clearance is the binding constraint, not stress.
+
 ### Printing it
 
 Lay the part with its **y axis vertical**: 72 x 99 mm footprint, 19 mm tall.

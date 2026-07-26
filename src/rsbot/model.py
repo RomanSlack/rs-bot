@@ -117,8 +117,8 @@ LASH_FRICTION = 0.0005
 #
 # The old numbers put 100 g in the shin on the assumption the wheel servo lived
 # there; it is really on the roll bracket, 110 mm further out.
-SEG_MASS = {"thigh": 0.0867, "shin": 0.0814, "ankle": 0.0568,
-            "rollbracket": 0.0598, "wheel": 0.060}
+SEG_MASS = {"thigh": 0.0867, "shin": 0.0814, "ankle": 0.0561,
+            "rollbracket": 0.0594, "wheel": 0.060}
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
 
@@ -166,8 +166,11 @@ def _link_geoms(link, side, sgn):
         # load), and at 12 mm that is only a 2.0x margin. See cad/thigh.py.
         vis.append(_v(f"vthigh_{side}", "box", f"0.010 0.008 0.049",
                       f"0 {sgn*0.023:.5f} -0.053", C_PRINT))
+        # INBOARD. The thigh wraps over and down the inboard side to reach it,
+        # because the outboard band is where the shin's hub has to be.
         vis.append(_v(f"vkneesv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                      f"0 {outb:.5f} {-0.110+off:.5f}", C_SERVO))
+                      f"0 {-sgn*(HH - SPINE_Y + SPY):.5f} {-0.110+off:.5f}",
+                      C_SERVO))
     elif link == "shin":
         col.append(f'<geom class="leg" name="shin_{side}" fromto="0 0 0  0 0 -0.094" '
                    f'mass="{m}" group="4"/>')
@@ -206,8 +209,16 @@ def _link_geoms(link, side, sgn):
         # that: it is inside the hole of the wheel-servo annulus (radius under
         # 14 mm, so the sweep misses it), and at |x| > 40 mm it is outside both
         # the upright and the flat wheel.
-        vis.append(_v(f"vankpost_{side}", "box", "0.008 0.006 0.006",
-                      "-0.064 0 0", C_PRINT))
+        # Between the roll servo and the wheel, not inside either: the servo
+        # case ends at x = -58, and |x| > 40 keeps it clear of the flat wheel.
+        vis.append(_v(f"vankpost_{side}", "box", "0.006 0.006 0.006",
+                      "-0.050 0 0", C_PRINT))
+        # Mounting face the roll servo bolts to, bridging it to the carrier.
+        # Kept within 8.5 mm of the roll axis: the roll bracket's tie sweeps
+        # an annulus 8.7-19.6 mm out, so anything reaching into that band gets
+        # hit partway through the flip.
+        vis.append(_v(f"vankface_{side}", "box", "0.002 0.006 0.006",
+                      "-0.056 0 0", C_PRINT))
         vis.append(_v(f"vrollsv_{side}", "box", f"{HH:.5f} {HW:.5f} {HL:.5f}",
                       # Lifted off the roll axis so it clears the floor in foot mode,
                       # where the axle is only 12 mm up. Safe despite the larger
@@ -225,12 +236,14 @@ def _link_geoms(link, side, sgn):
         # BESIDE the wheel (outboard of its 12 mm half-width) and then steps
         # inboard onto the roll axis, where the radius is under 14 mm and the
         # wheel-servo sweep has nothing to hit.
+        # Above the wheel servo (its case is +/-12.35 in z), and outboard of
+        # the tyre, so it clears both.
         vis.append(_v(f"vrollarm_{side}", "box", "0.022 0.0057 0.005",
-                      f"-0.022 {sgn*0.0178:.5f} 0", C_PRINT))
+                      f"-0.022 {sgn*0.0178:.5f} 0.01735", C_PRINT))
         # Crosses the wheel plane only aft of the tyre, where the radius
         # from the spin axis is already past 40 mm.
-        vis.append(_v(f"vrolltie_{side}", "box", "0.007 0.00475 0.005",
-                      f"-0.049 {sgn*0.007875:.5f} 0", C_PRINT))
+        vis.append(_v(f"vrolltie_{side}", "box", "0.007 0.00275 0.005",
+                      f"-0.049 {sgn*0.00985:.5f} 0.010", C_PRINT))
     elif link == "wheel":
         col.append(f'<geom class="wheel" name="wheel_{side}" zaxis="0 1 0" '
                    f'mass="{m}" group="4"/>')

@@ -22,6 +22,7 @@ import numpy as np
 from src.rsbot.model import load
 import cad.shin as shin
 import cad.thigh as thigh
+import cad.ankle as ankle
 
 PETG = 1.270          # g/cm3
 INFILL = 0.60         # a print is not solid; see cad/shin.py
@@ -30,8 +31,8 @@ WHEEL = 60.0
 PI5, BATT, DRIVER, IMU = 45.0, 180.0, 10.0, 5.0
 BALLAST = 600.0       # arms (480) + head (120), stage 4
 
-PRINTED = ("vthigh", "vshin", "vankstand", "vankpost", "vrollarm", "vrolltie",
-           "vside", "vtop", "vshelf")
+PRINTED = ("vthigh", "vshin", "vankstand", "vankpost", "vankface",
+           "vrollarm", "vrolltie", "vside", "vtop", "vshelf")
 SERVOS = ("vhipsv", "vkneesv", "vanksv", "vrollsv", "vwhlsv")
 
 
@@ -67,8 +68,11 @@ def table():
         elif n.startswith(PRINTED):
             r["cm3"] += vol * 1e6
 
+    yoke_kg, roll_kg = ankle.main(export=False)
     cad_g = {"shin": shin.main(export=False) * 1000.0,
-             "thigh": thigh.main(export=False) * 1000.0}
+             "thigh": thigh.main(export=False) * 1000.0,
+             "ankle": yoke_kg * 1000.0,
+             "rollbracket": roll_kg * 1000.0}
     out = {}
     for b, r in rows.items():
         link = b.rsplit("_", 1)[0]

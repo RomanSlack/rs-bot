@@ -52,6 +52,57 @@ and the balancer keeps authority the whole way down.
 Ankle pitch holds the face level as the leg pitches, and `ankle_bias` tips it
 deliberately - the ankle flex available in foot mode.
 
+## How the real one does it (AgiBot X2-N)
+
+There is a paper on exactly this robot, and it settles some questions.
+
+**It is an actuated ankle roll joint, not a passive mechanism.** The paper:
+"the mode transformation is achieved by reusing the ankle roll joint to
+actively drive the orientation of wheel motors from horizontal foot-contact to
+vertical wheel-contact form." So the approach here is the right one. Their
+transitions take about 1 s; ours takes 0.79 s.
+
+**But there IS a mechanical latch.** X2-N carries "a retaining clip structure
+and multiple contact interfaces to stabilize the wheel twist during
+locomotion", plus a sliding slot that guides the ankle into place. That is a
+lock for *holding*, not for driving - and it is worth copying here, for a
+reason specific to our problem: a clip that seats at each end state takes the
+driving loads off the ankle roll servo AND removes that joint's backlash in
+exactly the two poses where it hurts. Foot mode is the thing lash breaks
+(docs/backlash.md), so a detent there is worth more than a better servo.
+
+**They transform one leg at a time, in the air.** Wheel-to-foot happens "while
+rotating the ankle and wheel during the air time of each step". The leg being
+flipped is unloaded, so the mechanism never lifts the robot's weight. That is
+the "hop" you see in their videos, and it is the clean way to do it.
+
+We flip both legs at once, standing on both wheels, which only works because
+our barrier is tiny. Doing it their way would need a hip ROLL joint to shift
+weight onto one leg, which we do not have - two more servos. Not needed at
+this scale; increasingly needed as the robot gets bigger.
+
+## The energy asymmetry, and which way is downhill
+
+The axle rises 1.76 mm at 16.7 deg of roll and then falls to 12 mm. That hump
+is an over-centre mechanism, and it makes the two directions completely
+different jobs:
+
+| | climb | then | energy at 2.05 kg |
+|---|---|---|---|
+| wheel -> foot | 1.76 mm | falls 29.8 mm | **0.035 J** |
+| foot -> wheel | 29.8 mm | - | **0.599 J**, 17x more |
+
+Measured servo work bears it out: 1.13 J flipping down, 1.99 J coming back.
+Peak ankle-roll torque is 0.83 N.m per servo either way, against ~0.9 N.m
+continuous and 2.7 N.m stall at 3S - so it fits, but the return is the
+direction that works the servos.
+
+Note this is **inverted** relative to X2-N, whose foot-to-wheel transition
+"follows the potential-energy-descent principle due to the CoM depression in
+wheel-legged mode". Their wheel mode is lower; ours is higher, because our
+wheels are small relative to the ankle. So their free direction is
+foot-to-wheel and ours is wheel-to-foot.
+
 ## Getting back out
 
 `UNFLIP` runs the handover in reverse: authority grows back as cos(roll) while

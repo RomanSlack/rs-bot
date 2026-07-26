@@ -370,3 +370,13 @@ def test_every_body_is_one_rigid_piece(mode):
         loose = {find(i) for i in gs}
         bn = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b)
         assert len(loose) == 1, f"{bn} is {len(loose)} loose pieces, not one part"
+
+
+@pytest.mark.parametrize("mode", ["wheel", "foot"])
+def test_whole_robot_assembles_without_interference(mode):
+    """Every CAD part, at the pose the simulator puts it in, intersected
+    against every other. This is the one that answers 'does it actually go
+    together', and it runs on the real solids rather than the sim's
+    simplified boxes."""
+    from cad.assemble_check import main as check
+    assert not check(mode)

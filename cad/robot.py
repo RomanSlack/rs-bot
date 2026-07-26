@@ -1,0 +1,161 @@
+"""The whole robot, built from the real CAD parts.
+
+    uv run python -m cad.robot [wheel|foot]
+
+Every part is placed by the SIMULATOR's kinematics rather than by hand: pose
+the sim, read each body's world transform, and hang that body's CAD mesh off
+it. So if the CAD and the sim ever disagree about where something goes, this
+picture is wrong in an obvious way.
+
+Right-hand parts are the left-hand meshes mirrored in y (negative mesh scale).
+"""
+
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+
+os.environ.setdefault("MUJOCO_GL", "egl")
+
+import mujoco  # noqa: E402
+import numpy as np  # noqa: E402
+from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+
+import cad.ankle as ankle  # noqa: E402
+import cad.chassis as chassis  # noqa: E402
+import cad.shin as shin  # noqa: E402
+import cad.thigh as thigh  # noqa: E402
+from fitcheck import pose  # noqa: E402
+from src.rsbot.model import load  # noqa: E402
+
+OUT = Path(__file__).parent / "out"
+W, H = 620, 780
+
+C_PRINT = "0.88 0.45 0.13 1"
+C_SERVO = "0.13 0.13 0.15 1"
+C_WHEEL = "0.09 0.09 0.10 1"
+
+SERVO_L, SERVO_W, SERVO_H = 45.2, 24.7, 35.4
+
+# body name -> (stl stem, colour). Left-hand parts; right mirrors in y.
+PARTS = {
+    "torso": ("chassis", C_PRINT),
+    "thigh": ("thigh", C_PRINT),
+    "shin": ("shin", C_PRINT),
+    "ankle": ("ankle_yoke", C_PRINT),
+    "rollbracket": ("roll_bracket", C_PRINT),
+}
+
+
+def export_all():
+    OUT.mkdir(exist_ok=True)
+    chassis.main(export=True)
+    thigh.main(export=True)
+    shin.main(export=True)
+    ankle.main(export=True)
+
+
+def _quat(mat):
+    q = np.zeros(4)
+    mujoco.mju_mat2Quat(q, mat.flatten())
+    return q
+
+
+def build_scene(mode="wheel"):
+    m, d = load()
+    pose(m, d, mode)
+
+    assets, bodies, seen = [], [], {}
+    for body_stem, (stem, rgba) in PARTS.items():
+        for side, sgn in (("l", 1), ("r", -1)):
+            name = body_stem if body_stem == "torso" else f"{body_stem}_{side}"
+            if body_stem == "torso" and side == "r":
+                continue
+            bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, name)
+            p = d.xpos[bid]
+            q = _quat(d.xmat[bid].reshape(3, 3))
+            key = f"{stem}_{side}"
+            if key not in seen:
+                seen[key] = True
+                assets.append(
+                    f'<mesh name="{key}" file="{OUT / (stem + ".stl")}" '
+                    f'scale="0.001 {0.001*sgn} 0.001"/>')
+            bodies.append(
+                f'<body pos="{p[0]} {p[1]} {p[2]}" '
+                f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">'
+                f'<geom type="mesh" mesh="{key}" rgba="{rgba}"/></body>')
+
+    # Wheels and servo blocks, straight from the sim's own visual geoms.
+    for i in range(m.ngeom):
+        n = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i) or ""
+        if m.geom_group[i] != 0 or n == "floor" or n.startswith("h_"):
+            continue
+        if not n.startswith(("vtire", "vhub", "vhipsv", "vkneesv", "vanksv",
+                             "vrollsv", "vwhlsv", "vpi", "vbatt", "vdriver")):
+            continue
+        p, q = d.geom_xpos[i], _quat(d.geom_xmat[i].reshape(3, 3))
+        s = m.geom_size[i]
+        col = C_WHEEL if n.startswith(("vtire", "vhub")) else C_SERVO
+        if n.startswith(("vpi", "vbatt", "vdriver")):
+            col = "0.05 0.33 0.17 1"
+        if m.geom_type[i] == mujoco.mjtGeom.mjGEOM_CYLINDER:
+            g = f'<geom type="cylinder" size="{s[0]} {s[1]}" rgba="{col}"/>'
+        else:
+            g = f'<geom type="box" size="{s[0]} {s[1]} {s[2]}" rgba="{col}"/>'
+        bodies.append(f'<body pos="{p[0]} {p[1]} {p[2]}" '
+                      f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">{g}</body>')
+
+    return f'''<mujoco>
+  <visual><global offwidth="{W}" offheight="{H}"/>
+    <headlight ambient="0.48 0.48 0.48" diffuse="0.6 0.6 0.6" specular="0.15 0.15 0.15"/>
+    <quality shadowsize="4096"/><map znear="0.01" zfar="40"/></visual>
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512"
+             rgb1="0.20 0.21 0.23" rgb2="0.26 0.27 0.29"/>
+    <material name="grid" texture="grid" texrepeat="40 40"/>
+    {chr(10).join(assets)}
+  </asset>
+  <worldbody>
+    <light pos="0.4 -0.4 0.9" dir="-0.4 0.4 -1" diffuse="0.7 0.7 0.7"/>
+    <geom type="plane" size="0 0 0.05" material="grid"/>
+    {chr(10).join(bodies)}
+  </worldbody>
+</mujoco>'''
+
+
+def main(mode="wheel"):
+    export_all()
+    m = mujoco.MjModel.from_xml_string(build_scene(mode))
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    r = mujoco.Renderer(m, H, W)
+    cam = mujoco.MjvCamera()
+    cam.lookat[:] = (0.0, 0.0, 0.215)
+
+    font = ImageFont.truetype(
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
+    views = [("side", 90, -6, 0.80), ("three-quarter", 138, -16, 0.80),
+             ("front", 180, -6, 0.80)]
+    tiles = []
+    for name, az, el, dist in views:
+        cam.azimuth, cam.elevation, cam.distance = az, el, dist
+        r.update_scene(d, camera=cam)
+        im = Image.fromarray(r.render())
+        dr = ImageDraw.Draw(im, "RGBA")
+        dr.rectangle([0, 0, W, 36], fill=(0, 0, 0, 155))
+        dr.text((14, 7), f"{name}  -  {mode} mode", font=font,
+                fill=(255, 255, 255, 255))
+        tiles.append(im)
+
+    sheet = Image.new("RGB", (W * len(tiles), H))
+    for i, t in enumerate(tiles):
+        sheet.paste(t, (i * W, 0))
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    out = OUT / f"robot_{mode}_{stamp}.png"
+    sheet.save(out)
+    print(f"wrote {out}")
+    return out
+
+
+if __name__ == "__main__":
+    main(sys.argv[1] if len(sys.argv) > 1 else "wheel")

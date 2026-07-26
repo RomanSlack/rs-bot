@@ -178,6 +178,22 @@ contact, and check the pose is what you think it is.
 
 ---
 
+## When every link is done
+
+```bash
+uv run python -m cad.robot wheel      # the whole thing, real parts
+uv run python -m cad.assemble_check   # every pair, both modes
+```
+
+Place parts by the simulator's kinematics, not by hand, so CAD/sim
+disagreements show up as a visibly broken picture.
+
+And control-test any check you are about to trust. The first whole-robot
+interference check reported a clean zero, and kept reporting a clean zero with
+a part shoved 100 mm into the middle of the robot, because MuJoCo skips
+collision between bodies that are all static children of world. A check that
+cannot fail reads as evidence and is worse than no check at all.
+
 ## What not to model
 
 Servos, wheels, the Pi and the battery are **bought parts**. Their bounding box

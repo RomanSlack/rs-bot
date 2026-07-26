@@ -330,6 +330,35 @@ Robot **1756 g**. Distal parts are governed by clearance and proximal ones by
 stress, which is what you would expect and is a decent sanity check that the
 analysis is not nonsense.
 
+## Putting it together
+
+```bash
+uv run python -m cad.robot wheel      # whole robot, real parts
+uv run python -m cad.robot foot
+uv run python -m cad.assemble_check   # every pair intersected, both modes
+```
+
+`cad/robot.py` places every part by the **simulator's** kinematics: pose the
+sim, read each body's world transform, hang that body's CAD mesh on it. So if
+the CAD and the sim ever disagree about where something goes, the picture is
+visibly wrong rather than quietly wrong. Right-hand parts are the left-hand
+meshes mirrored in y.
+
+**Result: 19 solids, 0 interfering pairs, in both modes.**
+
+### A check that could not fail
+
+The first version of this dropped the meshes into a MuJoCo scene and counted
+contacts. It reported a clean zero - and still reported a clean zero when a
+part was deliberately shoved 100 mm into the middle of the robot. Bodies that
+are all static children of world cannot move relative to each other, so MuJoCo
+skips every pair.
+
+The replacement uses real boolean intersection, and it is control-tested: a
+solid against itself returns its own volume, and a part moved 30 mm into a
+servo reports 5207 mm3. A check that cannot fail is worse than no check,
+because it reads as evidence.
+
 ### Printing it
 
 Lay the part with its **y axis vertical**: 72 x 99 mm footprint, 19 mm tall.

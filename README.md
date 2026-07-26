@@ -86,6 +86,8 @@ uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```
 
+Latest status report: [status/2026-07-25-status.md](status/2026-07-25-status.md).
+
 See [docs/bom.md](docs/bom.md) for the real parts, costs and what modelling
 them at full size revealed,
 [docs/hardware-readiness.md](docs/hardware-readiness.md) for the actuator and

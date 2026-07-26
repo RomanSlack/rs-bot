@@ -50,6 +50,21 @@ SERVO_BOLTS = 40.0            # mounting bolt spacing along the servo case
 SHAFT_INSET = 10.0            # servo output shaft, from the near end of the case
 
 
+# Ribs at the two inside corners, in the x-z plane and across the full 12 mm
+# width, so they lie IN the layer plane where the material is strong. The shin
+# passed at 89% of PETG's allowable, which is passing with nothing to spare;
+# a triangle at a corner is the cheapest way to buy that back, because bending
+# stiffness goes as depth cubed and a rib is all depth.
+RIB_SPINE = ((-10, -41), (-10, -20), (-31, -41))   # spine to arm
+RIB_POST = ((-42, -55), (-42, -76), (-21, -55))    # arm to post
+
+
+def _gusset(pts_xz, y0, t):
+    """Triangular rib in the x-z plane, spanning y0 to y0 + t."""
+    g = bd.extrude(bd.Plane.XZ * bd.Polygon(*pts_xz), amount=t)
+    return bd.Pos(0, y0 + t, 0) * g
+
+
 def _box(spec):
     (x0, x1), (y0, y1), (z0, z1) = spec
     return bd.Pos((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2) * bd.Box(
@@ -58,6 +73,8 @@ def _box(spec):
 
 def build():
     part = _box(SPINE) + _box(ARM) + _box(POST) + _box(STANDOFF)
+    for rib in (RIB_SPINE, RIB_POST):
+        part += _gusset(rib, SPINE_Y - SPY, 2 * SPY)
 
     # Hub at the knee, bolted to the servo horn. It must be centred ON the
     # knee axis at z = 0, or the part does not pivot about the joint - it was

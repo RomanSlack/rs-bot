@@ -46,11 +46,15 @@ class Sim:
         self.shove = 0.0
         self.follow = True
         self.lash = 0.0
+        # The real printed parts, not the stand-in boxes. Visual only: the
+        # collision shapes and the CAD-derived inertials are the same either
+        # way, so this changes what you see and nothing about what it does.
+        self.meshes = True
         self.pan = [0.0, 0.0]      # x,z offset on the follow point
         self._reset()
 
     def _reset(self):
-        self.m, self.d = load(backlash=self.lash)
+        self.m, self.d = load(backlash=self.lash, meshes=self.meshes)
         self.mach = DeployMachine(gains=LASH_GAINS if self.lash else None)
         self.torso = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, "torso")
         self.wheel = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, "wheel_l")

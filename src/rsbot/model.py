@@ -7,6 +7,7 @@ import mujoco
 import numpy as np
 
 XML = Path(__file__).parent / "model" / "rsbot.xml"
+CAD_OUT = Path(__file__).parents[2] / "cad" / "out"
 
 WHEEL_R = 0.040
 WHEEL_HALF_W = 0.012
@@ -117,8 +118,39 @@ LASH_FRICTION = 0.0005
 #
 # The old numbers put 100 g in the shin on the assumption the wheel servo lived
 # there; it is really on the roll bracket, 110 mm further out.
-SEG_MASS = {"thigh": 0.0867, "shin": 0.0814, "ankle": 0.0561,
-            "rollbracket": 0.0594, "wheel": 0.060}
+SEG_MASS = {"thigh": 0.0894, "shin": 0.0854, "ankle": 0.0561,
+            "rollbracket": 0.0601, "wheel": 0.060}
+
+# Mass was derived; this is where that mass SITS and how it is spread out.
+#
+# Until this existed, each link's inertia came from the simple capsule or box
+# carrying its mass - a 28 mm capsule standing in for an L-shaped part with a
+# servo bolted to one side. The mass was right and the distribution was a
+# guess, and a balancer is sensitive to the distribution: the ankle's centre of
+# mass turned out to be 75 mm from where the stand-in put it, because the roll
+# servo hangs well aft of the axle.
+#
+# Composed from the real B-rep solid plus the servo and bought-part boxes at
+# the positions this file already places them, combined about the composite
+# centre of mass rather than added as scalars.
+#
+# link -> (mass kg, com m, (ixx iyy izz ixy ixz iyz) kg.m2),
+# LEFT side and torso; the right side mirrors in y.
+# Regenerate with: uv run python -m cad.inertia --emit
+SEG_INERTIA = {
+    "thigh": (0.089438, (+0.000000, +0.001064, -0.080342),
+              (1.082634e-04, 8.980793e-05, 2.648891e-05, 2.633472e-09, -5.026452e-20, -2.568573e-05)),
+    "shin": (0.085428, (-0.006073, +0.041168, -0.040788),
+              (5.280288e-05, 5.066766e-05, 4.486914e-05, -1.050164e-05, -1.267007e-05, -1.394741e-06)),
+    "ankle": (0.056103, (-0.075233, +0.000000, +0.015685),
+              (1.246639e-05, 1.602528e-05, 9.180675e-06, -1.340980e-23, 4.110834e-07, 3.550638e-24)),
+    "rollbracket": (0.060139, (-0.002478, +0.030361, +0.001399),
+              (1.112799e-05, 1.881592e-05, 2.167336e-05, -2.320841e-06, 2.129397e-06, 1.178736e-06)),
+    "torso": (1.069180, (+0.007624, +0.000249, +0.084388),
+              (3.743464e-03, 3.499079e-03, 1.323310e-03, -2.329118e-07, -5.782052e-05, 9.280251e-06)),
+    "wheel": (0.060000, (+0.000000, +0.000000, +0.000000),
+              (1.908250e-05, 3.264000e-05, 1.908250e-05, 0.000000e+00, 0.000000e+00, 4.979948e-11)),
+}
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
 
@@ -138,7 +170,60 @@ ANK_Y = 0.032        # ankle structure runs outboard of the shin's, so the
                      # two never touch as the ankle pitches between them
 
 
-def _link_geoms(link, side, sgn):
+
+# Visual geoms that stand in for printed structure. When the CAD meshes are
+# switched on these come out and the real part goes in; the servo, wheel and
+# electronics boxes stay, because those are bought parts and a box is all they
+# ever were.
+PRINTED_VIS = ("vthigh", "vshin", "vankstand", "vshinarm", "vshinpost",
+               "vankpost", "vankface", "vrollarm", "vrolltie",
+               "vside1", "vside-1", "vtop", "vshelf1", "vshelf2", "vpistand")
+MESH_STEM = {"thigh": "thigh", "shin": "shin", "ankle": "ankle_yoke",
+             "rollbracket": "roll_bracket", "torso": "chassis"}
+
+
+def _inertial(link, sgn):
+    """The <inertial> for one link, mirrored in y for the right side.
+
+    Mirroring flips the sign of the centre of mass in y AND of the Ixy and Iyz
+    products of inertia. Missing the products is invisible in any symmetric
+    pose and shows up only as a slow drift in a turn, which is the sort of bug
+    that gets blamed on the yaw gain for a week.
+    """
+    mass, com, I = SEG_INERTIA[link]
+    ixx, iyy, izz, ixy, ixz, iyz = I
+    if sgn < 0:
+        com = (com[0], -com[1], com[2])
+        ixy, iyz = -ixy, -iyz
+    return (f'<inertial pos="{com[0]:.6f} {com[1]:.6f} {com[2]:.6f}" '
+            f'mass="{mass:.6f}" fullinertia="{ixx:.6e} {iyy:.6e} {izz:.6e} '
+            f'{ixy:.6e} {ixz:.6e} {iyz:.6e}"/>')
+
+
+
+def _swap_meshes(vis, link, side, sgn):
+    """Printed stand-in boxes out, the real part in."""
+    kept = [g for g in vis
+            if not any(f'name="{p}_{side}"' in g or f'name="{p}"' in g
+                       for p in PRINTED_VIS)]
+    return kept + [_mesh_geom(link, side, sgn)]
+
+
+def _mesh_geom(link, side, sgn):
+    """The real printed part as a visual mesh, in place of the boxes.
+
+    Visual only, and only when asked for. The primitive build stays the
+    default because `fitcheck.py` measures interference from oriented bounding
+    boxes of the group-0 geoms, and a mesh has no meaningful geom_size - it
+    would silently start auditing the wrong shape.
+    """
+    stem = MESH_STEM[link]
+    return (f'<geom name="cad_{link}_{side}" type="mesh" '
+            f'mesh="cad_{stem}_{side}" rgba="{C_PRINT}" '
+            f'contype="0" conaffinity="0" mass="0" group="0"/>')
+
+
+def _link_geoms(link, side, sgn, meshes=False):
     """Collision shape (group 4, carries the mass) plus the visual build.
 
     Each link is a SPINE plate running from its own joint to the child joint,
@@ -150,15 +235,14 @@ def _link_geoms(link, side, sgn):
     through 80 mm vertically, flat it is an 80 mm platter swept horizontally.
     A part has to miss both.
     """
-    m = SEG_MASS[link]
-    col, vis = [], []
+    col, vis = [_inertial(link, sgn)], []
     y = sgn * SPINE_Y
     off = HL - SHAFT_INSET
     outb = sgn * (SPINE_Y + SPY + HH)     # servo flush outboard of the spine
 
     if link == "thigh":
         col.append(f'<geom class="leg" name="thigh_{side}" fromto="0 0 0  0 0 -0.110" '
-                   f'mass="{m}" group="4"/>')
+                   f'group="4"/>')
         # Stops short of the knee: the shin swings 40 deg there and would
         # otherwise scissor into it. The knee servo bridges the gap.
         # 16 mm wide in y, not 12: with no hip roll joint, the STRUCTURE
@@ -173,7 +257,7 @@ def _link_geoms(link, side, sgn):
                       C_SERVO))
     elif link == "shin":
         col.append(f'<geom class="leg" name="shin_{side}" fromto="0 0 0  0 0 -0.094" '
-                   f'mass="{m}" group="4"/>')
+                   f'group="4"/>')
         # Stops 55 mm above the axle. Below that it is inside the volume the
         # wheel-drive servo SWEEPS as the ankle rolls: that servo turns with
         # the roll bracket and carves an annulus 14-50 mm from the roll axis,
@@ -202,7 +286,7 @@ def _link_geoms(link, side, sgn):
     elif link == "ankle":
         col.append(f'<geom class="ankle" name="ankle_{side}" '
                    f'size="{HW:.5f} {HH:.5f} {HL:.5f}" pos="0 0 {HL:.5f}" '
-                   f'mass="{m}" group="4"/>')
+                   f'group="4"/>')
         # Yoke reaching AFT along the roll axis to a bearing clear of the
         # wheel disc, then up to meet the shin.
         # Bearing carrier, aft on the ROLL AXIS. Two clearances fall out of
@@ -225,8 +309,6 @@ def _link_geoms(link, side, sgn):
                       # radius because |x| > 23 mm puts it outside the wheel-servo sweep.
                       f"{-(0.058+HH):.5f} 0 0.016", C_SERVO))
     elif link == "rollbracket":
-        col.append(f'<inertial pos="0 0 0.01" mass="{m}" '
-                   f'diaginertia="4e-5 4e-5 4e-5"/>')
         # Wheel-drive servo and bearing block, OUTBOARD. The 90 deg roll maps
         # +y onto +z, so outboard becomes directly above the flat wheel, which
         # is the only place a support for a vertical shaft can live.
@@ -246,11 +328,13 @@ def _link_geoms(link, side, sgn):
                       f"-0.049 {sgn*0.00985:.5f} 0.010", C_PRINT))
     elif link == "wheel":
         col.append(f'<geom class="wheel" name="wheel_{side}" zaxis="0 1 0" '
-                   f'mass="{m}" group="4"/>')
+                   f'group="4"/>')
         vis += [_v(f"vtire_{side}", "cylinder", "0.040 0.012", "0 0 0", C_TIRE,
                    euler="1.5708 0 0"),
                 _v(f"vhub_{side}", "cylinder", "0.024 0.0115", "0 0 0", C_HUB,
                    euler="1.5708 0 0")]
+    if meshes and link in MESH_STEM:
+        vis = _swap_meshes(vis, link, side, sgn)
     return col + vis
 
 
@@ -260,7 +344,7 @@ CHAIN = [("hip", "thigh", None), ("knee", "shin", "0 0 -0.110"),
          ("ankle_roll", "rollbracket", "0 0 0"), ("wheel", "wheel", "0 0 0")]
 
 
-def _leg(side, backlash):
+def _leg(side, backlash, meshes=False):
     """One leg: hip pitch, knee pitch, ankle pitch, ankle ROLL, wheel.
 
     The roll bracket is its own body because the wheel-drive servo bolts to it
@@ -300,7 +384,7 @@ def _leg(side, backlash):
             gind = "  " * (depth + 1)
             depth += 1
 
-        for g in _link_geoms(link, side, sgn):
+        for g in _link_geoms(link, side, sgn, meshes):
             opens[-1] += gind + g + "\n"
 
     return "".join(opens) + "".join(reversed(closes))
@@ -316,7 +400,7 @@ def _hip_servos():
     return g
 
 
-def _torso_visual():
+def _torso_visual(meshes=False):
     """Chassis and the parts inside it, drawn at real size.
 
     Two things this makes obvious that a plain box did not: the 3S pack is
@@ -342,8 +426,31 @@ def _torso_visual():
     # Above the Pi now that the Pi sits on standoffs, still bolted to the
     # side plate.
     g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0.0266 0.0495", C_PCB))
+    if meshes:
+        g = _swap_meshes(g, "torso", "l", 1)
     g += _hip_servos()
     return "\n      ".join(g)
+
+
+
+def _mesh_assets(meshes):
+    """<mesh> entries for the CAD parts. Right-hand parts are the same STL with
+    a negative y scale, which is how a mirrored part is expressed in MJCF."""
+    if not meshes:
+        return ""
+    out = []
+    for link, stem in MESH_STEM.items():
+        sides = ("l",) if link == "torso" else ("l", "r")
+        for side in sides:
+            sgn = 1 if side == "l" else -1
+            f = CAD_OUT / f"{stem}.stl"
+            if not f.exists():
+                raise FileNotFoundError(
+                    f"{f} is missing - run `uv run python -m cad.robot` once to "
+                    f"export the STLs before loading the model with meshes=True")
+            out.append(f'<mesh name="cad_{stem}_{side}" file="{f}" '
+                       f'scale="0.001 {0.001 * sgn} 0.001"/>')
+    return "\n    ".join(out)
 
 
 def _excludes():
@@ -407,7 +514,7 @@ def _write_stance(m):
     m.key_ctrl[0] = ctrl
 
 
-def load(trim=None, backlash=0.0):
+def load(trim=None, backlash=0.0, meshes=False):
     """Return (model, data) reset to the stance keyframe.
 
     `backlash` is total gear lash per joint in radians, split +/- either side.
@@ -419,24 +526,34 @@ def load(trim=None, backlash=0.0):
     shift the torso to null it. Linear, so one pass is exact. Any residual
     offset shows up as a permanent standing lean.
     """
-    base = (XML.read_text()
-            .replace("<!--LEGS-->", _leg("l", backlash) + _leg("r", backlash))
-            .replace("<!--EXCLUDES-->", _excludes())
-            .replace("<!--TORSO_VIS-->", _torso_visual()))
-    marker = 'pos="0.0085 0 0.090"'
-    assert marker in base
+    def build(x_trim, meshes):
+        mass, com, I = SEG_INERTIA["torso"]
+        ixx, iyy, izz, ixy, ixz, iyz = I
+        inertial = (f'<inertial pos="{x_trim:.6f} {com[1]:.6f} {com[2]:.6f}" '
+                    f'mass="{mass:.6f}" fullinertia="{ixx:.6e} {iyy:.6e} '
+                    f'{izz:.6e} {ixy:.6e} {ixz:.6e} {iyz:.6e}"/>')
+        return (XML.read_text()
+                .replace("<!--LEGS-->", _leg("l", backlash, meshes)
+                         + _leg("r", backlash, meshes))
+                .replace("<!--EXCLUDES-->", _excludes())
+                .replace("<!--MESHES-->", _mesh_assets(meshes))
+                .replace("<!--TORSO_INERTIAL-->", inertial)
+                .replace("<!--TORSO_VIS-->", _torso_visual(meshes)))
 
+    nominal = SEG_INERTIA["torso"][1][0]
     if trim is None:
-        probe = mujoco.MjModel.from_xml_string(base)
+        # Probe on the primitive build regardless of `meshes`: the meshes are
+        # visual and massless, so they cannot move the centre of mass, and
+        # meshing is much the slower of the two to load.
+        probe = mujoco.MjModel.from_xml_string(build(nominal, False))
         _write_stance(probe)
         pd = mujoco.MjData(probe)
         mujoco.mj_resetDataKeyframe(probe, pd, 0)
         t = mujoco.mj_name2id(probe, mujoco.mjtObj.mjOBJ_BODY, "torso")
-        trim = 0.0085 - _com_offset(probe, pd) * (probe.body_subtreemass[t]
-                                                  / probe.body_mass[t])
+        trim = nominal - _com_offset(probe, pd) * (probe.body_subtreemass[t]
+                                                   / probe.body_mass[t])
 
-    m = mujoco.MjModel.from_xml_string(
-        base.replace(marker, f'pos="{trim:.6f} 0 0.090"'))
+    m = mujoco.MjModel.from_xml_string(build(trim, meshes))
     _write_stance(m)
     d = mujoco.MjData(m)
     mujoco.mj_resetDataKeyframe(m, d, 0)

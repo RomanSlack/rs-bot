@@ -21,22 +21,26 @@ from .model import (ROLL_WHEEL, WHEEL_R, ankle_pitch_level, leg_ik,
 
 @dataclass
 class Gains:
-    # Tuned against 1 deg of gear lash at the CAD-derived mass of 1.713 kg.
-    # Gains are mass-dependent: the same set at the old 2.05 kg estimate fell
-    # over at 2 deg of lash once the robot got lighter. See docs/backlash.md.
+    # Tuned against 1 deg of gear lash at the CAD-derived mass of 1.756 kg,
+    # with the CAD-derived INERTIA TENSORS rather than the primitive capsules.
+    # Gains depend on the mass distribution, not just the mass: correcting the
+    # distribution alone - same total, same centre of mass to within a few mm -
+    # broke shove rejection, steering and the whole transition, and needed this
+    # re-tune. The ankle was the worst of them, with its centre of mass 75 mm
+    # from where the stand-in box put it. See docs/backlash.md.
     # inner loop: pitch -> wheel speed
-    kp: float = 10.435
-    kd: float = 0.483
+    kp: float = 10.714
+    kd: float = 1.058
     # outer loop: odometry -> pitch target
-    kv: float = 0.300
-    kx: float = 0.550
-    pitch_max: float = 0.30  # rad, cap on commanded lean
-    tau_odom: float = 0.122  # s, low-pass on wheel-derived speed
+    kv: float = 0.35
+    kx: float = 0.400
+    pitch_max: float = 0.309  # rad, cap on commanded lean
+    tau_odom: float = 0.11  # s, low-pass on wheel-derived speed
     # Low-pass on the wheel command itself. With gear lash, slamming the
     # command across the deadzone is what drives the limit cycle.
-    tau_cmd: float = 0.08
+    tau_cmd: float = 0.112
     # Yaw: closed on the IMU's z gyro, differenced across the two wheels.
-    kyaw: float = 1.00
+    kyaw: float = 0.486
     yaw_max: float = 1.2     # rad/s; 1.5 and up tips it over
 
 

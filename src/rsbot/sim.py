@@ -28,11 +28,35 @@ def obs(m, d):
     }
 
 
+def _yaw_err(hist):
+    if not hist:
+        return 0.0
+    tail = np.array(hist[len(hist) // 2:])
+    return float(np.abs(tail[:, 1] - tail[:, 0]).mean())
+
+
+def _yaw_rms(hist):
+    """Deviation from the COMMANDED rate, root-mean-square. A robot cycling
+    +/-2 rad/s about a commanded 0 has a mean error of zero and an RMS of 2."""
+    if not hist:
+        return 0.0
+    tail = np.array(hist[len(hist) // 2:])
+    return float(np.sqrt(((tail[:, 1] - tail[:, 0]) ** 2).mean()))
+
+
 def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
-            backlash=0.0):
+            backlash=0.0, yaw_des=0.0):
     """Run the balancer. `shove` is (time_s, impulse_N_s) applied to the torso +x.
 
-    Returns a metrics dict: fell, max_pitch, drift, recovery time.
+    `yaw_des` is a commanded turn rate, constant or a function of time. It
+    exists because without it the tuning cost could not see the yaw loop at
+    all: a set of gains once passed every trial while limit-cycling in yaw at
+    +/-2 rad/s, counter-rotating the wheels at 20 rad/s and walking backwards a
+    metre. Mean wheel speed stayed near zero throughout, so the odometry
+    reported a robot standing perfectly still.
+
+    Returns a metrics dict: fell, max_pitch, drift, recovery time, and yaw
+    tracking.
     """
     m, d = load(backlash=backlash)
     bal = Balancer(gains)
@@ -44,6 +68,7 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
 
     max_pitch = 0.0
     pitch_hist = []
+    yaw_hist = []
     fell = False
     shove_t = shove[0] if shove else None
     recovered_at = None
@@ -56,7 +81,9 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
             o = obs(m, d)
             pitch = pitch_from_quat(o["quat"])
             vd = v_des(t) if callable(v_des) else v_des
-            d.ctrl[:] = bal(o, dt, vd)
+            yd = yaw_des(t) if callable(yaw_des) else yaw_des
+            d.ctrl[:] = bal(o, dt, vd, yaw_des=yd)
+            yaw_hist.append((yd, o["gyro"][2]))
 
         # Impulse over a single 10 ms window, applied at the torso CoM.
         d.xfrc_applied[torso] = 0.0
@@ -93,6 +120,11 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
         "drift": float(d.xpos[torso][0]),
         "recovery": recovered_at,
         "final_pitch": pitch,
+        # Yaw over the back half: how well the rate was tracked, and how much
+        # it thrashed doing it. The RMS is the one that catches a limit cycle,
+        # because a symmetric oscillation averages to the right answer.
+        "yaw_err": _yaw_err(yaw_hist),
+        "yaw_rms": _yaw_rms(yaw_hist),
     }
 
 
@@ -229,21 +261,46 @@ def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0,
 def cost(gains, duration=8.0, backlash=0.0):
     """Scalar score for tuning. Lower is better; falling is heavily penalised."""
     total = 0.0
+    # Shoves at the RATED 1.0 N.s as well as a gentle 0.35. Tuning against only
+    # a disturbance smaller than the one the robot is specified to survive
+    # returns gains that pass the search and fail the tests.
+    #
+    # `want` is how far the robot is SUPPOSED to travel. It is not always zero,
+    # and treating it as though it were is a real trap: penalising raw drift on
+    # the drive trial scores a robot that refuses to move as perfect, and that
+    # is exactly what one round of this produced - a set of gains that held
+    # position beautifully and tracked 3 cm of a 75 cm velocity command.
     trials = [
-        dict(duration=duration, shove=None),
-        dict(duration=duration, shove=(2.0, 0.35)),
-        dict(duration=duration, shove=(2.0, -0.35)),
-        dict(duration=duration, v_des=lambda t: 0.25 if 2.0 < t < 5.0 else 0.0),
+        dict(duration=duration, shove=None, want=0.0),
+        dict(duration=duration, shove=(2.0, 0.35), want=0.0),
+        dict(duration=duration, shove=(2.0, -0.35), want=0.0),
+        dict(duration=duration, shove=(2.0, 1.0), want=0.0),
+        dict(duration=duration, shove=(2.0, -1.0), want=0.0),
+        dict(duration=duration, want=0.75,
+             v_des=lambda t: 0.25 if 2.0 < t < 5.0 else 0.0),
+        dict(duration=duration, want=None, yaw_des=0.8),
+        dict(duration=duration, want=None, yaw_des=-1.2),
     ]
     for kw in trials:
+        want = kw.pop("want")
         r = rollout(gains, backlash=backlash, **kw)
         if r["fell"]:
             total += 100.0 + 10.0 * (duration - r["t_end"])
             continue
         # Oscillation dominates: a robot that wobbles +/-16 deg forever is not
         # balancing, even though it never falls.
-        total += (abs(r["drift"]) * 2.0 + r["max_pitch"] * 3.0
-                  + r["pitch_rms"] * 60.0 + r["pitch_ptp"] * 30.0)
+        # Position error at 40, not 2. The acceptance criterion is 50 mm of
+        # drift over a minute; at a weight of 2 that is worth 0.1 of cost
+        # against pitch terms worth tens, so the search happily trades all of
+        # it away for a slightly smoother pitch trace - which it did, returning
+        # gains that stood beautifully while wandering off the desk.
+        if want is not None:
+            total += abs(r["drift"] - want) * 40.0
+        total += (r["max_pitch"] * 3.0
+                  + r["pitch_rms"] * 60.0 + r["pitch_ptp"] * 30.0
+                  # Yaw RMS, not mean: a symmetric limit cycle averages to the
+                  # commanded rate and looks like perfect tracking.
+                  + r["yaw_rms"] * 12.0)
         if kw.get("shove"):
             total += (r["recovery"] if r["recovery"] is not None else 3.0)
     return total

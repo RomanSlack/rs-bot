@@ -16,7 +16,7 @@ import mujoco
 import numpy as np
 
 from src.rsbot.model import (ROLL_FOOT, ROLL_WHEEL, WHEEL_HALF_W, WHEEL_R,
-                             ankle_pitch_level, leg_ik, load)
+                             ankle_pitch_level, axle_height, leg_ik, load)
 
 # Pairs that legitimately share material: a hub inside its tyre, and parts
 # that bolt to each other through a lap joint.
@@ -60,8 +60,15 @@ def penetration(a, b):
     return best
 
 
-def pose(m, d, mode):
-    if mode == "foot":
+def pose(m, d, mode, frac=None):
+    """Pose the robot. `mode` picks an end state; `frac` in [0,1] instead walks
+    the flip, which is where parts actually sweep past each other.
+    """
+    if frac is not None:
+        h = 0.207 + (0.195 - 0.207) * frac
+        roll = ROLL_WHEEL + (ROLL_FOOT - ROLL_WHEEL) * frac
+        z = h + axle_height(roll)
+    elif mode == "foot":
         h, roll, z = 0.195, ROLL_FOOT, 0.195 + WHEEL_HALF_W
     else:
         h, roll, z = 0.207, ROLL_WHEEL, 0.207 + WHEEL_R
@@ -146,9 +153,9 @@ def connectivity(mode, touch=0.004, verbose=True):
     return groups
 
 
-def audit(mode, verbose=True):
+def audit(mode, verbose=True, frac=None):
     m, d = load()
-    pose(m, d, mode)
+    pose(m, d, mode, frac)
     # Robot parts only. The floor is not a part, and the scale-reference human
     # is a deliberately overlapping stack of primitives.
     vis = [i for i in range(m.ngeom)
@@ -162,6 +169,12 @@ def audit(mode, verbose=True):
     hits = []
     for i, j in itertools.combinations(vis, 2):
         na, nb = name(i), name(j)
+        # Geoms on the SAME body cannot move relative to each other, so any
+        # shared material is a lap joint. MuJoCo skips these for the same
+        # reason. Only parts that can move relative to one another can
+        # meaningfully interpenetrate.
+        if m.geom_bodyid[i] == m.geom_bodyid[j]:
+            continue
         stem = tuple(sorted((na.rsplit("_", 1)[0], nb.rsplit("_", 1)[0])))
         if stem in SKIP_PAIRS:
             continue
@@ -170,10 +183,31 @@ def audit(mode, verbose=True):
             hits.append((p, na, nb))
     hits.sort(reverse=True)
     if verbose:
-        print(f"--- {mode} mode: {len(hits)} interpenetrating pairs")
+        label = mode if frac is None else f"flip {frac*100:3.0f}%"
+        print(f"--- {label}: {len(hits)} interpenetrating pairs")
         for p, na, nb in hits:
             print(f"   {na:<14} x {nb:<14} {p*1000:6.1f} mm")
     return hits
+
+
+def sweep_audit(steps=25, verbose=True):
+    """Walk the whole flip, not just its end points."""
+    worst = {}
+    for i in range(steps + 1):
+        for _, na, nb in audit(None, verbose=False, frac=i / steps):
+            pass
+    for i in range(steps + 1):
+        f = i / steps
+        for p, na, nb in audit(None, verbose=False, frac=f):
+            key = tuple(sorted((na, nb)))
+            if p > worst.get(key, (0,))[0]:
+                worst[key] = (p, f)
+    if verbose:
+        print(f"--- through the flip ({steps + 1} poses): "
+              f"{len(worst)} pairs collide at some point")
+        for (a, b), (p, f) in sorted(worst.items(), key=lambda kv: -kv[1][0]):
+            print(f"   {a:<14} x {b:<14} {p*1000:6.1f} mm at {f*100:3.0f}%")
+    return worst
 
 
 if __name__ == "__main__":
@@ -187,3 +221,4 @@ if __name__ == "__main__":
     for mode in ("wheel", "foot"):
         connectivity(mode)
         print()
+    sweep_audit()

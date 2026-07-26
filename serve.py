@@ -152,6 +152,7 @@ class Sim:
                 with self.lock:
                     if self.follow:
                         self.cam.lookat[0] = self.d.xpos[self.torso][0] + self.pan[0]
+                        self.cam.lookat[1] = self.d.xpos[self.torso][1]
                         self.cam.lookat[2] = 0.20 + self.pan[1]
                     renderer.update_scene(self.d, camera=self.cam)
                     rgb = renderer.render()

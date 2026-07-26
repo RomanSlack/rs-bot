@@ -117,7 +117,10 @@ def main(out=None, lash_deg=0.0):
         mujoco.mj_step(m, d)
 
         if k % frame_every == 0:
+            # Follow y as well: once it steers, tracking x alone lets it
+            # wander out of frame.
             cam.lookat[0] = d.xpos[torso][0]
+            cam.lookat[1] = d.xpos[torso][1]
             cam.lookat[2] = 0.20
             cam.azimuth = 128 + 14.0 * np.sin(t * 0.30)   # slow drift
             renderer.update_scene(d, camera=cam)

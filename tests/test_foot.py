@@ -318,3 +318,14 @@ def test_robot_is_one_assembly_not_a_cloud_of_parts(mode):
     from fitcheck import connectivity
     groups = connectivity(mode, verbose=False)
     assert len(groups) == 1, f"{len(groups)} disconnected groups"
+
+
+def test_nothing_collides_during_the_flip():
+    """The two end poses being clean says nothing about the 90 degrees in
+    between. The wheel-drive servo turns with the roll bracket and sweeps an
+    annulus through the space the shin and ankle occupy."""
+    from fitcheck import sweep_audit
+    hits = sweep_audit(steps=25, verbose=False)
+    assert not hits, "; ".join(
+        f"{a} x {b} {p*1000:.1f}mm at {f*100:.0f}%"
+        for (a, b), (p, f) in sorted(hits.items(), key=lambda kv: -kv[1][0])[:5])

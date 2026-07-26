@@ -118,17 +118,53 @@ means either **|x| > 32 mm** (fore or aft of the disc) or **z > +12 mm**
 (above it). Nothing may run straight down to the axle at y = 0, which is why
 the shin stops 26 mm short and reaches the ankle bearing from behind.
 
+## The end poses are not enough: check the sweep
+
+Both end poses can be clean while the robot destroys itself in between.
+`fitcheck.py` now walks the flip in 26 steps and checks every pose. The first
+time it ran, the **wheel-drive servo swept 20.7 mm through the shin** at 64%
+of the flip. That servo turns with the roll bracket, so it carves an annulus
+**14-50 mm from the roll axis, for |x| < 23 mm**, and anything not on the roll
+bracket has to stay out of it.
+
+That single constraint reshaped the whole lower leg. The rules that survive:
+
+| region | rule |
+|---|---|
+| clear of the upright wheel | \|y\| > 12 mm, or radius > 40 mm from the spin axis |
+| clear of the flat wheel | \|x\| > 32 mm, or z > +12 mm above the axle |
+| clear of the wheel-servo sweep | radius < 14 mm **or** > 50 mm from the roll axis, or \|x\| > 23 mm |
+
+The third rule has a useful loophole: the annulus has a *hole*. Parts sitting
+essentially **on** the roll axis are inside it and the sweep misses them
+entirely, which is where the ankle bearing carrier and the tie back to the
+wheel servo now live. The shin instead goes the other way and stops 55 mm up,
+outside the annulus, reaching the ankle from behind.
+
+The audit also distinguishes three things that all look like overlap:
+
+- **interpenetration** between parts that can move relative to each other - a
+  real fault
+- **lap joints** between geoms on the same body, which cannot move relative to
+  each other at all, so shared material is just how a bracket bolts on
+  (MuJoCo skips these for the same reason)
+- **designed mates**, like a hub inside its tyre
+
+Current state: **0 interpenetration in both end poses, 0 through all 26 flip
+poses, 1 connected group.**
+
 ## Not modelled
 
-The structural brackets tying the ankle-pitch horn to the roll servo, and the
-roll horn to the wheel servo, are deliberately absent. They span two moving
-bodies, their real shape is a CAD problem, and every hand-placed guess
-interpenetrated something. Better an honest gap than known-wrong geometry.
+The ankle-pitch drive is not coaxial with its own joint, because the wheel
+already owns that axle. The servo sits high on the shin and would drive down
+through a belt on the real robot; that belt is not drawn.
 
-That gap is itself the finding: **the three-DOF ankle is the hard part of this
-robot.** Pitch, roll and wheel drive all want to live within 45 mm of one axle,
-and two of the three have to clear a wheel that changes shape halfway through
-the manoeuvre.
+**The three-DOF ankle remains the hard part of this robot.** Pitch, roll and
+wheel drive all want to live within 45 mm of one axle, two of them have to
+clear a wheel that changes shape halfway through the manoeuvre, and the third
+sweeps an annulus through everything else. It is buildable - the layout here
+is clean through the whole flip - but it is the part that will take real CAD
+rather than a parametric sketch.
 
 ## Still open
 

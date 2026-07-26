@@ -41,6 +41,35 @@ Validated end to end in this repo (`cad/shin.py`, runs in about a second).
   arguably the strongest option; it was excluded here on the open-source
   requirement.
 
+## Vendored, not just installed
+
+build123d lives in this repo as a submodule at `vendor/build123d`, pointing at
+a fork under `RomanSlack/build123d` with `gumyr/build123d` as `upstream`. It is
+installed **editable**, so changes to the CAD library take effect immediately
+and can be pushed back to the fork or upstream as a PR.
+
+```bash
+git clone --recurse-submodules <this repo>      # or, if already cloned:
+git submodule update --init --recursive
+uv sync
+```
+
+`pyproject.toml` pins it with `[tool.uv.sources]`. Without that pin a `uv sync`
+quietly swaps in the published wheel and edits stop having any effect, which is
+a miserable thing to debug.
+
+**One conflict this surfaced, worth knowing:** build123d depends on
+`threejs-materials`, which pins `pillow < 12.3`, while `render.py` had asked for
+`pillow >= 12.3`. Our constraint was arbitrary - we only use `Image`,
+`ImageDraw` and `ImageFont` - so we relaxed ours rather than patching a
+dependency. Verified: renderer and all 43 tests still pass on pillow 12.2.
+
+To pull upstream changes later:
+
+```bash
+cd vendor/build123d && git fetch upstream && git merge upstream/dev
+```
+
 ## The validated pipeline
 
 ```

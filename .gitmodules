@@ -1,0 +1,4 @@
+[submodule "vendor/build123d"]
+	path = vendor/build123d
+	url = https://github.com/RomanSlack/build123d.git
+	branch = dev

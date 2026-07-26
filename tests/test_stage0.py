@@ -20,7 +20,7 @@ def test_model_mass_matches_budget():
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     # 1.71 kg, derived rather than estimated: see cad/masses.py. The printed
     # structure turned out far lighter than the hand-assigned numbers.
-    assert 1.70 <= m.body_subtreemass[t] <= 1.77
+    assert 1.71 <= m.body_subtreemass[t] <= 1.78
 
 
 def test_stance_geometry():

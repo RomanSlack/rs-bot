@@ -47,6 +47,7 @@ BEARING_OD = 5.0              # radius, 623ZZ outer race (10 mm dia)
 BEARING_W = 4.0               # 623ZZ width
 SHAFT_R = 2.0                 # radius, clearance for the 3 mm shaft
 SERVO_BOLTS = 40.0            # mounting bolt spacing along the servo case
+SHAFT_INSET = 10.0            # servo output shaft, from the near end of the case
 
 
 def _box(spec):
@@ -58,13 +59,15 @@ def _box(spec):
 def build():
     part = _box(SPINE) + _box(ARM) + _box(POST) + _box(STANDOFF)
 
-    # Hub at the knee, bolted to the servo horn. The knee axis is +y.
-    part += bd.Pos(0, SPINE_Y, -14) * bd.Rot(90, 0, 0) * bd.Cylinder(HUB_R, 12)
-    part -= bd.Pos(0, SPINE_Y, -14) * bd.Rot(90, 0, 0) * bd.Cylinder(HORN_BORE, 14)
+    # Hub at the knee, bolted to the servo horn. It must be centred ON the
+    # knee axis at z = 0, or the part does not pivot about the joint - it was
+    # 14 mm below it, which no amount of stress margin would have saved.
+    part += bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HUB_R, 12)
+    part -= bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HORN_BORE, 14)
     for i in range(4):
         ang = np.deg2rad(45 + 90 * i)
         part -= (bd.Pos(HORN_BOLTS * np.cos(ang), SPINE_Y,
-                        -14 + HORN_BOLTS * np.sin(ang))
+                        HORN_BOLTS * np.sin(ang))
                  * bd.Rot(90, 0, 0) * bd.Cylinder(M2_CLEAR, 20))
 
     # Ankle pitch bearing: a 623ZZ pressed into a counterbore, with a

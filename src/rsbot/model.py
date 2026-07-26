@@ -117,7 +117,7 @@ LASH_FRICTION = 0.0005
 #
 # The old numbers put 100 g in the shin on the assumption the wheel servo lived
 # there; it is really on the roll bracket, 110 mm further out.
-SEG_MASS = {"thigh": 0.0729, "shin": 0.0793, "ankle": 0.0568,
+SEG_MASS = {"thigh": 0.0729, "shin": 0.0814, "ankle": 0.0568,
             "rollbracket": 0.0598, "wheel": 0.060}
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}

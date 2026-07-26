@@ -143,7 +143,12 @@ wrong. Deepened 10 -> 14 mm, now 10.8 MPa and 3.7x.
 The standoff now runs the length of the servo case with bolts 40 mm apart:
 41 N. This is the sort of thing that survives assembly and fails a week later.
 
-Plus a fourth from simply looking at the render: a lightening pocket that cut a
+**The hub was 14 mm off the knee axis.** Found only when placing the servos:
+the hub sat at z = -14 while the knee joint is at z = 0, so the part would not
+have pivoted about its own joint. No amount of stress margin saves that. Now
+centred on the axis.
+
+Plus a fifth from simply looking at the render: a lightening pocket that cut a
 10 mm slot through a 20 mm spine, leaving a thin-necked keyhole. Removed.
 
 ### Stress, on measured loads
@@ -161,6 +166,28 @@ Applying a 3x design factor, because a desk robot will get knocked off a desk:
 
 The arm remains the governing member. Everything is now above 3x on a load
 that is itself 3x measured peak.
+
+### Fitted with its servos
+
+```bash
+uv run python -m cad.assembly     # shin + knee servo + ankle servo
+```
+
+Two STS3215s touch this part: the knee servo, whose case bolts to the thigh
+and whose horn drives the hub, and the ankle-pitch servo, whose case bolts to
+the standoff. Both are placed by their mounting rather than by eye, and
+checked by boolean intersection rather than by looking:
+
+| pair | intersection |
+|---|---|
+| knee servo x shin | 0.0 mm3 |
+| ankle servo x shin | 0.0 mm3 |
+| servo x servo | 0.0 mm3 |
+
+Assembly envelope **72 x 90 x 134 mm**. Note the 90 mm in y: the shin itself is
+19 mm, and the two servo cases either side account for the rest. That is worth
+carrying into the other links, because it is what actually sets the robot's
+width.
 
 ### Printing it
 

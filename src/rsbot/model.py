@@ -117,7 +117,7 @@ LASH_FRICTION = 0.0005
 #
 # The old numbers put 100 g in the shin on the assumption the wheel servo lived
 # there; it is really on the roll bracket, 110 mm further out.
-SEG_MASS = {"thigh": 0.0729, "shin": 0.0814, "ankle": 0.0568,
+SEG_MASS = {"thigh": 0.0867, "shin": 0.0814, "ankle": 0.0568,
             "rollbracket": 0.0598, "wheel": 0.060}
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
@@ -161,8 +161,11 @@ def _link_geoms(link, side, sgn):
                    f'mass="{m}" group="4"/>')
         # Stops short of the knee: the shin swings 40 deg there and would
         # otherwise scissor into it. The knee servo bridges the gap.
-        vis.append(_v(f"vthigh_{side}", "box", f"0.010 {SPY} 0.049",
-                      f"0 {y:.5f} -0.053", C_PRINT))
+        # 16 mm wide in y, not 12: with no hip roll joint, the STRUCTURE
+        # carries the whole lateral moment at the hip (9.5 N.m at the design
+        # load), and at 12 mm that is only a 2.0x margin. See cad/thigh.py.
+        vis.append(_v(f"vthigh_{side}", "box", f"0.010 0.008 0.049",
+                      f"0 {sgn*0.023:.5f} -0.053", C_PRINT))
         vis.append(_v(f"vkneesv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
                       f"0 {outb:.5f} {-0.110+off:.5f}", C_SERVO))
     elif link == "shin":

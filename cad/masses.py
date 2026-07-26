@@ -12,8 +12,8 @@ to the shin, the roll servo to the ankle, and the wheel servo to the roll
 bracket. Getting that wrong is what left 100 g in the shin on the assumption
 the wheel servo lived there.
 
-The shin uses its real CAD mass; the others use their visual volume until they
-are ported too.
+Ported links (shin, thigh) use their real CAD mass; the rest fall back to
+their visual volume until they are ported too.
 """
 
 import mujoco
@@ -21,6 +21,7 @@ import numpy as np
 
 from src.rsbot.model import load
 import cad.shin as shin
+import cad.thigh as thigh
 
 PETG = 1.270          # g/cm3
 INFILL = 0.60         # a print is not solid; see cad/shin.py
@@ -66,10 +67,12 @@ def table():
         elif n.startswith(PRINTED):
             r["cm3"] += vol * 1e6
 
-    shin_g = shin.main(export=False) * 1000.0
+    cad_g = {"shin": shin.main(export=False) * 1000.0,
+             "thigh": thigh.main(export=False) * 1000.0}
     out = {}
     for b, r in rows.items():
-        printed = shin_g if b.startswith("shin") else r["cm3"] * PETG * INFILL
+        link = b.rsplit("_", 1)[0]
+        printed = cad_g.get(link, r["cm3"] * PETG * INFILL)
         total = printed + r["servos"] * SERVO + r["bought"]
         if b == "torso":
             total += IMU + BALLAST

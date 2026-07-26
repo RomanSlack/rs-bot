@@ -260,7 +260,7 @@ def test_visual_parts_carry_no_mass_or_collision():
                 and not name.startswith("h_"):   # visual build
             assert m.geom_contype[i] == 0 and m.geom_conaffinity[i] == 0, name
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    assert m.body_subtreemass[t] == pytest.approx(1.732, abs=3e-3)
+    assert m.body_subtreemass[t] == pytest.approx(1.759, abs=3e-3)
 
 
 def test_no_real_part_hits_the_floor_in_either_mode():

@@ -189,6 +189,44 @@ Assembly envelope **72 x 90 x 134 mm**. Note the 90 mm in y: the shin itself is
 carrying into the other links, because it is what actually sets the robot's
 width.
 
+## Thigh
+
+Ported second. Same review, and one design decision fell out of it.
+
+**The governing load in the whole leg is at the hip, and no servo reacts it.**
+There is no hip roll joint, so a lateral force at the contact patch is carried
+entirely by the structure: 38 N design load at 247 mm is **9.5 N.m**. At the
+shin's 12 mm width that is a 2.0x margin, the thinnest anywhere in the robot.
+The thigh spine is therefore **16 mm wide rather than 12**, which takes it to
+3.6x. Fore/aft is never the problem there - the hip servo's own 1.67 N.m peak
+works out at 25x.
+
+**The knee servo mount has to reach around the servo, not bolt beside it.** The
+case occupies y = -20.4 .. 15, which is exactly where the shin's hub also
+wants to be. Bolting to the outboard face would put the bracket through the
+shin. The thigh instead crosses over the top of the case and comes down the
+inboard side to a 6 mm plate carrying all four mounting bolts.
+
+Checked, not eyeballed:
+
+| check | result |
+|---|---|
+| thigh x knee servo case | 0.0 mm3 |
+| thigh x shin, knee swept 0 to -110 deg in 10 deg steps | 0.0 mm3 at every angle |
+
+Sweeping the knee matters for the same reason sweeping the flip did: two links
+that clear each other in one pose can still scissor in between.
+
+Thigh is 31.7 g printed. The robot is now 1759 g with two links CAD-derived.
+
+### One regression, stated plainly
+
+The heavier, differently distributed leg costs a little backlash tolerance:
+the full round trip now survives to **1.75 deg** rather than 2. Under 1 deg
+nothing changes, and the measured STS3215 figure is 0.87 deg, so this sits
+inside the design target - but it is a real narrowing and the margin at 2 deg
+is gone.
+
 ### Printing it
 
 Lay the part with its **y axis vertical**: 72 x 99 mm footprint, 19 mm tall.

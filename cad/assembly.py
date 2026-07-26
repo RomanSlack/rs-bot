@@ -21,6 +21,7 @@ import mujoco  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 import cad.shin as shin  # noqa: E402
+import cad.thigh as thigh  # noqa: E402
 
 OUT = Path(__file__).parent / "out"
 SERVO_L, SERVO_W, SERVO_H = 45.2, 24.7, 35.4
@@ -56,7 +57,11 @@ def build():
     az = (shin.STANDOFF[2][0] + shin.STANDOFF[2][1]) / 2
     ankle = _block(0, stand_face + SERVO_H / 2, az, SERVO_W, SERVO_H, SERVO_L)
 
+    # Thigh sits above, in the same frame: its knee is this shin's origin.
+    th = bd.Pos(0, 0, -thigh.KNEE_Z) * thigh.build()
+
     return [(part, "0.88 0.45 0.13 1", "shin"),
+            (th, "0.72 0.36 0.10 1", "thigh"),
             (knee, "0.13 0.13 0.15 1", "knee servo"),
             (ankle, "0.22 0.22 0.26 1", "ankle-pitch servo")]
 
@@ -92,12 +97,12 @@ def main():
     mujoco.mj_forward(m, d)
     r = mujoco.Renderer(m, H, W)
     cam = mujoco.MjvCamera()
-    cam.lookat[:] = (-0.015, 0.02, -0.04)
+    cam.lookat[:] = (-0.012, 0.015, 0.005)
 
     font = ImageFont.truetype(
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
-    views = [("side", 90, -8, 0.24), ("three-quarter", 140, -20, 0.24),
-             ("front", 180, -8, 0.24)]
+    views = [("side", 90, -8, 0.34), ("three-quarter", 140, -20, 0.34),
+             ("front", 180, -8, 0.34)]
     tiles = []
     for name, az, el, dist in views:
         cam.azimuth, cam.elevation, cam.distance = az, el, dist
@@ -112,7 +117,7 @@ def main():
     for i, t in enumerate(tiles):
         sheet.paste(t, (i * W, 0))
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out = OUT / f"shin_assembly_{stamp}.png"
+    out = OUT / f"leg_assembly_{stamp}.png"
     sheet.save(out)
     print(f"wrote {out}")
     return out

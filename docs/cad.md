@@ -120,6 +120,72 @@ stiffness figure, which assumes a solid section. Removed after one look.
 
 For a proper CAD GUI on the STEP files, FreeCAD opens them directly.
 
+## Shin: manufacturability review
+
+Reviewed before porting anything else, on the principle that the same mistakes
+would otherwise be repeated seven more times. Three were real.
+
+### Three faults, all fixed
+
+**The knee hub had no attachment at all.** The horn bolt circle was at 7.5 mm
+radius inside a 10 mm bore, so the four M2 holes cut nothing but air. The part
+could not have been bolted to the knee servo. Now a 4 mm bore with the bolt
+circle at 8 mm, inside a 13 mm hub: 2.9 mm of material to the bore, 3.9 mm to
+the rim.
+
+**The arm was the weak member.** Peak bending stress 18.8 MPa on a 3x design
+load, only 2.1x against PETG's ~40 MPa in-plane - and uncomfortably close to
+its ~20 MPa *across* layers, which is what you get if the print orientation is
+wrong. Deepened 10 -> 14 mm, now 10.8 MPa and 3.7x.
+
+**The ankle servo's bolts were 12 mm apart.** Its reaction torque peaks at
+1.63 N.m measured, and a couple through bolts that close is **136 N per bolt**.
+The standoff now runs the length of the servo case with bolts 40 mm apart:
+41 N. This is the sort of thing that survives assembly and fails a week later.
+
+Plus a fourth from simply looking at the render: a lightening pocket that cut a
+10 mm slot through a 20 mm spine, leaving a thin-necked keyhole. Removed.
+
+### Stress, on measured loads
+
+Peak ground reaction on one wheel, measured in sim across quiet standing,
+driving, a 1.0 N.s shove and a full flip cycle: **18.3 N normal, 12.8 N
+lateral, 3.8 N fore/aft**, worst case during the flip - about 2.2x static.
+Applying a 3x design factor, because a desk robot will get knocked off a desk:
+
+| member | section | peak stress | margin vs 40 MPa |
+|---|---|---|---|
+| post | 12 x 12 | 1.6 MPa | 25x |
+| arm | 12 x 14 | 10.8 MPa | **3.7x** |
+| spine | 20 x 12 | 8.2 MPa | 4.9x |
+
+The arm remains the governing member. Everything is now above 3x on a load
+that is itself 3x measured peak.
+
+### Printing it
+
+Lay the part with its **y axis vertical**: 72 x 99 mm footprint, 19 mm tall.
+That orientation is not arbitrary:
+
+- the part is essentially a profile extruded along y, so there are no
+  overhangs and it needs no support
+- both bores - the knee hub and the ankle bearing - run along y, so they print
+  as vertical circles with no bridging and no elephant-footing on the seat
+- bending loads put tension along x and z, which are **in-plane**. Printed flat
+  instead, the same loads would pull across layers at ~20 MPa, and the arm's
+  10.8 MPa would be a 1.9x margin rather than 3.7x
+
+### Still not verified
+
+- **Beam theory, not FEA.** Fine for prismatic members, unreliable at the
+  fillets and the hub, which are exactly where a real part cracks.
+- **The bearing fit.** A 623ZZ counterbore is modelled at nominal 10 mm; a
+  printed bore needs measuring and offsetting, usually 0.1-0.2 mm.
+- **Thread engagement.** M2 clearance holes are drawn, but nothing specifies
+  heat-set inserts versus self-tapping into plastic. Inserts, for anything
+  that will be taken apart more than twice.
+- **The ankle-pitch belt** is still neither drawn nor sized.
+
 ## What this buys, concretely
 
 1. **The mass budget stops being a guess.** Every part's mass, centroid and

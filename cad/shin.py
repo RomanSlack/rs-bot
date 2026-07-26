@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import build123d as bd
+import numpy as np
 
 OUT = Path(__file__).parent / "out"
 
@@ -29,15 +30,23 @@ SPINE_Y, SPY = 21.0, 6.0      # spine centre-line and half-thickness
 ANKLE_Z = -110.0
 
 SPINE = ((-10, 10), (SPINE_Y - SPY, SPINE_Y + SPY), (-55, 0))
-ARM = ((-42, -10), (SPINE_Y - SPY, SPINE_Y + SPY), (-53, -43))
+# 14 mm deep, not 10. At 10 the arm peaked at 18.8 MPa, which is only 2.1x on
+# a 3x design load and uncomfortably near PETG's ~20 MPa ACROSS layers.
+ARM = ((-42, -10), (SPINE_Y - SPY, SPINE_Y + SPY), (-55, -41))
 POST = ((-54, -42), (SPINE_Y - SPY, SPINE_Y + SPY), (-94, -48))
-STANDOFF = ((-8, 8), (SPINE_Y + SPY, SPINE_Y + SPY + 7), (-52, -28))
+# Runs the length of the servo case so its mounting bolts can be far apart.
+STANDOFF = ((-8, 8), (SPINE_Y + SPY, SPINE_Y + SPY + 7), (-62, -18))
 
 # --- fasteners ---------------------------------------------------------------
 M2_CLEAR = 1.1                # radius, clearance for M2
-HORN_BORE = 10.0              # radius, over the 25T servo horn
-HORN_BOLTS = 7.5              # bolt circle radius on the horn
-BEARING_BORE = 3.0            # radius, ankle pitch shaft
+HUB_R = 13.0                  # hub outer radius
+HORN_BORE = 4.0               # radius, clearance over the servo output boss
+HORN_BOLTS = 8.0              # bolt circle radius; MUST sit outside HORN_BORE
+                              # and inside HUB_R, or the holes cut thin air
+BEARING_OD = 5.0              # radius, 623ZZ outer race (10 mm dia)
+BEARING_W = 4.0               # 623ZZ width
+SHAFT_R = 2.0                 # radius, clearance for the 3 mm shaft
+SERVO_BOLTS = 40.0            # mounting bolt spacing along the servo case
 
 
 def _box(spec):
@@ -50,20 +59,26 @@ def build():
     part = _box(SPINE) + _box(ARM) + _box(POST) + _box(STANDOFF)
 
     # Hub at the knee, bolted to the servo horn. The knee axis is +y.
-    hub = bd.Pos(0, SPINE_Y, -14) * bd.Rot(90, 0, 0) * bd.Cylinder(16, 12)
-    part += hub
+    part += bd.Pos(0, SPINE_Y, -14) * bd.Rot(90, 0, 0) * bd.Cylinder(HUB_R, 12)
     part -= bd.Pos(0, SPINE_Y, -14) * bd.Rot(90, 0, 0) * bd.Cylinder(HORN_BORE, 14)
-    for ang in (0, 90, 180, 270):
-        loc = bd.Rot(0, 0, ang) * bd.Pos(HORN_BOLTS, 0, 0)
-        part -= (bd.Pos(loc.position.X, SPINE_Y, -14 + loc.position.Y)
+    for i in range(4):
+        ang = np.deg2rad(45 + 90 * i)
+        part -= (bd.Pos(HORN_BOLTS * np.cos(ang), SPINE_Y,
+                        -14 + HORN_BOLTS * np.sin(ang))
                  * bd.Rot(90, 0, 0) * bd.Cylinder(M2_CLEAR, 20))
 
-    # Ankle pitch bearing, on the same +y axis, at the bottom of the aft post.
+    # Ankle pitch bearing: a 623ZZ pressed into a counterbore, with a
+    # clearance hole through for the shaft. A plain hole would run the shaft
+    # straight against printed plastic.
     part += bd.Pos(-48, SPINE_Y, -88) * bd.Rot(90, 0, 0) * bd.Cylinder(11, 12)
-    part -= bd.Pos(-48, SPINE_Y, -88) * bd.Rot(90, 0, 0) * bd.Cylinder(BEARING_BORE, 14)
+    part -= bd.Pos(-48, SPINE_Y, -88) * bd.Rot(90, 0, 0) * bd.Cylinder(SHAFT_R, 14)
+    part -= (bd.Pos(-48, SPINE_Y + SPY - BEARING_W / 2, -88)
+             * bd.Rot(90, 0, 0) * bd.Cylinder(BEARING_OD, BEARING_W))
 
-    # Ankle-servo mounting, through the standoff.
-    for z in (-46, -34):
+    # Ankle-servo mounting. Spacing matters: the servo's 1.63 N.m reaction is
+    # a force couple through these bolts, so 12 mm apart meant 136 N each.
+    # At 40 mm it is 41 N.
+    for z in (-40 - SERVO_BOLTS / 2, -40 + SERVO_BOLTS / 2):
         part -= (bd.Pos(0, SPINE_Y + SPY + 3.5, z) * bd.Rot(90, 0, 0)
                  * bd.Cylinder(M2_CLEAR, 20))
 

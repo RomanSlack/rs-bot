@@ -117,7 +117,7 @@ LASH_FRICTION = 0.0005
 #
 # The old numbers put 100 g in the shin on the assumption the wheel servo lived
 # there; it is really on the roll bracket, 110 mm further out.
-SEG_MASS = {"thigh": 0.0729, "shin": 0.0756, "ankle": 0.0568,
+SEG_MASS = {"thigh": 0.0729, "shin": 0.0793, "ankle": 0.0568,
             "rollbracket": 0.0598, "wheel": 0.060}
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
@@ -180,7 +180,7 @@ def _link_geoms(link, side, sgn):
         # Stood off 7 mm further outboard than the spine face. At the flush
         # position its inner corner sits 49 mm from the roll axis, just inside
         # the wheel-servo sweep, and clips it at mid-flip by 2.4 mm.
-        vis.append(_v(f"vankstand_{side}", "box", f"0.008 0.0035 0.012",
+        vis.append(_v(f"vankstand_{side}", "box", f"0.008 0.0035 0.022",
                       f"0 {sgn*(SPINE_Y+SPY+0.0035):.5f} {-0.110+0.0700:.5f}",
                       C_PRINT))
         vis.append(_v(f"vanksv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
@@ -189,7 +189,7 @@ def _link_geoms(link, side, sgn):
         # the ankle axis belongs here. It steps aft high up, where the radius
         # from the roll axis already clears the servo sweep, then drops at
         # |x| > 32 mm, which also clears the flat wheel.
-        vis.append(_v(f"vshinarm_{side}", "box", f"0.016 {SPY} 0.005",
+        vis.append(_v(f"vshinarm_{side}", "box", f"0.016 {SPY} 0.007",
                       f"-0.026 {y:.5f} -0.048", C_PRINT))
         vis.append(_v(f"vshinpost_{side}", "box", f"0.006 {SPY} 0.023",
                       f"-0.048 {y:.5f} -0.071", C_PRINT))

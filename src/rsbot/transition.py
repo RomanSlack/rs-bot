@@ -40,14 +40,18 @@ class DeployCfg:
     flip_rate: float = 2.0        # rad/s of ankle roll
     stand_height: float = 0.195   # leg length held through the flip
     ankle_bias: float = 0.0       # deliberate foot tilt in foot mode
-    settle_pitch: float = 0.015   # rad, measured against the trim lean
+    # Tightened when the CAD inertias went in. The robot has to be genuinely
+    # still before it commits to the flip, not merely nearly still: with the
+    # real mass distribution the leftover motion carries straight through the
+    # manoeuvre, and loosening these back costs about 12 mm of travel.
+    settle_pitch: float = 0.008   # rad, measured against the trim lean
     settle_rate: float = 0.15     # rad/s
-    settle_speed: float = 0.03    # m/s
+    settle_speed: float = 0.015   # m/s
     # The quiet test has to HOLD, not just be true for one tick. Speed comes
     # from wheel odometry low-passed at tau_odom, which lags by over 100 ms, so
     # an instantaneous check passes while the robot is still rolling and the
     # motion only shows up later, mid-flip, with the outer loop already off.
-    settle_dwell: float = 0.35
+    settle_dwell: float = 0.50
     settle_timeout: float = 4.0
     trim_tau: float = 0.5
     unload_time: float = 0.20     # s to ramp the wheel command out

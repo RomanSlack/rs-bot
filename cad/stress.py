@@ -79,13 +79,23 @@ def in_box(nodes, lo, hi):
 # have to be the real interfaces or the answer is fiction.
 #
 # `layer` is the print orientation: the normal to the layers, i.e. the axis the
-# part is built up along. Every part here is assumed printed lying on its
-# largest face, which puts the layer normal along y and the bending in-plane.
+# part is built up along. It is NOT "lay it on its biggest face" - it is chosen
+# per part from the load, because it is free and it matters more than expected.
+# Interlayer utilisation across the three axes, in PETG:
+#
+#     part            y (on its side)   z (flat)   x (built up in x)
+#     thigh                  74%          136%           36%   <- best
+#     shin                   13%  <-best   109%           40%
+#     roll bracket          202%           78%  <-best   222%
+#     chassis                76%            81%           35%   <- best
+#
+# The roll bracket goes from 202% to 78% for nothing but turning it on the bed.
+# Get this wrong and a part that passes fails, with no other change.
 
 def _parts():
     return {
         "thigh": dict(
-            step="thigh.step", layer=(0, 1, 0),
+            step="thigh.step", layer=(1, 0, 0),
             # Bolted to the hip servo horn: the four M2 on the 8 mm bolt circle.
             fix=lambda n: np.concatenate([
                 near_axis(n, (8 * np.cos(a), 21, 8 * np.sin(a)), (0, 1, 0), 2.2)
@@ -123,7 +133,7 @@ def _parts():
             note="support ASSUMED - the ankle-pitch joint is not drawn"),
 
         "roll_bracket": dict(
-            step="roll_bracket.step", layer=(0, 1, 0),
+            step="roll_bracket.step", layer=(0, 0, 1),
             # Selected on solid material, not on holes: this part has none.
             # All four of its drawn features cut air (see docs/stress.md), so
             # the interfaces are taken where they physically have to be - the
@@ -137,7 +147,7 @@ def _parts():
             note="interfaces ASSUMED - none of its holes exist yet"),
 
         "chassis": dict(
-            step="chassis.step", layer=(0, 1, 0),
+            step="chassis.step", layer=(1, 0, 0),
             # BOTH hips held, not one. The first version held one hip's four
             # bolts and hung the whole robot off them, which bent the chassis
             # 71 mm - a load case that cannot happen, because the other leg is
@@ -334,6 +344,12 @@ def sheet(name, spec, res, wrench, stamp):
 
 def main(only=None, size=None):
     OUT.mkdir(exist_ok=True)
+    # Re-export first. This reads STEP files off disk, so without it an edited
+    # part is analysed in its previous shape and the result looks like the fix
+    # did nothing - which is exactly what happened once, and it is a confusing
+    # thing to debug because every other number moves and one does not.
+    import cad.robot
+    cad.robot.export_all()
     print("measuring loads from the sim...")
     design = loads.design_loads()
     parts = _parts()

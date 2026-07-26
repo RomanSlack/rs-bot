@@ -11,7 +11,7 @@ against something it cannot fake.
 
 | | what it does | how it is checked |
 |---|---|---|
-| `cad/loads.py` | reads the wrench crossing every joint | closes against statics to 0.01 N |
+| `cad/loads.py` | reads the wrench crossing every joint | closes against statics exactly, 6.12 N vs 6.12 N |
 | `cad/fea.py` | TET10 linear-elastic solve | cantilever, +1.9% deflection, +3.1% stress |
 | `cad/stress.py` | per-part boundary conditions, materials, pictures | interfaces must land on real features |
 
@@ -30,33 +30,44 @@ of hundred millimetres. It has to be translated to the joint first.
 
 **Control test:** balancing quietly, the wrench across the knee must equal
 everything below the knee, weighed, minus the ground reaction under that wheel.
-It comes out 6.10 N against 6.10 N. If that had not closed, every number below
+It comes out 6.12 N against 6.12 N. If that had not closed, every number below
 would have been wrong in the same direction and none of the pictures would have
 shown it.
 
-### Three cases, three factors
+### Four cases, and they are not the same kind of event
 
-| case | what it is | factor | why |
-|---|---|---|---|
-| quiet | standing still | - | reference |
-| flip | a full wheel -> foot -> wheel cycle | **x3** | worst normal operation |
-| shove | the rated 1.0 N.s disturbance | **x1.5** | already a limit event |
+| case | what it is | factor |
+|---|---|---|
+| quiet | standing still | - |
+| flip | a full wheel -> foot -> wheel cycle | **x3** (worst normal operation) |
+| shove | the rated 1.0 N.s disturbance, **fore/aft** | **x1.5** (already a limit event) |
+| tipover | the same impulse **sideways** | **x1** (a measured event, not a proxy) |
 
-Factoring the shove by 3 as well would count the same conservatism twice and
-turn an 87 N transient into a fictional 261 N. The shove is delivered as 100 N
-for 10 ms, which is an impulse approximation and not a measurement of any real
-knock - the same impulse over 50 ms would load the structure far less. Read the
-shove rows as an upper bound on a hand-swipe.
+Factoring a limit case by 3 as well counts the same conservatism twice.
+
+The fore/aft and lateral cases are separated because averaging them hides the
+most important number in this whole exercise:
+
+| | peak force at the hip |
+|---|---|
+| fore/aft 1.0 N.s | **6.5 N** - the wheels roll away, almost nothing reaches the structure |
+| lateral 1.0 N.s | **472 N**, peaking 574 ms *later* |
+
+That 574 ms is the tell: it is not the impulse. The robot rolls through -100
+degrees and lands on its side, and 472 N is the floor. There is no hip roll
+joint and no way to step sideways, so laterally the robot has **no compliance
+whatever**. Same impulse, seventy times the load, and it is what sizes the
+thigh and the shin.
 
 Design loads that come out of this:
 
 | part | wrench at the joint below | governed by |
 |---|---|---|
-| thigh | 131 N, 10.90 N.m | shove |
-| shin | 95 N, 2.30 N.m | shove |
-| ankle yoke | 46 N, 1.82 N.m | flip |
-| roll bracket | 47 N, 1.81 N.m | flip |
-| chassis | 60 N payload + shove | its own cargo |
+| thigh | 107 N, 8.81 N.m | tipover |
+| shin | 104 N, 6.34 N.m | tipover |
+| ankle yoke | 47 N, 1.92 N.m | flip |
+| roll bracket | 49 N, 1.87 N.m | flip |
+| chassis | 55 N sideways + 25 N down | its own payload |
 
 What this does **not** include: the reaction torque of a servo whose case bolts
 to the part. That is an internal couple between two bolt patterns on the same
@@ -104,8 +115,9 @@ of nothing.
 
 Printed parts get two numbers, because a printed part is not one material:
 **in-plane** along the layers, and **interlayer** pulling them apart at roughly
-half the strength. The second is how a printed part actually fails. Every part
-is assumed printed lying on its largest face, layer normal along y.
+half the strength. The second is how a printed part actually fails. The print
+orientation is chosen per part from the load - see below, it is worth a factor
+of three.
 
 A 0.6 knockdown is applied to printed strength and stiffness, matching the 60%
 infill the mass model assumes. That is conservative for bending, where the solid
@@ -115,17 +127,66 @@ perimeters sit at the extreme fibre. Print a coupon and correct it.
 
 ## Results
 
+Every part in its chosen print orientation, worst of in-plane and interlayer.
+Bold is over the allowable.
+
 | part | PETG | PLA | ABS | PA6-CF | Al 6061-T6 |
 |---|---|---|---|---|---|
-| thigh | **154%** | **133%** | **192%** | 78% | 16% |
-| shin | 69% | 58% | 84% | 34% | 7% |
-| ankle yoke | 9% | 4% | 6% | 3% | 1% |
-| roll bracket | **1596%** | **1382%** | **2000%** | **799%** | **165%** |
-| chassis | 35% (76% interlayer) | 30% | 44% (99%) | 18% | 4% |
+| thigh | 75% | 63% | 92% | 37% | 8% |
+| shin | 63% | 53% | 76% | 30% | 6% |
+| ankle yoke | 6% | 5% | 7% | 3% | 1% |
+| roll bracket | **163%** | **141%** | **205%** | 81% | 17% |
+| chassis | 35% | 30% | 44% | 19% | 4% |
 
-Worst of in-plane and interlayer. Bold is over the allowable.
+**PA6-CF passes everything.** ABS and PETG pass everything except the roll
+bracket; the thigh in ABS is marginal at 92%.
+
+### How it got there
+
+The first pass had three parts over the line, two of them badly:
+
+| part | before | after | what changed |
+|---|---|---|---|
+| thigh | 161% | **75%** | plate 6 -> 9 mm, two corner ribs |
+| shin | 89% | **63%** | ribs at both inside corners |
+| roll bracket | 1596% | **163%** | a real joint instead of a 0.5 mm lap |
+
+Fifteen grams total, 1.756 -> 1.771 kg. Nothing was thickened uniformly: every
+addition is a triangle at a corner or section where the load actually is,
+because bending stiffness goes as depth cubed and a rib is all depth.
+
+The roll bracket took four rounds, and each one is worth reading as a lesson:
+
+| change | PETG |
+|---|---|
+| as drawn - 2.00 x 0.50 x 2.65 mm lap | 1596% |
+| lap grown in y and z, corner rib | 430% |
+| **tongue** running aft to lap the tie over 12 mm, not 2 | 215% |
+| fillet on the re-entrant corner | 204% |
+| tongue filled down to the tie's inboard face | **163%** |
+
+The tongue is the one that mattered, and it is not "more material" - it is
+threading a member through the only gap available, inboard of the shin's post
+at y = 15 and outboard of the yoke's rotation sweep at radius 8.5 mm. The part
+went from 4.4 g to 4.9 g doing it.
+
+### Print orientation is free and it is not a detail
+
+`layer` is chosen per part from the load, not by laying each on its biggest
+face. Interlayer utilisation in PETG, across the three axes:
+
+| part | y (on its side) | z (flat on the bed) | x (built up in x) |
+|---|---|---|---|
+| thigh | 74% | 136% | **36%** |
+| shin | **13%** | 109% | 40% |
+| roll bracket | 202% | **78%** | 222% |
+| chassis | 76% | 81% | **35%** |
+
+The roll bracket goes from 202% to 78% for nothing but turning it on the bed.
+Get this wrong and a part that passes fails, with no other change to anything.
 
 ### Three faults this found
+
 
 **1. The roll bracket's two members meet over a 0.5 mm sliver.**
 
@@ -159,19 +220,6 @@ no matching feature at all, and assembled, the two parts come no closer than
 This is the same class as the knee hub that sat 14 mm off its own axis, and a
 bigger instance: the joint does not exist. It also means the shin's number above
 is computed with the lever arm as drawn, not the kinematic one.
-
-### Two things that were already suspected, now with numbers
-
-**The thigh is the limiting printed part, and not where the widening went.**
-The spine was widened from 12 to 16 mm because lateral bending at the hip is
-reacted by structure alone. But the peak is on the **knee-servo mounting
-plate**, at 154% in PETG - the 6 mm inboard plate the whole shin hangs off.
-Widening the spine did not touch it.
-
-**The chassis is soft, as suspected.** 13.8 mm of sway in PETG under the rated
-lateral shove, and interlayer is the binding constraint at 76% (99% in ABS) -
-side plates printed flat get their layers pulled apart in exactly this load
-case. A rear brace, already on the open-items list, is the fix.
 
 ### What the materials are worth
 

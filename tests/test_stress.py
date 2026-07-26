@@ -42,17 +42,29 @@ def test_interface_force_closes_against_statics():
 
 
 def test_load_survey_is_ordered_by_severity():
-    """Quiet must be the mildest case and the shove the worst, in every part.
-    If the flip ever beat the shove it would mean the flip had gone wrong."""
+    """Quiet must be the mildest case, the flip worse, and the tipover worst of
+    all - the robot falls on its side there, so nothing should beat it.
+
+    The fore/aft shove sits BELOW the flip, which is the interesting part: the
+    wheels roll away and almost nothing reaches the structure. Laterally the
+    same impulse has nowhere to go.
+    """
     cases = loads.survey()
     for child in loads.CHILD.values():
         n = {c: np.linalg.norm(cases[c][child][0]) for c in cases}
-        assert n["quiet"] < n["flip"] < n["shove"], f"{child}: {n}"
+        assert n["quiet"] < n["flip"] < n["tipover"], f"{child}: {n}"
+        assert n["shove"] < n["flip"], f"{child}: fore/aft shove beat the flip: {n}"
 
 
-def test_roll_bracket_members_barely_touch():
-    """The fault that made the roll bracket fail at 16x. Pinning it so the fix
-    is verifiable: this must get much bigger, not silently stay small."""
+def test_roll_bracket_members_actually_lap():
+    """The roll bracket used to fail at 1068% of PETG's allowable, and not for
+    want of material: its two members overlapped in a box 2.00 x 0.50 x 2.65 mm
+    and the whole wheel load went through 2.65 mm3 of plastic.
+
+    A tongue now runs aft from the arm to meet the tie along its full length,
+    threaded inboard of the shin's post. This pins the joint so it cannot
+    quietly shrink back.
+    """
     import build123d as bd
     import cad.ankle as ankle
 
@@ -61,12 +73,23 @@ def test_roll_bracket_members_barely_touch():
         return bd.Pos((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2) * bd.Box(
             x1 - x0, y1 - y0, z1 - z0)
 
-    overlap = box(ankle.ROLL_ARM) & box(ankle.ROLL_TIE)
-    bb = overlap.bounding_box()
-    thinnest = min(bb.size.X, bb.size.Y, bb.size.Z)
-    assert thinnest == pytest.approx(0.5, abs=0.01), (
-        f"the arm/tie lap is now {thinnest:.2f} mm - if this was fixed, update "
-        f"the number and re-run cad.stress")
+    # The tongue is a continuation of the ARM, so the joint that carries the
+    # load is (arm + tongue) against the tie, not arm against tongue.
+    joint = (box(ankle.ROLL_ARM) + box(ankle.ROLL_TONGUE)) & box(ankle.ROLL_TIE)
+    bb = joint.bounding_box()
+    assert joint.volume > 60.0, f"lap is only {joint.volume:.1f} mm3"
+    assert bb.size.X > 10.0, f"lap is only {bb.size.X:.1f} mm long"
+    assert min(bb.size.X, bb.size.Y, bb.size.Z) > 1.5, "still a knife edge"
+
+
+def test_roll_bracket_corner_is_filleted():
+    """The hottest twelve nodes all sat inside a 3 mm cube on a sharp
+    re-entrant corner, which is a singularity - refine the mesh and it grows.
+    OCC refuses the fillet if the edge selection is widened, and swallowing
+    that exception returns the SHARP part while looking like a small
+    improvement."""
+    import cad.ankle as ankle
+    assert ankle.roll_bracket().volume > 6325.0, "the corner fillet is missing"
 
 
 def test_ankle_pitch_joint_is_not_drawn():

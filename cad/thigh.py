@@ -31,13 +31,28 @@ SERVO_Y_LO = SERVO_Y_HI - SERVO_H             # inboard face, y = -20.4
 SERVO_Z_LO = KNEE_Z - SHAFT_INSET             # -120.0
 SERVO_Z_HI = SERVO_Z_LO + SERVO_L             # -74.8
 
-PLATE_T = 6.0                 # inboard mounting plate thickness
+# 9 mm, not 6. FEA put the peak at 161% of PETG's allowable right here, on
+# the plate the whole shin hangs off - not on the spine, which is what got
+# widened for the hip's lateral moment. Section modulus goes as thickness
+# squared, so 6 -> 9 is 2.25x on its own, and the ribs below do the rest.
+PLATE_T = 9.0                 # inboard mounting plate thickness
+# Two triangular ribs tying the plate back to the cross-member, in the x-z
+# plane at either side. Depth at the corner is worth more than thickness
+# everywhere: bending stiffness goes as depth cubed.
+RIB_T = 4.0
+RIB_RUN = 26.0                # how far the rib reaches down the plate
 
 
 def _box(x, y, z):
     (x0, x1), (y0, y1), (z0, z1) = x, y, z
     return bd.Pos((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2) * bd.Box(
         x1 - x0, y1 - y0, z1 - z0)
+
+
+def _gusset(pts_xz, y0, t):
+    """Triangular rib in the x-z plane, spanning y0 to y0 + t."""
+    g = bd.extrude(bd.Plane.XZ * bd.Polygon(*pts_xz), amount=t)
+    return bd.Pos(0, y0 + t, 0) * g
 
 
 def build():
@@ -58,6 +73,13 @@ def build():
                  (SERVO_Z_HI, SERVO_Z_HI + 12))
     part += _box((-10, 10), (SERVO_Y_LO - PLATE_T, SERVO_Y_LO),
                  (SERVO_Z_LO, SERVO_Z_HI + 12))
+
+    # Ribs from the cross-member down the plate, one at each edge in x.
+    for x0 in (-10.0, 10.0):
+        sgn = 1 if x0 > 0 else -1
+        pts = ((x0, SERVO_Z_HI + 12), (x0, SERVO_Z_HI + 12 - RIB_RUN),
+               (x0 - sgn * RIB_RUN, SERVO_Z_HI + 12))
+        part += _gusset(pts, SERVO_Y_LO - PLATE_T, RIB_T)
 
     # Servo mounting bolts: all four corners, through the inboard plate.
     for dx in (-8.5, 8.5):

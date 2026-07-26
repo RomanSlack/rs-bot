@@ -17,17 +17,31 @@ translated to the joint and rotated into the part's own frame first.
 Three load cases are reported separately rather than blended, because they mean
 different things and take different factors:
 
-    quiet   standing still. What the robot does most of the time.
-    flip    a full wheel -> foot -> wheel cycle. The worst NORMAL operation,
-            and so the one that gets the full SF = 3.
-    shove   the rated 1.0 N.s disturbance. A LIMIT event, already at the edge
-            of what the controller is meant to survive, so it takes 1.5 the
-            way an ultimate-load check does. Factoring a limit case by 3 as
-            well would be counting the same conservatism twice, and it turns
-            an 87 N transient into a fictional 261 N.
+    quiet    standing still. What the robot does most of the time.
+    flip     a full wheel -> foot -> wheel cycle. The worst NORMAL operation,
+             and so the one that gets the full SF = 3.
+    shove    the rated 1.0 N.s disturbance, FORE/AFT. A LIMIT event, already at
+             the edge of what the controller is meant to survive, so it takes
+             1.5 the way an ultimate-load check does. Factoring a limit case by
+             3 as well counts the same conservatism twice.
+    tipover  the same impulse applied SIDEWAYS. This is not a disturbance the
+             robot rejects - it falls over. Factor 1.0, because it is the
+             measured event and not a proxy for one.
 
-Design load is the worse of flip x 3 and shove x 1.5, and the table says which
-one governs.
+Design load is the worst of flip x 3, shove x 1.5 and tipover x 1, and the
+table says which governs.
+
+The fore/aft and lateral cases are separated because they are not the same kind
+of event at all, and averaging them hides the most important number here:
+
+    fore/aft 1.0 N.s   ->  6.5 N at the hip. The wheels roll away and almost
+                           nothing reaches the structure.
+    lateral  1.0 N.s   ->  472 N at the hip, peaking 574 ms LATER. That is not
+                           the impulse, it is the robot hitting the floor: it
+                           rolls through -100 degrees and lands on its side.
+
+There is no hip roll joint and no way to step sideways, so laterally the robot
+has no compliance whatever. Same impulse, seventy times the load.
 
 The shove is delivered the way `src/rsbot/sim.py` delivers it: 1.0 N.s as
 100 N for 10 ms. That is an impulse approximation, not a measurement of any
@@ -53,6 +67,7 @@ from src.rsbot.transition import DeployMachine
 # Sized for a desk robot that will get knocked off a desk.
 SF = 3.0             # on normal operation
 SF_LIMIT = 1.5       # on the rated shove, which is already a limit event
+SF_FALL = 1.0        # on the tipover, which is a measured event, not a proxy
 SHOVE = 1.0          # N.s, the rated disturbance in wheel mode
 SHOVE_MS = 0.010     # applied over 10 ms, matching src/rsbot/sim.py
 
@@ -117,10 +132,9 @@ def _run(case, seconds):
                 ctl.start_retract()
             d.ctrl[:] = ctl(obs(m, d), dt)
         else:
-            if case == "shove" and 2.0 <= t < 2.0 + SHOVE_MS:
-                d.xfrc_applied[torso, 0] = SHOVE / SHOVE_MS
-            if case == "shove" and 3.0 <= t < 3.0 + SHOVE_MS:
-                d.xfrc_applied[torso, 1] = SHOVE / SHOVE_MS
+            axis = {"shove": 0, "tipover": 1}.get(case)
+            if axis is not None and 2.0 <= t < 2.0 + SHOVE_MS:
+                d.xfrc_applied[torso, axis] = SHOVE / SHOVE_MS
             d.ctrl[:] = ctl(obs(m, d), dt)
         mujoco.mj_step(m, d)
         # Skip the first moments: the keyframe is not exactly an equilibrium
@@ -133,7 +147,7 @@ def _run(case, seconds):
 def survey():
     """{case: {child: (force, torque)}}, unfactored."""
     return {"quiet": _run("quiet", 2.5), "flip": _run("flip", 7.0),
-            "shove": _run("shove", 5.0)}
+            "shove": _run("shove", 5.0), "tipover": _run("tipover", 5.0)}
 
 
 def design_loads(cases=None):
@@ -144,7 +158,8 @@ def design_loads(cases=None):
     out = {}
     for part, child in CHILD.items():
         options = [("flip x3", *[v * SF for v in cases["flip"][child]]),
-                   ("shove x1.5", *[v * SF_LIMIT for v in cases["shove"][child]])]
+                   ("shove x1.5", *[v * SF_LIMIT for v in cases["shove"][child]]),
+                   ("tipover x1", *cases["tipover"][child])]
         name, f, t = max(options,
                          key=lambda o: np.linalg.norm(o[1]) + 40 * np.linalg.norm(o[2]))
         out[part] = (f, t, name)
@@ -196,7 +211,7 @@ if __name__ == "__main__":
     for part, child in CHILD.items():
         print(f"{part}  (wrench at the {child} joint, part frame)")
         print(hdr)
-        for c in ("quiet", "flip", "shove"):
+        for c in ("quiet", "flip", "shove", "tipover"):
             print(_row(c, *cases[c][child]))
         f, t, gov = design_loads(cases)[part]
         print(_row(gov, f, t) + "   <- design")

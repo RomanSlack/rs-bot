@@ -260,7 +260,10 @@ def test_visual_parts_carry_no_mass_or_collision():
                 and not name.startswith("h_"):   # visual build
             assert m.geom_contype[i] == 0 and m.geom_conaffinity[i] == 0, name
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    assert m.body_subtreemass[t] == pytest.approx(1.756, abs=3e-3)
+    # 1.771 kg, not 1.756: the thigh plate went 6 -> 9 mm and three parts
+    # gained triangular ribs to get them under PETG's allowable. 15 g for a
+    # thigh that went from 161% of allowable to 78% is a trade worth making.
+    assert m.body_subtreemass[t] == pytest.approx(1.771, abs=3e-3)
 
 
 def test_no_real_part_hits_the_floor_in_either_mode():

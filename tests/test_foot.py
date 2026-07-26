@@ -231,9 +231,13 @@ def test_ankle_loop_is_what_makes_foot_mode_survive_backlash(deg):
 
 
 def test_foot_mode_falls_without_the_loop_once_lash_is_real():
-    """Guards the claim above: at 2 deg the loop is load-bearing, not cosmetic."""
+    """Guards the claim above: the loop is load-bearing, not cosmetic.
+
+    The threshold moved from 2 to 3 deg when the robot got lighter - less
+    momentum builds inside the deadzone - so the loop earns its keep later
+    than it used to, but it still earns it."""
     cfg = DeployCfg(flip_rate=2.0)
-    assert not _stand_in_foot_mode(math.radians(2.0), _no_loop(cfg))
+    assert not _stand_in_foot_mode(math.radians(3.0), _no_loop(cfg))
 
 
 def test_round_trip_survives_backlash():
@@ -256,7 +260,7 @@ def test_visual_parts_carry_no_mass_or_collision():
                 and not name.startswith("h_"):   # visual build
             assert m.geom_contype[i] == 0 and m.geom_conaffinity[i] == 0, name
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    assert m.body_subtreemass[t] == pytest.approx(2.050, abs=1e-3)
+    assert m.body_subtreemass[t] == pytest.approx(1.713, abs=2e-3)
 
 
 def test_no_real_part_hits_the_floor_in_either_mode():

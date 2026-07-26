@@ -111,8 +111,14 @@ LASH_DAMPING = 0.001
 LASH_ARMATURE = 0.0001
 LASH_FRICTION = 0.0005
 
-SEG_MASS = {"thigh": 0.130, "shin": 0.100, "ankle": 0.060,
-            "rollbracket": 0.060, "wheel": 0.060}
+# Derived, not estimated: run `uv run python -m cad.masses`. Each body is its
+# printed structure (volume x PETG x infill) plus the servos whose CASES bolt
+# to it plus bought parts. The shin uses its real CAD mass from cad/shin.py.
+#
+# The old numbers put 100 g in the shin on the assumption the wheel servo lived
+# there; it is really on the roll bracket, 110 mm further out.
+SEG_MASS = {"thigh": 0.0729, "shin": 0.0723, "ankle": 0.0568,
+            "rollbracket": 0.0598, "wheel": 0.060}
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
 

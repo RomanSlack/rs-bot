@@ -5,26 +5,40 @@ not-yet-built parts as torso ballast so the legs are sized and the balancer is
 tuned against real inertia from day one. On the stage-1 hardware build this is
 literal: a ~600 g block where the arms and head will go.
 
+**These are now derived, not estimated.** Run `uv run python -m cad.masses`.
+Each body is its printed structure (volume x PETG x infill) plus the servos
+whose *cases* bolt to it plus the bought parts it carries. The shin uses its
+real CAD mass from `cad/shin.py`.
+
 | Item | Count | Each | Total |
 |---|---|---|---|
-| Leg servos (hip, knee, ankle pitch, ankle **roll**, wheel x2) | 10 | 60 g | 600 g |
-| Arm servos (shoulder pitch/roll, elbow, gripper x2) | 8 | 60 g | 480 g |
-| Head servos (pan/tilt) | 2 | 60 g | 120 g |
-| Printed structure (PETG) | | | 400 g |
-| Pi 5 + cameras + IMU + harness | | | 250 g |
-| 3S pack | | | 200 g |
-| **Total** | | | **2050 g** |
+| Leg servos, STS3215 | 10 | 55 g | 550 g |
+| Printed structure (PETG @ 60% infill) | | | 165 g |
+| 3S pack | 1 | 180 g | 180 g |
+| Wheels | 2 | 60 g | 120 g |
+| Pi 5 | 1 | 45 g | 45 g |
+| Bus adapter + IMU | | | 15 g |
+| Arm/head ballast (stage 4) | | | 600 g |
+| **Total** | | | **1713 g** |
+
+The printed structure came in at **165 g against a 400 g estimate**, which is
+where most of the 337 g went. Estimating structure by eye overshoots badly.
 
 ## How that maps onto the sim model
 
-| Body | Mass | Stands in for |
-|---|---|---|
-| torso | 1230 g | structure, Pi, battery, **plus arm/head ballast** |
-| thigh x2 | 130 g | hip + knee servo, thigh shell |
-| shin x2 | 100 g | wheel servo, shin shell |
-| ankle x2 | 120 g | ankle pitch + ankle roll servos |
-| wheel x2 | 60 g | wheel, tyre |
-| **Total** | **2050 g** | |
+A servo case bolts to the body **proximal** to the joint it drives, which is
+what fixes the old error of leaving 100 g in the shin for a wheel servo that
+actually lives on the roll bracket, 110 mm further out.
+
+| Body | Mass | Printed | Carries |
+|---|---|---|---|
+| torso | 1069 g | 119 g | 2 hip servos, Pi, pack, adapter, IMU, 600 g ballast |
+| thigh x2 | 72.9 g | 17.9 g | knee servo |
+| shin x2 | 72.3 g | **17.3 g (CAD)** | ankle-pitch servo |
+| ankle x2 | 56.8 g | 1.8 g | ankle-roll servo |
+| rollbracket x2 | 59.8 g | 4.8 g | wheel servo |
+| wheel x2 | 60 g | - | tyre and hub, bought |
+| **Total** | **1713 g** | | |
 
 ## Torso fore/aft trim
 
@@ -41,6 +55,13 @@ changing the leg can no longer silently reintroduce the error.
 
 On the real build, this is where the battery goes. Expect to trim it again on
 hardware once the arms are on, since they move the CoM forward.
+
+### What the correction cost
+
+Losing 337 g made the robot twitchier, and the gains are mass-dependent: the
+old set fell over at 2 deg of lash once the robot got lighter. Re-tuned, and
+shove rejection settles at 1.0 N.s rather than 1.4 - the same impulse is a
+larger velocity change on a lighter robot.
 
 **The +120 g is the cost of the wheel-flip foot.** It buys an ankle roll joint
 per leg, and that joint is what turns the wheel into an 80 mm foot centred

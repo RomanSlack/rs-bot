@@ -21,17 +21,17 @@ from .model import (ROLL_WHEEL, WHEEL_R, ankle_pitch_level, leg_ik,
 
 @dataclass
 class Gains:
-    # Tuned against 1 deg of gear lash, and identical to the old rigid-only
-    # tuning on a rigid model. The earlier kp=48 set balanced a perfect robot
-    # beautifully and fell over at 0.5 deg of lash. See docs/backlash.md.
+    # Tuned against 1 deg of gear lash at the CAD-derived mass of 1.713 kg.
+    # Gains are mass-dependent: the same set at the old 2.05 kg estimate fell
+    # over at 2 deg of lash once the robot got lighter. See docs/backlash.md.
     # inner loop: pitch -> wheel speed
     kp: float = 10.435
-    kd: float = 0.435
+    kd: float = 0.483
     # outer loop: odometry -> pitch target
     kv: float = 0.300
-    kx: float = 0.500
+    kx: float = 0.550
     pitch_max: float = 0.30  # rad, cap on commanded lean
-    tau_odom: float = 0.100  # s, low-pass on wheel-derived speed
+    tau_odom: float = 0.122  # s, low-pass on wheel-derived speed
     # Low-pass on the wheel command itself. With gear lash, slamming the
     # command across the deadzone is what drives the limit cycle.
     tau_cmd: float = 0.08

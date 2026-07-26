@@ -169,11 +169,18 @@ def audit(mode, verbose=True, frac=None):
     hits = []
     for i, j in itertools.combinations(vis, 2):
         na, nb = name(i), name(j)
-        # Geoms on the SAME body cannot move relative to each other, so any
-        # shared material is a lap joint. MuJoCo skips these for the same
-        # reason. Only parts that can move relative to one another can
-        # meaningfully interpenetrate.
-        if m.geom_bodyid[i] == m.geom_bodyid[j]:
+        # Geoms on the SAME body cannot move relative to each other, so shared
+        # material between two PRINTED pieces is a lap joint, and MuJoCo skips
+        # these for the same reason.
+        #
+        # But a bought part is not something you can lap-joint into: a bracket
+        # cannot occupy the same space as a servo case. Skipping same-body
+        # pairs blindly hid the ankle yoke sitting 2597 mm3 inside the roll
+        # servo.
+        bought = ("vhipsv", "vkneesv", "vanksv", "vrollsv", "vwhlsv",
+                  "vtire", "vhub", "vpi", "vbatt", "vdriver")
+        involves_bought = na.startswith(bought) or nb.startswith(bought)
+        if m.geom_bodyid[i] == m.geom_bodyid[j] and not involves_bought:
             continue
         stem = tuple(sorted((na.rsplit("_", 1)[0], nb.rsplit("_", 1)[0])))
         if stem in SKIP_PAIRS:

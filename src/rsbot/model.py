@@ -111,8 +111,14 @@ LASH_DAMPING = 0.001
 LASH_ARMATURE = 0.0001
 LASH_FRICTION = 0.0005
 
-SEG_MASS = {"thigh": 0.130, "shin": 0.100, "ankle": 0.060,
-            "rollbracket": 0.060, "wheel": 0.060}
+# Derived, not estimated: run `uv run python -m cad.masses`. Each body is its
+# printed structure (volume x PETG x infill) plus the servos whose CASES bolt
+# to it plus bought parts. The shin uses its real CAD mass from cad/shin.py.
+#
+# The old numbers put 100 g in the shin on the assumption the wheel servo lived
+# there; it is really on the roll bracket, 110 mm further out.
+SEG_MASS = {"thigh": 0.0867, "shin": 0.0814, "ankle": 0.0561,
+            "rollbracket": 0.0594, "wheel": 0.060}
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
 
@@ -155,10 +161,16 @@ def _link_geoms(link, side, sgn):
                    f'mass="{m}" group="4"/>')
         # Stops short of the knee: the shin swings 40 deg there and would
         # otherwise scissor into it. The knee servo bridges the gap.
-        vis.append(_v(f"vthigh_{side}", "box", f"0.010 {SPY} 0.049",
-                      f"0 {y:.5f} -0.053", C_PRINT))
+        # 16 mm wide in y, not 12: with no hip roll joint, the STRUCTURE
+        # carries the whole lateral moment at the hip (9.5 N.m at the design
+        # load), and at 12 mm that is only a 2.0x margin. See cad/thigh.py.
+        vis.append(_v(f"vthigh_{side}", "box", f"0.010 0.008 0.049",
+                      f"0 {sgn*0.023:.5f} -0.053", C_PRINT))
+        # INBOARD. The thigh wraps over and down the inboard side to reach it,
+        # because the outboard band is where the shin's hub has to be.
         vis.append(_v(f"vkneesv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                      f"0 {outb:.5f} {-0.110+off:.5f}", C_SERVO))
+                      f"0 {-sgn*(HH - SPINE_Y + SPY):.5f} {-0.110+off:.5f}",
+                      C_SERVO))
     elif link == "shin":
         col.append(f'<geom class="leg" name="shin_{side}" fromto="0 0 0  0 0 -0.094" '
                    f'mass="{m}" group="4"/>')
@@ -174,7 +186,7 @@ def _link_geoms(link, side, sgn):
         # Stood off 7 mm further outboard than the spine face. At the flush
         # position its inner corner sits 49 mm from the roll axis, just inside
         # the wheel-servo sweep, and clips it at mid-flip by 2.4 mm.
-        vis.append(_v(f"vankstand_{side}", "box", f"0.008 0.0035 0.012",
+        vis.append(_v(f"vankstand_{side}", "box", f"0.008 0.0035 0.022",
                       f"0 {sgn*(SPINE_Y+SPY+0.0035):.5f} {-0.110+0.0700:.5f}",
                       C_PRINT))
         vis.append(_v(f"vanksv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
@@ -183,7 +195,7 @@ def _link_geoms(link, side, sgn):
         # the ankle axis belongs here. It steps aft high up, where the radius
         # from the roll axis already clears the servo sweep, then drops at
         # |x| > 32 mm, which also clears the flat wheel.
-        vis.append(_v(f"vshinarm_{side}", "box", f"0.016 {SPY} 0.005",
+        vis.append(_v(f"vshinarm_{side}", "box", f"0.016 {SPY} 0.007",
                       f"-0.026 {y:.5f} -0.048", C_PRINT))
         vis.append(_v(f"vshinpost_{side}", "box", f"0.006 {SPY} 0.023",
                       f"-0.048 {y:.5f} -0.071", C_PRINT))
@@ -197,8 +209,16 @@ def _link_geoms(link, side, sgn):
         # that: it is inside the hole of the wheel-servo annulus (radius under
         # 14 mm, so the sweep misses it), and at |x| > 40 mm it is outside both
         # the upright and the flat wheel.
-        vis.append(_v(f"vankpost_{side}", "box", "0.008 0.006 0.006",
-                      "-0.064 0 0", C_PRINT))
+        # Between the roll servo and the wheel, not inside either: the servo
+        # case ends at x = -58, and |x| > 40 keeps it clear of the flat wheel.
+        vis.append(_v(f"vankpost_{side}", "box", "0.006 0.006 0.006",
+                      "-0.050 0 0", C_PRINT))
+        # Mounting face the roll servo bolts to, bridging it to the carrier.
+        # Kept within 8.5 mm of the roll axis: the roll bracket's tie sweeps
+        # an annulus 8.7-19.6 mm out, so anything reaching into that band gets
+        # hit partway through the flip.
+        vis.append(_v(f"vankface_{side}", "box", "0.002 0.006 0.006",
+                      "-0.056 0 0", C_PRINT))
         vis.append(_v(f"vrollsv_{side}", "box", f"{HH:.5f} {HW:.5f} {HL:.5f}",
                       # Lifted off the roll axis so it clears the floor in foot mode,
                       # where the axle is only 12 mm up. Safe despite the larger
@@ -216,12 +236,14 @@ def _link_geoms(link, side, sgn):
         # BESIDE the wheel (outboard of its 12 mm half-width) and then steps
         # inboard onto the roll axis, where the radius is under 14 mm and the
         # wheel-servo sweep has nothing to hit.
+        # Above the wheel servo (its case is +/-12.35 in z), and outboard of
+        # the tyre, so it clears both.
         vis.append(_v(f"vrollarm_{side}", "box", "0.022 0.0057 0.005",
-                      f"-0.022 {sgn*0.0178:.5f} 0", C_PRINT))
+                      f"-0.022 {sgn*0.0178:.5f} 0.01735", C_PRINT))
         # Crosses the wheel plane only aft of the tyre, where the radius
         # from the spin axis is already past 40 mm.
-        vis.append(_v(f"vrolltie_{side}", "box", "0.007 0.00475 0.005",
-                      f"-0.049 {sgn*0.007875:.5f} 0", C_PRINT))
+        vis.append(_v(f"vrolltie_{side}", "box", "0.007 0.00275 0.005",
+                      f"-0.049 {sgn*0.00985:.5f} 0.010", C_PRINT))
     elif link == "wheel":
         col.append(f'<geom class="wheel" name="wheel_{side}" zaxis="0 1 0" '
                    f'mass="{m}" group="4"/>')
@@ -308,13 +330,18 @@ def _torso_visual():
                     f"{x} {sgn*0.0381:.4f} 0.090", C_PLATE))
     g.append(_v("vtop", "box", "0.045 0.0366 0.0015", f"{x} 0 0.1785", C_PLATE))
     g.append(_v("vshelf1", "box", "0.045 0.0366 0.0015", f"{x} 0 0.0200", C_PLATE))
+    # Sits ON 4 mm standoffs above the shelf, not on the shelf itself: the
+    # PCB needs clearance underneath for its through-hole legs.
+    g.append(_v("vpistand", "box", "0.040 0.026 0.002", f"{x} 0 0.0235", C_PLATE))
     g.append(_v("vpi", "box", f"{PI5[0]/2} {PI5[1]/2} {PI5[2]/2}",
-                f"{x} 0 0.0300", C_PCB))
+                f"{x} 0 0.0340", C_PCB))
     # Stood on end: 105 mm will not fit across a 90 mm bay.
     g.append(_v("vshelf2", "box", "0.045 0.0366 0.0015", f"{x} 0 0.0610", C_PLATE))
     g.append(_v("vbatt", "box", f"{BATT_3S[2]/2} {BATT_3S[1]/2} {BATT_3S[0]/2}",
                 f"{x} 0 0.115", C_BATT))
-    g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0.0266 0.0455", C_PCB))
+    # Above the Pi now that the Pi sits on standoffs, still bolted to the
+    # side plate.
+    g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0.0266 0.0495", C_PCB))
     g += _hip_servos()
     return "\n      ".join(g)
 

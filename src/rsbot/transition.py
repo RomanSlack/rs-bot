@@ -43,6 +43,11 @@ class DeployCfg:
     settle_pitch: float = 0.015   # rad, measured against the trim lean
     settle_rate: float = 0.15     # rad/s
     settle_speed: float = 0.03    # m/s
+    # The quiet test has to HOLD, not just be true for one tick. Speed comes
+    # from wheel odometry low-passed at tau_odom, which lags by over 100 ms, so
+    # an instantaneous check passes while the robot is still rolling and the
+    # motion only shows up later, mid-flip, with the outer loop already off.
+    settle_dwell: float = 0.35
     settle_timeout: float = 4.0
     trim_tau: float = 0.5
     unload_time: float = 0.20     # s to ramp the wheel command out
@@ -65,6 +70,7 @@ class DeployMachine:
         self.t_state = 0.0
         self.roll = ROLL_WHEEL
         self.unload = 1.0
+        self.quiet_for = 0.0
         self.trim = 0.0
         self.stand_i = 0.0
         self.cruise_height = cruise_height
@@ -75,6 +81,7 @@ class DeployMachine:
         self.log.append((round(self.t, 3), NAMES[self.state], NAMES[s]))
         self.state = s
         self.t_state = 0.0
+        self.quiet_for = 0.0
 
     def start_deploy(self):
         if self.state == WHEEL:
@@ -127,7 +134,8 @@ class DeployMachine:
             quiet = (abs(pitch - self.trim) < c.settle_pitch
                      and abs(rate) < c.settle_rate
                      and abs(self.bal.v_filt) < c.settle_speed)
-            if quiet or self.t_state > c.settle_timeout:
+            self.quiet_for = self.quiet_for + dt if quiet else 0.0
+            if self.quiet_for >= c.settle_dwell or self.t_state > c.settle_timeout:
                 self.timed_out = self.t_state > c.settle_timeout
                 self.bal.height = c.stand_height
                 self._go(FLIP)

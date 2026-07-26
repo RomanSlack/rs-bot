@@ -1,17 +1,30 @@
 [project]
 name = "rsbot"
 version = "0.1.0"
-description = "Add your description here"
+description = "Desk-scale wheeled biped whose wheels rotate flat to become its feet"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "mujoco>=3.10.0",
     "numpy>=2.5.1",
-    "pillow>=12.3.0",
+    # 12.2, not 12.3: build123d pulls threejs-materials, which pins
+    # pillow < 12.3. We only use Image/ImageDraw/ImageFont, so the older
+    # release is fine and beats patching a dependency.
+    "pillow>=12.2.0,<12.3.0",
 ]
 
 [dependency-groups]
 dev = [
-    "build123d>=0.11.1",
     "pytest>=9.1.1",
+    "build123d",
 ]
+
+# build123d is vendored as a submodule under vendor/ and installed editable,
+# so changes to the CAD kernel wrapper take effect immediately and can be
+# pushed back to our fork. Pin it to the path, or a `uv sync` will quietly
+# swap in the published wheel and edits will stop having any effect.
+#
+# Plain `build123d`, not `build123d[all]`: the `all` extra pulls ocp_vscode,
+# which drags in a much larger dependency set than a headless CAD script needs.
+[tool.uv.sources]
+build123d = { path = "vendor/build123d", editable = true }

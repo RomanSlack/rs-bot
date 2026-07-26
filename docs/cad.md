@@ -263,6 +263,12 @@ That orientation is not arbitrary:
 3. **The fit checks get sharper.** `fitcheck.py` currently approximates every
    part as an oriented box. Against real solids it can use true clearances.
 
+## Method
+
+The step-by-step process, the design rules that came out of it, and the traps -
+written up in [porting-a-link.md](porting-a-link.md). Read that before porting
+the next link; every rule in it exists because something broke.
+
 ## Suggested order of work
 
 1. Port one link - the shin - to build123d with real bolt holes and a bearing

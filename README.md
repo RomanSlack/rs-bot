@@ -87,7 +87,9 @@ uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```
 
-See [docs/cad.md](docs/cad.md) for the route to real CAD.
+See [docs/cad.md](docs/cad.md) for the route to real CAD, and
+[docs/porting-a-link.md](docs/porting-a-link.md) for the method used to port
+each part.
 
 Latest status report: [status/2026-07-25-status.md](status/2026-07-25-status.md).
 

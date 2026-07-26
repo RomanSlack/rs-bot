@@ -1,0 +1,108 @@
+# Going to real CAD
+
+The current model is a parametric sketch: boxes and cylinders at real
+dimensions, with masses I assigned by hand. To actually build the robot it has
+to become real parts with bolt holes, bearing seats, wire routing and a belt,
+and the masses have to come from the geometry rather than from my estimates.
+
+The requirement is narrow, which makes the choice easy: it must be **scriptable
+in Python**, export **STEP** for manufacture, export **meshes MuJoCo can load**,
+and give **mass and inertia from the solid**. That last one matters most,
+because "mass distribution is stale" is currently an open item on the project
+and CAD is what closes it for good.
+
+## Recommendation: build123d
+
+Validated end to end in this repo (`cad/shin.py`, runs in about a second).
+
+| | |
+|---|---|
+| Kernel | Open CASCADE - the same B-rep kernel FreeCAD uses, not a mesh hack |
+| API | Python, context managers rather than CadQuery's method chaining |
+| Exports | STEP, STL, 3MF, SVG, DXF |
+| Mass properties | volume, centroid, full inertia matrix from the solid |
+| Build time | 0.06 s for a bolted structural part |
+| Licence | Apache 2.0 |
+
+**Why not the alternatives:**
+
+- **CadQuery** is the obvious rival and shares the same kernel. build123d is
+  effectively its successor: same capability, a much less awkward API, and it
+  is where the momentum is. Either would work; the API is the tiebreak.
+- **OpenSCAD** is CSG-only with no real B-rep, no STEP export, and no mass
+  properties. Fine for brackets, wrong for a machine.
+- **FreeCAD** has a genuine kernel and a Python console, and RobotCAD /
+  OVERCROSS can emit URDF from it. But it is GUI-first: driving it headless
+  from a script is fighting the tool. Worth keeping as the **viewer** for STEP
+  files build123d produces.
+- **Onshape + onshape-to-robot** is the most mature CAD-to-simulation pipeline
+  that exists, and it exports MuJoCo directly. It is also **not open source**,
+  and the free tier makes your documents public. If that is acceptable it is
+  arguably the strongest option; it was excluded here on the open-source
+  requirement.
+
+## The validated pipeline
+
+```
+build123d  --export_step-->  STEP   ->  printer / machine shop
+           --export_stl -->  STL    ->  MuJoCo <mesh>
+MuJoCo     computes mass and inertia from the actual geometry
+```
+
+Measured agreement between CAD and MuJoCo: **0.000%**.
+
+### Two traps, both found by measuring rather than reading docs
+
+**Units.** build123d exports millimetres; MuJoCo assumes metres. Without a
+scale the part comes out 10^9 times too heavy - the first test reported a
+28,000 tonne shin.
+
+```xml
+<mesh name="spine" file="shin_spine.stl" scale="0.001 0.001 0.001"/>
+```
+
+**Convex hull.** MuJoCo computes mesh inertia from the convex hull by default,
+which quietly fills every bolt hole and pocket. Tightening the STL tolerance
+does nothing, because tessellation was never the problem:
+
+| mesh `inertia=` | mass error vs CAD |
+|---|---|
+| `legacy` (default) | +2.146% |
+| `convex` | +1.609% |
+| `exact` | **+0.001%** |
+
+Set `inertia="exact"` on every structural mesh. On a robot whose whole design
+turns on a 2.05 kg mass budget and a CoM trimmed to a millimetre, a silent 2%
+error on every part is not acceptable.
+
+## What this buys, concretely
+
+1. **The mass budget stops being a guess.** Every part's mass, centroid and
+   inertia tensor comes from its geometry. The open item about the shin
+   carrying 100 g on a stale assumption disappears - the number just becomes
+   whatever the part weighs.
+2. **The sim and the parts cannot drift apart.** One script generates the STEP
+   you print and the STL the simulator loads. Today they are two separate
+   descriptions of the robot that I have to keep in agreement by hand.
+3. **The fit checks get sharper.** `fitcheck.py` currently approximates every
+   part as an oriented box. Against real solids it can use true clearances.
+
+## Suggested order of work
+
+1. Port one link - the shin - to build123d with real bolt holes and a bearing
+   seat, and drive its mass into the MuJoCo model from the solid.
+2. Re-verify the balancer against the corrected mass distribution. This is the
+   open item that most wants closing before anything gets printed.
+3. Port the rest of the structure, then the ankle, which is the region that
+   most needs real CAD: three DOF inside 45 mm, two of them clearing a wheel
+   that changes shape, and a belt that is currently neither drawn nor sized.
+4. Keep the servos, wheels, Pi and battery as simple blocks. They are bought
+   parts; modelling them in detail buys nothing beyond their bounding box and
+   mass, both of which are already known.
+
+## Sources
+
+- [build123d](https://dev.opencascade.org/project/build123d) on Open CASCADE
+- [build123d vs CadQuery comparison](https://www.oreateai.com/blog/build123d-vs-cadquery-navigating-the-future-of-python-cad-modeling/b9e17e3134422786a0ab67c0a6d1eeda)
+- [onshape-to-robot](https://github.com/Rhoban/onshape-to-robot) - URDF/SDF/MuJoCo export from Onshape
+- [RobotCAD for FreeCAD](https://github.com/drfenixion/freecad.robotcad) - CAD to ROS2/URDF

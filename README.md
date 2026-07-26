@@ -73,6 +73,7 @@ scale.py                    true-scale still beside a 5 ft 9 in person
 fitcheck.py                 do the real parts actually fit? (oriented-box audit)
 tune.py                     coordinate-descent gain search
 view.py                     native viewer (needs a working GLX display)
+cad/shin.py                 build123d proof of concept: STEP + MuJoCo mesh
 tests/                      exit criteria as executable checks
 ```
 
@@ -85,6 +86,8 @@ uv run python fitcheck.py          # part interpenetration audit, both modes
 uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```
+
+See [docs/cad.md](docs/cad.md) for the route to real CAD.
 
 Latest status report: [status/2026-07-25-status.md](status/2026-07-25-status.md).
 

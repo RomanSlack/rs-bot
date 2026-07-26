@@ -287,6 +287,49 @@ it. Same trick as the bearing carrier.
 Yoke is 1.1 g, roll bracket 4.4 g. Both trivially strong; in this region
 clearance is the binding constraint, not stress.
 
+## Chassis
+
+The last part, and structurally the easy one. 3 mm side plates give **11x** in
+bending under a hip servo hung 19 mm outboard, so nothing needed thickening.
+
+The load path worth knowing: a lateral force at a contact patch becomes a
+9.5 N.m moment at the hip, and the two hip mounts react it as a couple across
+their 120 mm separation - **79 N at each mount**, on top of the 26 N design
+vertical. Through four M2 bolts into a 3 mm plate that is 4 MPa of bearing,
+which is fine.
+
+Two faults, both about things sitting on other things:
+
+- **The Pi was intersecting its own standoffs.** It has to sit *on* them, not
+  through them, so it moved from z = 30 to z = 34. Then the bus adapter had to
+  move up as well.
+- **The Pi then floated**, because the standoffs existed only in CAD. Added to
+  the sim, so the torso is one rigid piece again.
+
+Chassis is 119.2 g, which happens to match the estimate exactly - the first
+part where the guess was right, because plate volume is easy to eyeball and
+brackets are not.
+
+**Known weakness, not fixed:** the chassis is open front and back, so it is
+torsionally soft. The shelves carry most of it. A rear brace would help and
+would cost a few grams; it is not in the sim, so adding it is a change to
+both.
+
+## All five parts, done
+
+| part | printed | governing constraint |
+|---|---|---|
+| chassis | 119.2 g | hip mount bearing stress |
+| thigh x2 | 31.7 g | lateral moment at the hip, 3.6x |
+| shin x2 | 26.4 g | arm bending, 3.7x |
+| roll bracket x2 | 4.4 g | clearance, not stress |
+| ankle yoke x2 | 1.1 g | clearance, not stress |
+| **total printed** | **165 g** | |
+
+Robot **1756 g**. Distal parts are governed by clearance and proximal ones by
+stress, which is what you would expect and is a decent sanity check that the
+analysis is not nonsense.
+
 ### Printing it
 
 Lay the part with its **y axis vertical**: 72 x 99 mm footprint, 19 mm tall.

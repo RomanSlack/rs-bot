@@ -330,13 +330,18 @@ def _torso_visual():
                     f"{x} {sgn*0.0381:.4f} 0.090", C_PLATE))
     g.append(_v("vtop", "box", "0.045 0.0366 0.0015", f"{x} 0 0.1785", C_PLATE))
     g.append(_v("vshelf1", "box", "0.045 0.0366 0.0015", f"{x} 0 0.0200", C_PLATE))
+    # Sits ON 4 mm standoffs above the shelf, not on the shelf itself: the
+    # PCB needs clearance underneath for its through-hole legs.
+    g.append(_v("vpistand", "box", "0.040 0.026 0.002", f"{x} 0 0.0235", C_PLATE))
     g.append(_v("vpi", "box", f"{PI5[0]/2} {PI5[1]/2} {PI5[2]/2}",
-                f"{x} 0 0.0300", C_PCB))
+                f"{x} 0 0.0340", C_PCB))
     # Stood on end: 105 mm will not fit across a 90 mm bay.
     g.append(_v("vshelf2", "box", "0.045 0.0366 0.0015", f"{x} 0 0.0610", C_PLATE))
     g.append(_v("vbatt", "box", f"{BATT_3S[2]/2} {BATT_3S[1]/2} {BATT_3S[0]/2}",
                 f"{x} 0 0.115", C_BATT))
-    g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0.0266 0.0455", C_PCB))
+    # Above the Pi now that the Pi sits on standoffs, still bolted to the
+    # side plate.
+    g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0.0266 0.0495", C_PCB))
     g += _hip_servos()
     return "\n      ".join(g)
 

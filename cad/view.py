@@ -23,15 +23,14 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 OUT = Path(__file__).parent / "out"
 W, H = 560, 620
+# Camera auto-frames from the mesh bounds, so this works on a 20 mm bracket and
+# a 180 mm chassis without editing anything.
 # Two rows: the four orthogonal-ish views on top, and views that actually show
 # the features - the hub bolt circle and the bearing counterbore both face +y,
 # so they are invisible from every angle in the first row.
-VIEWS = [("side", 90, -8, 0.20), ("front", 180, -8, 0.20),
-         ("three-quarter", 140, -22, 0.20), ("top", 90, -70, 0.20),
-         ("knee hub, bolt circle", 90, -4, 0.062),
-         ("ankle bearing seat", 90, -4, 0.062)]
-LOOKAT = {"knee hub, bolt circle": (0.0, 0.021, -0.014),
-          "ankle bearing seat": (-0.048, 0.021, -0.088)}
+VIEWS = [("side", 90, -8, 1.0), ("front", 180, -8, 1.0),
+         ("three-quarter", 140, -22, 1.0), ("top", 90, -65, 1.0),
+         ("close, +y face", 90, -4, 0.34), ("close, -y face", 270, -4, 0.34)]
 
 
 def main(stl=None, out=None):
@@ -48,22 +47,31 @@ def main(stl=None, out=None):
   </asset>
   <worldbody>
     <light pos="0.3 -0.3 0.6" dir="-0.4 0.4 -1" diffuse="0.7 0.7 0.7"/>
-    <geom name="floor" type="plane" size="0 0 0.05" material="grid" pos="0 0 -0.12"/>
-    <body pos="0 0 0"><geom type="mesh" mesh="part" rgba="0.88 0.45 0.13 1"/></body>
+    <geom name="floor" type="plane" size="0 0 0.05" material="grid" pos="0 0 -5"/>
+    <body pos="0 0 0"><geom name="part" type="mesh" mesh="part" rgba="0.88 0.45 0.13 1"/></body>
   </worldbody>
 </mujoco>'''
     m = mujoco.MjModel.from_xml_string(xml)
     d = mujoco.MjData(m)
     mujoco.mj_forward(m, d)
     r = mujoco.Renderer(m, H, W)
+
+    # Frame from the actual mesh bounds.
+    # Use the geom's world AABB. Not the mesh vertices: MuJoCo re-centres a
+    # mesh on its centroid at compile time and compensates with geom_pos, so
+    # the vertex centroid is not where the part actually is.
+    gid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "part")
+    centre = d.geom_xpos[gid] + m.geom_aabb[gid][:3]
+    span = 2.0 * float(np.linalg.norm(m.geom_aabb[gid][3:]))
     cam = mujoco.MjvCamera()
 
     font = ImageFont.truetype(
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
     tiles = []
-    for name, az, el, dist in VIEWS:
-        cam.azimuth, cam.elevation, cam.distance = az, el, dist
-        cam.lookat[:] = LOOKAT.get(name, (-0.02, 0.021, -0.05))
+    for name, az, el, zoom in VIEWS:
+        cam.azimuth, cam.elevation = az, el
+        cam.distance = span * 1.25 * zoom
+        cam.lookat[:] = centre
         r.update_scene(d, camera=cam)
         im = Image.fromarray(r.render())
         dr = ImageDraw.Draw(im, "RGBA")

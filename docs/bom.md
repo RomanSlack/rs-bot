@@ -32,6 +32,26 @@ bracket. The interesting part is the ankle, which carries **three**: pitch,
 roll, and the wheel drive. That is 165 g and three 45 mm bodies clustered at
 the end of the leg.
 
+## Does it actually fit? `uv run python fitcheck.py`
+
+MuJoCo cannot answer this: geoms in the same body never collide, and the
+visual build is non-colliding by design. So `fitcheck.py` runs its own
+oriented-box (separating axis) test over every pair of parts, in both wheel
+and foot mode, and reports interpenetration in millimetres. It is wired into
+the test suite, so the layout cannot silently regress.
+
+The first attempt had **102 interpenetrating pairs**, worst at 12 mm. Two
+mistakes caused most of it:
+
+- **Servos were attached to the wrong body.** A servo case bolts to the body
+  *proximal* to the joint it drives, so the hip servos belong to the torso,
+  the knee servo to the thigh, and so on. Hanging each one off the link it
+  drives put every case inside the next link.
+- **The output shaft was modelled along the body's long axis.** On a real bus
+  servo it is perpendicular, near one end of the top face, so a servo driving
+  a joint occupies the plane *perpendicular* to that joint's axis. Getting
+  this backwards rotates every servo 90 degrees into its neighbours.
+
 ## What drawing it at real size caught
 
 **The battery does not fit flat.** A 3S 2200 mAh pack is 105 mm long and the
@@ -50,8 +70,14 @@ ends up level with the axle after the roll, and the axle is only 12 mm up in
 foot mode. It has to be offset outboard so the roll carries it upward.
 
 **The wheel-drive servo has to be outboard.** Mounted inboard it swings *down*
-into the floor during the flip. Outboard it swings up. That also sets the
-robot's width: about 234 mm across the ankles.
+into the floor during the flip. Outboard it swings up.
+
+**The flat wheel sweeps an 80 mm disc horizontally.** This is the one that is
+genuinely easy to miss. Upright, the wheel is 24 mm wide and you plan
+clearances in y. Flat, it becomes a 80 mm platter and anything within 40 mm of
+the axle horizontally is in its way. The ankle-pitch servo, mounted outboard
+purely to clear the upright wheel, ran straight into the flat one. It needs
+*both* clearances.
 
 Current clearances, worst part in each mode:
 
@@ -59,7 +85,30 @@ Current clearances, worst part in each mode:
 |---|---|---|
 | wheel mode | tyre | 0 mm (it is the contact) |
 | foot mode | tyre face | 0 mm (it is the contact) |
-| foot mode, next-lowest | roll bracket | ~8 mm |
+
+Interpenetration: **0 pairs in both modes.**
+
+Overall size, for the record:
+
+| | |
+|---|---|
+| height on wheels | 427 mm / 16.8 in |
+| height on feet | 387 mm / 15.2 in |
+| width | 219 mm / 8.6 in |
+| depth | 131 mm / 5.2 in |
+| mass | 2.05 kg / 4.5 lb |
+
+## Not modelled
+
+The structural brackets tying the ankle-pitch horn to the roll servo, and the
+roll horn to the wheel servo, are deliberately absent. They span two moving
+bodies, their real shape is a CAD problem, and every hand-placed guess
+interpenetrated something. Better an honest gap than known-wrong geometry.
+
+That gap is itself the finding: **the three-DOF ankle is the hard part of this
+robot.** Pitch, roll and wheel drive all want to live within 45 mm of one axle,
+and two of the three have to clear a wheel that changes shape halfway through
+the manoeuvre.
 
 ## Still open
 

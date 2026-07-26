@@ -45,6 +45,7 @@ class Sim:
         self.shove = 0.0
         self.follow = True
         self.lash = 0.0
+        self.pan = [0.0, 0.0]      # x,z offset on the follow point
         self._reset()
 
     def _reset(self):
@@ -78,10 +79,18 @@ class Sim:
                 self.speed = max(0.05, min(2.0, v))
             elif a == "cam":
                 self.cam.azimuth += float(q.get("az", ["0"])[0])
-                self.cam.elevation = max(-85, min(5, self.cam.elevation
+                self.cam.elevation = max(-85, min(20, self.cam.elevation
                                                  + float(q.get("el", ["0"])[0])))
-                self.cam.distance = max(0.3, min(3.0, self.cam.distance
-                                                * float(q.get("dz", ["1"])[0])))
+                self.cam.distance = max(0.18, min(6.0, self.cam.distance
+                                                 * float(q.get("dz", ["1"])[0])))
+            elif a == "pan":
+                # Scale with distance so panning feels the same at any zoom.
+                k = self.cam.distance
+                self.pan[0] += float(q.get("dx", ["0"])[0]) * k
+                self.pan[1] += float(q.get("dy", ["0"])[0]) * k
+            elif a == "home":
+                self.cam.distance, self.cam.elevation, self.cam.azimuth = 0.95, -8, 132
+                self.pan = [0.0, 0.0]
             elif a == "lash":
                 self.lash = math.radians(v)
                 self._reset()
@@ -137,8 +146,8 @@ class Sim:
                 next_frame = now + 1.0 / FPS
                 with self.lock:
                     if self.follow:
-                        self.cam.lookat[0] = self.d.xpos[self.torso][0]
-                        self.cam.lookat[2] = 0.20
+                        self.cam.lookat[0] = self.d.xpos[self.torso][0] + self.pan[0]
+                        self.cam.lookat[2] = 0.20 + self.pan[1]
                     renderer.update_scene(self.d, camera=self.cam)
                     rgb = renderer.render()
                 buf = io.BytesIO()
@@ -149,75 +158,157 @@ class Sim:
 SIM = Sim()
 
 PAGE = """<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
 <title>rs-bot</title><style>
-*{box-sizing:border-box}
-body{margin:0;background:#14161a;color:#d8dce3;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
-.wrap{max-width:940px;margin:0 auto;padding:18px}
-h1{font-size:15px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#8a929e;margin:0 0 14px}
-img{width:100%;border-radius:6px;display:block;background:#000}
-.row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-button{background:#232830;color:#d8dce3;border:1px solid #333a45;border-radius:5px;
-padding:8px 13px;font:inherit;cursor:pointer}
-button:hover{background:#2c323c;border-color:#4a5361}
-button:active{background:#3a424f}
-button.go{background:#2d4a63;border-color:#3d6383}
-button.hot{background:#5e3527;border-color:#7d4633}
-#tel{margin-top:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.c{background:#1b1f26;border:1px solid #262c35;border-radius:5px;padding:8px 10px}
-.c b{display:block;color:#6f7885;font-size:10px;letter-spacing:.1em;text-transform:uppercase}
-.c span{font-size:16px}
-.ok{color:#6cc08b}.warn{color:#d99a5b}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0e1013;--panel:#171a1f;--line:#252a32;--txt:#dfe3ea;--dim:#79828f;--acc:#4a9eff}
+body{background:var(--bg);color:var(--txt);
+ font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;padding:16px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1fr 260px;gap:14px}
+h1{grid-column:1/-1;font-size:12px;font-weight:600;letter-spacing:.18em;
+ text-transform:uppercase;color:var(--dim);display:flex;gap:12px;align-items:center}
+h1 b{color:var(--txt);letter-spacing:.06em}
+#stage{position:relative;border-radius:10px;overflow:hidden;background:#000;
+ border:1px solid var(--line);cursor:grab}
+#stage.drag{cursor:grabbing}
+#view{width:100%;display:block;user-select:none;-webkit-user-drag:none}
+#hud{position:absolute;left:12px;top:12px;font-size:11px;color:#aeb6c2;
+ background:rgba(0,0,0,.55);padding:7px 10px;border-radius:6px;line-height:1.7;
+ pointer-events:none;letter-spacing:.03em}
+#hud b{color:#fff}
+#hint{position:absolute;right:12px;bottom:12px;font-size:10px;color:#8e97a4;
+ background:rgba(0,0,0,.5);padding:6px 9px;border-radius:6px;pointer-events:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+ color:var(--dim);margin-bottom:9px;font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:5px}
+button{background:#20242b;color:var(--txt);border:1px solid #2d333c;border-radius:6px;
+ padding:7px 10px;font:inherit;font-size:12px;cursor:pointer;transition:.12s}
+
+button:hover{background:#2a303a;border-color:#3b434f}
+button:active{transform:translateY(1px)}
+button.go{background:#1d3a57;border-color:#2b5580;color:#cfe4ff}
+button.hot{background:#4a2a1e;border-color:#6d3f2c;color:#ffd8c6}
+button.on{outline:1px solid var(--acc)}
+.side{display:flex;flex-direction:column;gap:12px}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+td{padding:2.5px 0;color:var(--dim)}
+td+td{text-align:right;color:var(--txt);font-variant-numeric:tabular-nums}
+kbd{background:#20242b;border:1px solid #2d333c;border-radius:4px;padding:1px 5px;font-size:10px}
 </style></head><body><div class=wrap>
-<h1>rs-bot &mdash; live</h1>
-<img src="/stream">
-<div class=row>
-  <button onmousedown="c('drive',0.35)" onmouseup="c('drive',0)">&#9654; forward</button>
-  <button onmousedown="c('drive',-0.35)" onmouseup="c('drive',0)">&#9664; back</button>
-  <button onclick="c('drive',0)">stop</button>
-  <button class=hot onclick="c('shove',1.0)">shove &rarr;</button>
-  <button class=hot onclick="c('shove',-1.0)">&larr; shove</button>
-  <button class=go onclick="c('deploy')">flip to feet</button>
-  <button class=go onclick="c('retract')">back to wheels</button>
-  <button onclick="c('reset')">reset</button>
+
+<h1><b>rs-bot</b> <span id=title>wheel mode</span></h1>
+
+<div>
+  <div id=stage>
+    <img id=view src="/stream" draggable=false>
+    <div id=hud></div>
+    <div id=hint>drag orbit &middot; shift+drag pan &middot; scroll zoom &middot; dbl-click reset view</div>
+  </div>
+  <div class=card style="margin-top:12px">
+    <h2>drive</h2>
+    <div class=row>
+      <button onmousedown="c('drive',0.35)" onmouseup="c('drive',0)" onmouseleave="c('drive',0)">&#9654;&nbsp;forward <kbd>W</kbd></button>
+      <button onmousedown="c('drive',-0.35)" onmouseup="c('drive',0)" onmouseleave="c('drive',0)">&#9664;&nbsp;back <kbd>S</kbd></button>
+      <button onclick="c('drive',0)">stop</button>
+      <button class=hot onclick="c('shove',1.0)">shove &rarr; <kbd>space</kbd></button>
+      <button class=hot onclick="c('shove',-1.0)">&larr; shove</button>
+      <button class=go onclick="c('toggle')">flip mode <kbd>D</kbd></button>
+      <button onclick="c('reset')">reset <kbd>R</kbd></button>
+    </div>
+  </div>
 </div>
-<div class=row>
-  <button onclick="cam(-15,0,1)">&#8630; orbit</button>
-  <button onclick="cam(15,0,1)">orbit &#8631;</button>
-  <button onclick="cam(0,-6,1)">tilt up</button>
-  <button onclick="cam(0,6,1)">tilt dn</button>
-  <button onclick="cam(0,0,0.85)">zoom in</button>
-  <button onclick="cam(0,0,1.18)">zoom out</button>
-  <button onclick="c('follow')">follow on/off</button>
-  <button onclick="c('speed',0.15)">0.15x</button>
-  <button onclick="c('speed',0.5)">0.5x</button>
-  <button onclick="c('speed',1)">1x</button>
-  <button onclick="c('lash',0)">lash 0</button>
-  <button onclick="c('lash',1)">lash 1&deg;</button>
-  <button onclick="c('lash',2)">lash 2&deg;</button>
+
+<div class=side>
+  <div class=card>
+    <h2>telemetry</h2>
+    <table id=tel></table>
+  </div>
+  <div class=card>
+    <h2>dimensions</h2>
+    <table>
+      <tr><td>height, wheels</td><td>16.8 in</td></tr>
+      <tr><td>height, feet</td><td>15.2 in</td></tr>
+      <tr><td>width</td><td>8.6 in</td></tr>
+      <tr><td>depth</td><td>5.2 in</td></tr>
+      <tr><td>wheel dia</td><td>3.15 in</td></tr>
+      <tr><td>foot polygon</td><td>3.15 in</td></tr>
+      <tr><td>mass</td><td>4.5 lb</td></tr>
+      <tr><td>human shown</td><td>5 ft 9 in</td></tr>
+    </table>
+  </div>
+  <div class=card>
+    <h2>sim rate</h2>
+    <div class=row>
+      <button onclick="c('speed',0.15)">0.15x</button>
+      <button onclick="c('speed',0.5)">0.5x</button>
+      <button onclick="c('speed',1)">1x</button>
+    </div>
+  </div>
+  <div class=card>
+    <h2>gear backlash</h2>
+    <div class=row>
+      <button onclick="c('lash',0)">none</button>
+      <button onclick="c('lash',1)">1&deg;</button>
+      <button onclick="c('lash',2)">2&deg;</button>
+      <button onclick="c('lash',3)">3&deg;</button>
+    </div>
+  </div>
+  <div class=card>
+    <h2>view</h2>
+    <div class=row>
+      <button onclick="c('home')">reset view</button>
+      <button onclick="c('follow')">follow on/off</button>
+    </div>
+  </div>
 </div>
-<div id=tel></div>
 </div><script>
-const F=['state','t','pitch','x','axle_mm','roll_deg','lash_deg','speed'];
-const L={t:'sim time',pitch:'pitch deg',x:'x m',axle_mm:'axle height mm',
-         roll_deg:'wheel roll deg',lash_deg:'backlash deg',speed:'rate'};
+const F={state:'state',t:'sim time s',pitch:'pitch deg',x:'travelled m',
+         axle_mm:'axle height mm',roll_deg:'wheel roll deg',lash_deg:'backlash deg',
+         speed:'rate'};
+const CAP={WHEEL:'wheel mode - balancing',SETTLE:'settling',
+           FLIP:'flipping to feet',STAND:'foot mode - standing',
+           UNFLIP:'flipping back to wheels'};
 function c(a,v){fetch(`/cmd?a=${a}&v=${v??0}`)}
-function cam(az,el,dz){fetch(`/cmd?a=cam&az=${az}&el=${el}&dz=${dz}`)}
+function cam(q){fetch('/cmd?a=cam&'+q)}
+
+const stage=document.getElementById('stage');
+let drag=null;
+stage.addEventListener('mousedown',e=>{drag={x:e.clientX,y:e.clientY,pan:e.shiftKey||e.button==2};
+  stage.classList.add('drag');e.preventDefault()});
+addEventListener('mouseup',()=>{drag=null;stage.classList.remove('drag')});
+addEventListener('mousemove',e=>{
+  if(!drag)return;
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if(Math.abs(dx)<2&&Math.abs(dy)<2)return;
+  drag.x=e.clientX; drag.y=e.clientY;
+  if(drag.pan) fetch(`/cmd?a=pan&dx=${(-dx*0.0022).toFixed(4)}&dy=${(dy*0.0022).toFixed(4)}`);
+  else cam(`az=${(-dx*0.35).toFixed(2)}&el=${(-dy*0.25).toFixed(2)}`);
+});
+stage.addEventListener('wheel',e=>{e.preventDefault();
+  cam(`dz=${e.deltaY>0?1.09:0.917}`)},{passive:false});
+stage.addEventListener('contextmenu',e=>e.preventDefault());
+stage.addEventListener('dblclick',()=>c('home'));
+
 async function tick(){
   try{const d=await (await fetch('/tel')).json();
-    document.getElementById('tel').innerHTML=F.map(k=>{
-      let cl='';
-      if(k=='state')cl=d.standing?'ok':'';
-      if(k=='axle_mm')cl=d[k]<20?'ok':'';
-      return `<div class=c><b>${L[k]||k}</b><span class="${cl}">${d[k]}</span></div>`}).join('');
+    document.getElementById('title').textContent=CAP[d.state]||d.state;
+    document.getElementById('hud').innerHTML=
+      `<b>${d.state}</b><br>roll ${d.roll_deg}&deg;<br>axle ${d.axle_mm} mm<br>pitch ${d.pitch}&deg;`;
+    document.getElementById('tel').innerHTML=Object.keys(F).map(k=>
+      `<tr><td>${F[k]}</td><td>${d[k]}</td></tr>`).join('');
   }catch(e){}
 }
 setInterval(tick,200);tick();
-document.addEventListener('keydown',e=>{
-  if(e.repeat)return;
-  if(e.key=='w')c('drive',0.35); if(e.key=='s')c('drive',-0.35);
-  if(e.key==' ')c('shove',1.0); if(e.key=='d')c('toggle'); if(e.key=='r')c('reset');
+const held={};
+addEventListener('keydown',e=>{
+  if(held[e.key])return; held[e.key]=1;
+  if(e.key=='w')c('drive',0.35); else if(e.key=='s')c('drive',-0.35);
+  else if(e.key==' '){c('shove',1.0);e.preventDefault()}
+  else if(e.key=='d')c('toggle'); else if(e.key=='r')c('reset');
 });
-document.addEventListener('keyup',e=>{if(e.key=='w'||e.key=='s')c('drive',0)});
+addEventListener('keyup',e=>{delete held[e.key];
+  if(e.key=='w'||e.key=='s')c('drive',0)});
 </script></body></html>"""
 
 

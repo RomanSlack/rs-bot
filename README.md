@@ -67,8 +67,10 @@ src/rsbot/model.py          loading, leg IK, foot geometry
 src/rsbot/balance.py        the balancer
 src/rsbot/transition.py     wheel mode <-> foot mode state machine
 src/rsbot/sim.py            headless rollouts, shove test
-serve.py                    live sim in the browser, with controls
+serve.py                    live sim in the browser: drag to orbit, scroll to zoom
 render.py                   render a demo run to renders/*.mp4
+scale.py                    true-scale still beside a 5 ft 9 in person
+fitcheck.py                 do the real parts actually fit? (oriented-box audit)
 tune.py                     coordinate-descent gain search
 view.py                     native viewer (needs a working GLX display)
 tests/                      exit criteria as executable checks
@@ -79,6 +81,7 @@ tests/                      exit criteria as executable checks
 ```bash
 uv run python -m pytest tests -q   # all exit criteria, ~8 s
 uv run python serve.py             # live sim at localhost:8781, drive it around
+uv run python fitcheck.py          # part interpenetration audit, both modes
 uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```

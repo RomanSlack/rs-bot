@@ -15,9 +15,12 @@ from src.rsbot.sim import rollout
 
 def test_model_mass_matches_budget():
     m, _ = load()
+    # Look the torso up by name: the scale-reference human is also a
+    # top-level body, so index 1 is not the robot.
+    t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     # 2.05 kg: the wheel-flip leg needs ankle pitch AND ankle roll,
     # which is two more servos than the original 8-servo budget.
-    assert 2.00 <= m.body_subtreemass[1] <= 2.10
+    assert 2.00 <= m.body_subtreemass[t] <= 2.10
 
 
 def test_stance_geometry():
@@ -37,7 +40,8 @@ def test_com_over_wheel_axle():
     m, d = load()
     mujoco.mj_forward(m, d)
     axle = d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "wheel_l")]
-    assert abs(d.subtree_com[1][0] - axle[0]) < 1e-3
+    t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
+    assert abs(d.subtree_com[t][0] - axle[0]) < 1e-3
 
 
 def test_leg_ik_roundtrip():

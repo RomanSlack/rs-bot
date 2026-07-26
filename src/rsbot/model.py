@@ -111,55 +111,63 @@ _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
 
 
+# Servo half-extents. On a real bus servo the output shaft is PERPENDICULAR to
+# the long axis and sits near one end of the top face, so a servo driving a
+# joint occupies the plane perpendicular to that joint's axis. Getting this
+# backwards is what made the first pass interpenetrate.
+HL, HW, HH = SERVO[0] / 2, SERVO[1] / 2, SERVO[2] / 2
+SHAFT_INSET = 0.010          # shaft centre from the near end of the body
+
+
 def _link_geoms(link, side, sgn):
-    """Collision shape (group 4, carries the mass) plus the visual build."""
-    L, W, H = SERVO
-    sl, sw, sh = L / 2, W / 2, H / 2
+    """Collision shape (group 4, carries the mass) plus the visual build.
+
+    A servo case bolts to the body PROXIMAL to the joint it drives, so the hip
+    servos live on the torso, the knee servo on the thigh, and so on.
+    """
     m = SEG_MASS[link]
     col, vis = [], []
+    off = HL - SHAFT_INSET       # body centre offset along its own length
 
     if link == "thigh":
         col.append(f'<geom class="leg" name="thigh_{side}" fromto="0 0 0  0 0 -0.110" '
                    f'mass="{m}" group="4"/>')
-        vis += [_v(f"vhipsv_{side}", "box", f"{sh:.5f} {sw:.5f} {sl:.5f}",
-                   f"0 0 {-sl:.5f}", C_SERVO),
-                _v(f"vhiphorn_{side}", "cylinder", f"{SERVO_HORN_R} 0.004",
-                   f"0 {sgn*0.016:.4f} 0", C_HORN, euler="1.5708 0 0"),
-                _v(f"vthighbr_{side}", "box", f"0.010 0.016 0.0324",
-                   "0 0 -0.0776", C_PRINT)]
+        # Knee servo: drives the knee at z=-0.110, case bolted to the thigh,
+        # body reaching back up the thigh, tucked inboard of the leg plane.
+        vis.append(_v(f"vkneesv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
+                      f"0 {-sgn*HH:.5f} {-0.110+off:.5f}", C_SERVO))
+        vis.append(_v(f"vthighbr_{side}", "box", "0.008 0.0075 0.030",
+                      f"0 {sgn*0.020:.4f} -0.055", C_PRINT))
     elif link == "shin":
         col.append(f'<geom class="leg" name="shin_{side}" fromto="0 0 0  0 0 -0.094" '
                    f'mass="{m}" group="4"/>')
-        vis += [_v(f"vkneesv_{side}", "box", f"{sh:.5f} {sw:.5f} {sl:.5f}",
-                   f"0 0 {-sl:.5f}", C_SERVO),
-                _v(f"vkneehorn_{side}", "cylinder", f"{SERVO_HORN_R} 0.004",
-                   f"0 {sgn*0.016:.4f} 0", C_HORN, euler="1.5708 0 0"),
-                _v(f"vshinbr_{side}", "box", f"0.010 0.016 0.0324",
-                   "0 0 -0.0776", C_PRINT)]
+        # Ankle-pitch servo. Two clearances, not one: outboard of the 24 mm
+        # upright wheel, AND above the flat wheel, which sweeps an 80 mm disc
+        # horizontally once the ankle rolls. The second one is easy to miss.
+        vis.append(_v(f"vanksv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
+                      f"0 {sgn*(0.014+HH):.5f} {-0.110+0.052:.5f}", C_SERVO))
+        vis.append(_v(f"vshinbr_{side}", "box", "0.008 0.0070 0.024",
+                      f"0 {-sgn*0.020:.4f} -0.048", C_PRINT))
     elif link == "ankle":
-        # Ankle-pitch servo. Must sit ABOVE the axle: in foot mode the wheel
-        # face is only 12 mm below it, and anything lower becomes the contact.
         col.append(f'<geom class="ankle" name="ankle_{side}" '
-                   f'size="{sh:.5f} {sw:.5f} {sl:.5f}" pos="0 0 {sl:.5f}" '
+                   f'size="{HW:.5f} {HH:.5f} {HL:.5f}" pos="0 0 {HL:.5f}" '
                    f'mass="{m}" group="4"/>')
-        vis.append(_v(f"vanksv_{side}", "box", f"{sh:.5f} {sw:.5f} {sl:.5f}",
-                      f"0 0 {sl:.5f}", C_SERVO))
+        # Roll servo: output on the fore/aft axis, so the case occupies the y-z
+        # plane. Aft and outboard, clear of both the wheel and the floor.
+        vis.append(_v(f"vrollsv_{side}", "box", f"{HH:.5f} {HW:.5f} {HL:.5f}",
+                      f"{-(HH+0.042):.5f} {sgn*0.020:.4f} {off:.5f}", C_SERVO))
+        # NOTE: the structural brackets tying the ankle-pitch horn to the roll
+        # servo, and the roll horn to the wheel servo, are NOT modelled. They
+        # span two moving bodies and their real shape is a CAD problem, so
+        # drawing a guess would only put known-wrong geometry on screen.
     elif link == "rollbracket":
         col.append(f'<inertial pos="0 0 0.01" mass="{m}" '
                    f'diaginertia="4e-5 4e-5 4e-5"/>')
-        # Roll servo: output on the fore/aft axis, so the body runs fore/aft.
-        # Offset OUTBOARD in y, because the 90 deg roll maps y onto z: anything
-        # sitting at y=0 ends up level with the axle and grazes the floor.
-        vis.append(_v(f"vrollsv_{side}", "box", f"{sl:.5f} {sw:.5f} {sh:.5f}",
-                      f"-0.034 {sgn*0.022:.4f} 0.020", C_SERVO))
-        # Wheel-drive servo, OUTBOARD so the 90 deg roll swings it up, not
-        # down into the floor.
-        vis.append(_v(f"vwhlsv_{side}", "box", f"{sh:.5f} {sl:.5f} {sw:.5f}",
-                      f"0 {sgn*(0.012+sl):.5f} 0", C_SERVO))
-        # Compact and hugging the axle. A plate reaching 45 mm up swings 18 mm
-        # BELOW the floor once the ankle rolls, which the abstract model hid.
-        vis.append(_v(f"vrollbr_{side}", "box", "0.018 0.010 0.010",
-                      f"0 {sgn*0.006:.4f} 0.018", C_PRINT))
+        # Wheel-drive servo: output on the spin axis, so the case occupies the
+        # x-z plane, mounted OUTBOARD. Inboard it would swing down into the
+        # floor when the ankle rolls 90 deg; outboard it swings up.
+        vis.append(_v(f"vwhlsv_{side}", "box", f"{HL:.5f} {HH:.5f} {HW:.5f}",
+                      f"0 {sgn*(0.013+HH):.5f} 0", C_SERVO))
     elif link == "wheel":
         col.append(f'<geom class="wheel" name="wheel_{side}" zaxis="0 1 0" '
                    f'mass="{m}" group="4"/>')
@@ -222,6 +230,15 @@ def _leg(side, backlash):
     return "".join(opens) + "".join(reversed(closes))
 
 
+def _hip_servos():
+    """Hip servo cases bolt to the torso, not the thigh."""
+    g = []
+    for sgn in (1, -1):
+        g.append(_v(f"vhipsv{sgn}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
+                    f"0 {sgn*(0.060+HH):.5f} {HL:.5f}", C_SERVO))
+    return g
+
+
 def _torso_visual():
     """Chassis and the parts inside it, drawn at real size.
 
@@ -234,15 +251,15 @@ def _torso_visual():
     for sgn in (1, -1):
         g.append(_v(f"vside{sgn}", "box", "0.045 0.0015 0.090",
                     f"{x} {sgn*0.0345:.4f} 0.090", C_PLATE))
-    g.append(_v("vtop", "box", "0.045 0.035 0.0015", f"{x} 0 0.1785", C_PLATE))
-    g.append(_v("vfloor", "box", "0.045 0.035 0.0015", f"{x} 0 0.0015", C_PLATE))
+    g.append(_v("vtop", "box", "0.045 0.0325 0.0015", f"{x} 0 0.1785", C_PLATE))
     g.append(_v("vpi", "box", f"{PI5[0]/2} {PI5[1]/2} {PI5[2]/2}",
                 f"{x} 0 0.030", C_PCB))
     # Stood on end: 105 mm will not fit across a 90 mm bay.
     g.append(_v("vbatt", "box", f"{BATT_3S[2]/2} {BATT_3S[1]/2} {BATT_3S[0]/2}",
                 f"{x} 0 0.115", C_BATT))
     g.append(_v("vdriver", "box", f"{DRIVER[0]/2} {DRIVER[1]/2} {DRIVER[2]/2}",
-                f"{x} 0 0.058", C_PCB))
+                f"{x} 0 0.055", C_PCB))
+    g += _hip_servos()
     return "\n      ".join(g)
 
 
@@ -266,9 +283,13 @@ def _excludes():
 
 
 def _com_offset(m, d):
+    """Standing CoM offset from the wheel axle. Looks the torso up by name:
+    the scale-reference human is also a top-level body, so index 1 is not
+    safe."""
     mujoco.mj_forward(m, d)
+    torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     axle = d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "wheel_l")]
-    return d.subtree_com[1][0] - axle[0]
+    return d.subtree_com[torso][0] - axle[0]
 
 
 STANCE = {"hip": 0.35, "knee": -0.70, "ankle_pitch": 0.35,
@@ -327,8 +348,9 @@ def load(trim=None, backlash=0.0):
         _write_stance(probe)
         pd = mujoco.MjData(probe)
         mujoco.mj_resetDataKeyframe(probe, pd, 0)
-        trim = 0.0085 - _com_offset(probe, pd) * (probe.body_subtreemass[1]
-                                                  / probe.body_mass[1])
+        t = mujoco.mj_name2id(probe, mujoco.mjtObj.mjOBJ_BODY, "torso")
+        trim = 0.0085 - _com_offset(probe, pd) * (probe.body_subtreemass[t]
+                                                  / probe.body_mass[t])
 
     m = mujoco.MjModel.from_xml_string(
         base.replace(marker, f'pos="{trim:.6f} 0 0.090"'))

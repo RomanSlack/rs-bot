@@ -140,7 +140,7 @@ def test_backlash_zero_is_the_rigid_model():
     """backlash=0 must add no bodies, so every index-based test still holds."""
     a, _ = load()
     b, _ = load(backlash=0.0)
-    assert a.nq == b.nq == 17 and a.nbody == b.nbody == 12
+    assert a.nq == b.nq == 17 and a.nbody == b.nbody
 
 
 def test_backlash_adds_one_lash_joint_per_actuator():
@@ -251,9 +251,11 @@ def test_visual_parts_carry_no_mass_or_collision():
     m, _ = load()
     for i in range(m.ngeom):
         name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i)
-        if m.geom_group[i] == 0 and name != "floor":   # visual build
+        if m.geom_group[i] == 0 and name not in ("floor",) \
+                and not name.startswith("h_"):   # visual build
             assert m.geom_contype[i] == 0 and m.geom_conaffinity[i] == 0, name
-    assert m.body_subtreemass[1] == pytest.approx(2.050, abs=1e-3)
+    t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
+    assert m.body_subtreemass[t] == pytest.approx(2.050, abs=1e-3)
 
 
 def test_no_real_part_hits_the_floor_in_either_mode():
@@ -296,3 +298,13 @@ def test_no_real_part_hits_the_floor_in_either_mode():
             if n in (None, "floor") or n.startswith(("vtire", "vhub", "wheel")):
                 continue                     # the wheel IS the contact
             assert lowest_point(i) > -1e-3, f"{n} below the floor at roll={roll:.2f}"
+
+
+@pytest.mark.parametrize("mode", ["wheel", "foot"])
+def test_no_parts_interpenetrate(mode):
+    """Real parts must not pass through each other. MuJoCo will not catch this
+    for us: geoms in the same body never collide, and the visual build is
+    non-colliding by design, so it needs its own oriented-box check."""
+    from fitcheck import audit
+    hits = audit(mode, verbose=False)
+    assert not hits, "; ".join(f"{a} x {b} {p*1000:.1f}mm" for p, a, b in hits[:5])

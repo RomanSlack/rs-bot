@@ -50,7 +50,7 @@
   </default>
 
   <visual>
-    <global offwidth="1280" offheight="720"/>
+    <global offwidth="1920" offheight="1080"/>
     <quality shadowsize="4096"/>
     <headlight ambient="0.45 0.45 0.45" diffuse="0.55 0.55 0.55" specular="0.1 0.1 0.1"/>
     <map znear="0.02" zfar="30"/>
@@ -66,6 +66,31 @@
     <light pos="0 0 2" dir="0 0 -1" diffuse="0.7 0.7 0.7"/>
     <geom name="floor" type="plane" size="0 0 0.05" material="grid"
           friction="1.0 0.005 0.0001"/>
+
+    <!-- 1.75 m (5 ft 9 in) human, visual only, for scale. The robot drives
+         past it in the render. -->
+    <body name="human" pos="0.10 -0.72 0">
+      <geom name="h_head" type="sphere" size="0.090" pos="0 0 1.660"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+      <geom name="h_neck" type="capsule" size="0.035" fromto="0 0 1.500 0 0 1.575"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+      <geom name="h_torso" type="box" size="0.090 0.150 0.170" pos="0 0 1.330"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+      <geom name="h_hips" type="box" size="0.085 0.135 0.100" pos="0 0 1.060"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+      <geom name="h_arm_l" type="capsule" size="0.045" fromto="0 0.150 1.470 0 0.185 1.030"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+      <geom name="h_arm_r" type="capsule" size="0.045" fromto="0 -0.150 1.470 0 -0.185 1.030"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+      <geom name="h_leg_l" type="capsule" size="0.060" fromto="0 0.075 1.000 0 0.085 0.070"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+      <geom name="h_leg_r" type="capsule" size="0.060" fromto="0 -0.075 1.000 0 -0.085 0.070"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+      <geom name="h_foot_l" type="box" size="0.115 0.045 0.030" pos="0.030 0.085 0.030"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+      <geom name="h_foot_r" type="box" size="0.115 0.045 0.030" pos="0.030 -0.085 0.030"
+            rgba="0.24 0.26 0.31 1" contype="0" conaffinity="0" mass="0"/>
+    </body>
 
     <body name="torso" pos="0 0 0.247">
       <freejoint name="root"/>

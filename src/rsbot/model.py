@@ -51,10 +51,16 @@ def leg_ik(height, shift=0.0):
     return psi + phi, -2.0 * phi
 
 
-def make_ctrl(hip, knee, apitch, aroll, wheel):
-    """Assemble the 10-actuator command, same values both legs."""
+def make_ctrl(hip, knee, apitch, aroll, wheel, wheel_r=None):
+    """Assemble the 10-actuator command.
+
+    Legs share the joint angles; the wheels can differ, which is how the robot
+    steers - there is no steering joint, only a speed difference.
+    """
+    if wheel_r is None:
+        wheel_r = wheel
     return np.array([hip, knee, apitch, aroll, wheel,
-                     hip, knee, apitch, aroll, wheel])
+                     hip, knee, apitch, aroll, wheel_r])
 
 
 # --- Real part dimensions, metres --------------------------------------------
@@ -119,55 +125,73 @@ HL, HW, HH = SERVO[0] / 2, SERVO[1] / 2, SERVO[2] / 2
 SHAFT_INSET = 0.010          # shaft centre from the near end of the body
 
 
+SPINE_Y = 0.018      # spine centre-line, outboard of the 24 mm wide wheel
+SPY = 0.006          # spine half-thickness
+
+
 def _link_geoms(link, side, sgn):
     """Collision shape (group 4, carries the mass) plus the visual build.
 
-    A servo case bolts to the body PROXIMAL to the joint it drives, so the hip
-    servos live on the torso, the knee servo on the thigh, and so on.
+    Each link is a SPINE plate running from its own joint to the child joint,
+    with the child's servo bolted flush against it. The spine is what makes
+    this an assembly rather than a cloud of parts.
+
+    Everything is routed OUTBOARD of the wheel plane and stops short of the
+    axle, because the wheel changes shape: upright it is a 24 mm rim swept
+    through 80 mm vertically, flat it is an 80 mm platter swept horizontally.
+    A part has to miss both.
     """
     m = SEG_MASS[link]
     col, vis = [], []
-    off = HL - SHAFT_INSET       # body centre offset along its own length
+    y = sgn * SPINE_Y
+    off = HL - SHAFT_INSET
+    outb = sgn * (SPINE_Y + SPY + HH)     # servo flush outboard of the spine
 
     if link == "thigh":
         col.append(f'<geom class="leg" name="thigh_{side}" fromto="0 0 0  0 0 -0.110" '
                    f'mass="{m}" group="4"/>')
-        # Knee servo: drives the knee at z=-0.110, case bolted to the thigh,
-        # body reaching back up the thigh, tucked inboard of the leg plane.
+        # Stops short of the knee: the shin swings 40 deg there and would
+        # otherwise scissor into it. The knee servo bridges the gap.
+        vis.append(_v(f"vthigh_{side}", "box", f"0.010 {SPY} 0.049",
+                      f"0 {y:.5f} -0.053", C_PRINT))
         vis.append(_v(f"vkneesv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                      f"0 {-sgn*HH:.5f} {-0.110+off:.5f}", C_SERVO))
-        vis.append(_v(f"vthighbr_{side}", "box", "0.008 0.0075 0.030",
-                      f"0 {sgn*0.020:.4f} -0.055", C_PRINT))
+                      f"0 {outb:.5f} {-0.110+off:.5f}", C_SERVO))
     elif link == "shin":
         col.append(f'<geom class="leg" name="shin_{side}" fromto="0 0 0  0 0 -0.094" '
                    f'mass="{m}" group="4"/>')
-        # Ankle-pitch servo. Two clearances, not one: outboard of the 24 mm
-        # upright wheel, AND above the flat wheel, which sweeps an 80 mm disc
-        # horizontally once the ankle rolls. The second one is easy to miss.
+        # Stops 18 mm above the axle: below that it would be inside the flat
+        # wheel, which reaches 12 mm either side of the axle plane.
+        vis.append(_v(f"vshin_{side}", "box", f"0.010 {SPY} 0.038",
+                      f"0 {y:.5f} -0.046", C_PRINT))
+        # Ankle-pitch servo. It cannot be coaxial with its own joint, because
+        # the wheel already owns that axle, so it sits high on the shin and
+        # drives down through a belt that is not drawn.
         vis.append(_v(f"vanksv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                      f"0 {sgn*(0.014+HH):.5f} {-0.110+0.052:.5f}", C_SERVO))
-        vis.append(_v(f"vshinbr_{side}", "box", "0.008 0.0070 0.024",
-                      f"0 {-sgn*0.020:.4f} -0.048", C_PRINT))
+                      f"0 {outb:.5f} {-0.110+0.0626:.5f}", C_SERVO))
+        # The SHIN carries the ankle bearing, so the member reaching back to
+        # the ankle axis belongs here. It runs AFT rather than down: a
+        # non-rolling part must clear the flat wheel, which means either
+        # |x| > 32 mm or sitting above z = +12 mm.
+        vis.append(_v(f"vshinarm_{side}", "box", f"0.016 {SPY} 0.005",
+                      f"-0.028 {y:.5f} -0.073", C_PRINT))
     elif link == "ankle":
         col.append(f'<geom class="ankle" name="ankle_{side}" '
                    f'size="{HW:.5f} {HH:.5f} {HL:.5f}" pos="0 0 {HL:.5f}" '
                    f'mass="{m}" group="4"/>')
-        # Roll servo: output on the fore/aft axis, so the case occupies the y-z
-        # plane. Aft and outboard, clear of both the wheel and the floor.
+        # Yoke reaching AFT along the roll axis to a bearing clear of the
+        # wheel disc, then up to meet the shin.
+        vis.append(_v(f"vankpost_{side}", "box", f"0.0045 {SPY} 0.005",
+                      f"-0.0555 {y:.5f} 0.036", C_PRINT))
         vis.append(_v(f"vrollsv_{side}", "box", f"{HH:.5f} {HW:.5f} {HL:.5f}",
-                      f"{-(HH+0.042):.5f} {sgn*0.020:.4f} {off:.5f}", C_SERVO))
-        # NOTE: the structural brackets tying the ankle-pitch horn to the roll
-        # servo, and the roll horn to the wheel servo, are NOT modelled. They
-        # span two moving bodies and their real shape is a CAD problem, so
-        # drawing a guess would only put known-wrong geometry on screen.
+                      f"{-(0.058+HH):.5f} {y:.5f} 0.030", C_SERVO))
     elif link == "rollbracket":
         col.append(f'<inertial pos="0 0 0.01" mass="{m}" '
                    f'diaginertia="4e-5 4e-5 4e-5"/>')
-        # Wheel-drive servo: output on the spin axis, so the case occupies the
-        # x-z plane, mounted OUTBOARD. Inboard it would swing down into the
-        # floor when the ankle rolls 90 deg; outboard it swings up.
+        # Wheel-drive servo and bearing block, OUTBOARD. The 90 deg roll maps
+        # +y onto +z, so outboard becomes directly above the flat wheel, which
+        # is the only place a support for a vertical shaft can live.
         vis.append(_v(f"vwhlsv_{side}", "box", f"{HL:.5f} {HH:.5f} {HW:.5f}",
-                      f"0 {sgn*(0.013+HH):.5f} 0", C_SERVO))
+                      f"0 {sgn*(0.0140+HH):.5f} 0", C_SERVO))
     elif link == "wheel":
         col.append(f'<geom class="wheel" name="wheel_{side}" zaxis="0 1 0" '
                    f'mass="{m}" group="4"/>')
@@ -234,8 +258,9 @@ def _hip_servos():
     """Hip servo cases bolt to the torso, not the thigh."""
     g = []
     for sgn in (1, -1):
+        # Flush inboard of the thigh spine, and reaching back to the chassis.
         g.append(_v(f"vhipsv{sgn}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                    f"0 {sgn*(0.060+HH):.5f} {HL:.5f}", C_SERVO))
+                    f"0 {sgn*(0.060+SPINE_Y-SPY-HH):.5f} {HL:.5f}", C_SERVO))
     return g
 
 
@@ -251,14 +276,15 @@ def _torso_visual():
     for sgn in (1, -1):
         g.append(_v(f"vside{sgn}", "box", "0.045 0.0015 0.090",
                     f"{x} {sgn*0.0345:.4f} 0.090", C_PLATE))
-    g.append(_v("vtop", "box", "0.045 0.0325 0.0015", f"{x} 0 0.1785", C_PLATE))
+    g.append(_v("vtop", "box", "0.045 0.0330 0.0015", f"{x} 0 0.1785", C_PLATE))
+    g.append(_v("vshelf1", "box", "0.045 0.033 0.0015", f"{x} 0 0.0200", C_PLATE))
     g.append(_v("vpi", "box", f"{PI5[0]/2} {PI5[1]/2} {PI5[2]/2}",
-                f"{x} 0 0.030", C_PCB))
+                f"{x} 0 0.0300", C_PCB))
     # Stood on end: 105 mm will not fit across a 90 mm bay.
+    g.append(_v("vshelf2", "box", "0.045 0.033 0.0015", f"{x} 0 0.0610", C_PLATE))
     g.append(_v("vbatt", "box", f"{BATT_3S[2]/2} {BATT_3S[1]/2} {BATT_3S[0]/2}",
                 f"{x} 0 0.115", C_BATT))
-    g.append(_v("vdriver", "box", f"{DRIVER[0]/2} {DRIVER[1]/2} {DRIVER[2]/2}",
-                f"{x} 0 0.055", C_PCB))
+    g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0.021 0.0455", C_PCB))
     g += _hip_servos()
     return "\n      ".join(g)
 

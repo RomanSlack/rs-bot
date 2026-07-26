@@ -71,3 +71,30 @@ def test_tracks_velocity_command():
     assert not r["fell"]
     # 6 s at 0.25 m/s = 1.5 m, allow 15% for accel/decel transients.
     assert r["drift"] == pytest.approx(1.5, rel=0.15)
+
+
+@pytest.mark.parametrize("yaw", [0.4, 0.8, 1.2, -0.8])
+def test_steers_without_falling(yaw):
+    """There is no steering joint: turning is a wheel speed difference,
+    closed on the z gyro so it holds a rate."""
+    import numpy as np
+    from src.rsbot.model import load
+    from src.rsbot.sim import CTRL_HZ, obs
+    from src.rsbot.balance import Balancer, pitch_from_quat
+
+    m, d = load()
+    bal = Balancer()
+    decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))
+    dt = decim * m.opt.timestep
+    rates = []
+    for k in range(int(9.0 / m.opt.timestep)):
+        t = k * m.opt.timestep
+        if k % decim == 0:
+            d.ctrl[:] = bal(obs(m, d), dt, yaw_des=yaw if t > 2.0 else 0.0)
+        mujoco.mj_step(m, d)
+        o = obs(m, d)
+        assert abs(pitch_from_quat(o["quat"])) < 1.0, f"fell turning at {yaw}"
+        if t > 4.5:
+            rates.append(o["gyro"][2])
+    achieved = float(np.mean(rates))
+    assert achieved / yaw > 0.80, f"only tracked {achieved:.2f} of {yaw}"

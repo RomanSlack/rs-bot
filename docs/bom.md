@@ -98,6 +98,26 @@ Overall size, for the record:
 | depth | 131 mm / 5.2 in |
 | mass | 2.05 kg / 4.5 lb |
 
+## Is it assembled, or just non-overlapping?
+
+Those are different questions, and the first pass only answered the second.
+`fitcheck.py` now also builds a connectivity graph: two parts are joined if
+their boxes come within 4 mm, and the whole robot should be one group. It was
+**11 separate groups** - a cloud of parts that happened to miss each other,
+which is exactly what "floating" looks like.
+
+Fixing it meant giving every link a **spine** running from its own joint to
+the child joint, with the child's servo bolted flush against it, and routing
+the whole structure outboard of the wheel plane. Now **1 group in both modes,
+0 interpenetration.**
+
+The rule that shapes the entire lower leg: a non-rolling part must clear the
+wheel in *both* of its shapes. Upright it is a 24 mm rim swept 80 mm
+vertically; flat it is an 80 mm platter swept horizontally. Satisfying both
+means either **|x| > 32 mm** (fore or aft of the disc) or **z > +12 mm**
+(above it). Nothing may run straight down to the axle at y = 0, which is why
+the shin stops 26 mm short and reaches the ankle bearing from behind.
+
 ## Not modelled
 
 The structural brackets tying the ankle-pitch horn to the roll servo, and the

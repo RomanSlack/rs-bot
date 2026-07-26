@@ -70,10 +70,11 @@ def test_transition_reaches_stand_and_holds():
     assert not r["fell"]
     assert r["state"] == "STAND"
     assert r["stand_duration"] > 30.0
-    # Lash-tolerant gains hold position more loosely than the old rigid-only
-    # tuning did; ~50 mm over a 40 s rollout that includes a full flip is the
-    # price of not limit-cycling. See docs/backlash.md.
-    assert abs(r["drift"]) < 0.08
+    # Position hold is deliberately loose: lash-tolerant gains, plus the
+    # x_ref reset on entering SETTLE that stops the outer loop braking hard
+    # enough to tip the robot. ~80 mm over a 40 s rollout including a full
+    # flip is the price. See docs/backlash.md.
+    assert abs(r["drift"]) < 0.10
     # Standing on the faces, not perched on the rims.
     assert abs(r["wheel_clear"]) < 0.002
 
@@ -308,3 +309,12 @@ def test_no_parts_interpenetrate(mode):
     from fitcheck import audit
     hits = audit(mode, verbose=False)
     assert not hits, "; ".join(f"{a} x {b} {p*1000:.1f}mm" for p, a, b in hits[:5])
+
+
+@pytest.mark.parametrize("mode", ["wheel", "foot"])
+def test_robot_is_one_assembly_not_a_cloud_of_parts(mode):
+    """Non-overlapping is not the same as assembled. Two parts that miss each
+    other by 30 mm pass a penetration check and still look like they hover."""
+    from fitcheck import connectivity
+    groups = connectivity(mode, verbose=False)
+    assert len(groups) == 1, f"{len(groups)} disconnected groups"

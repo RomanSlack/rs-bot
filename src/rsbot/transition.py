@@ -78,6 +78,12 @@ class DeployMachine:
 
     def start_deploy(self):
         if self.state == WHEEL:
+            # Entering SETTLE gates the drive command to zero. If the robot is
+            # still moving, the position reference stops advancing while the
+            # measured position keeps growing, and the outer loop brakes hard
+            # enough to tip it. Re-zero the reference so it decelerates on the
+            # velocity term alone.
+            self.bal.x_ref = self.bal.x
             self._go(SETTLE)
 
     def start_retract(self):
@@ -100,12 +106,13 @@ class DeployMachine:
     def _ramp(self, value, target, rate, dt):
         return value + np.clip(target - value, -rate * dt, rate * dt)
 
-    def __call__(self, obs, dt, v_des=0.0):
+    def __call__(self, obs, dt, v_des=0.0, yaw_des=0.0):
         c = self.cfg
         self.t += dt
         self.t_state += dt
         if self.state != WHEEL:
-            v_des = 0.0
+            # Driving and steering only mean anything on the wheels.
+            v_des = yaw_des = 0.0
 
         pitch = pitch_from_quat(obs["quat"])
         rate = obs["gyro"][1]
@@ -164,7 +171,7 @@ class DeployMachine:
             apitch += c.stand_kp * pitch + c.stand_kd * rate + self.stand_i
             return make_ctrl(hip, knee, apitch, self.roll, 0.0)
 
-        ctrl = self.bal(obs, dt, v_des=v_des,
+        ctrl = self.bal(obs, dt, v_des=v_des, yaw_des=yaw_des,
                         pitch_bias=self.trim if not self.bal.outer_enabled else 0.0)
         ctrl[2] = ctrl[7] = apitch
         ctrl[3] = ctrl[8] = self.roll

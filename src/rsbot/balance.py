@@ -35,6 +35,9 @@ class Gains:
     # Low-pass on the wheel command itself. With gear lash, slamming the
     # command across the deadzone is what drives the limit cycle.
     tau_cmd: float = 0.08
+    # Yaw: closed on the IMU's z gyro, differenced across the two wheels.
+    kyaw: float = 1.00
+    yaw_max: float = 1.2     # rad/s; 1.5 and up tips it over
 
 
 # Kept as a name for the tuned-for-lash set, which is now simply the default:
@@ -66,8 +69,12 @@ class Balancer:
         self.w_cmd = 0.0
         self.outer_enabled = True
 
-    def __call__(self, obs, dt, v_des=0.0, pitch_bias=0.0):
+    def __call__(self, obs, dt, v_des=0.0, yaw_des=0.0, pitch_bias=0.0):
         """obs: dict with quat(4), gyro(3), wheel_vel(2). Returns ctrl(8).
+
+        `yaw_des` is a turn rate in rad/s, positive to the left. There is no
+        steering joint: it becomes a speed difference between the wheels,
+        closed on the gyro so it holds a rate rather than a wheel offset.
 
         `pitch_bias` offsets the commanded lean. The transition uses it to rock
         the robot back onto its pads: the inner loop drives the wheels forward
@@ -105,7 +112,13 @@ class Balancer:
             self.w_cmd += a * (w_cmd - self.w_cmd)
             w_cmd = self.w_cmd
 
+        # Steering. Positive yaw is to the left, so the right wheel runs
+        # faster. Gated by the caller in foot mode, where a flat wheel would
+        # just scrub against the floor.
+        yaw_des = max(-g.yaw_max, min(g.yaw_max, yaw_des))
+        dw = g.kyaw * (yaw_des - obs["gyro"][2]) / WHEEL_R
+
         hip, knee = leg_ik(self.height)
         # Wheels upright, foot face held level so it is ready to plant.
         return make_ctrl(hip, knee, ankle_pitch_level(hip, knee),
-                         ROLL_WHEEL, w_cmd)
+                         ROLL_WHEEL, w_cmd - dw, w_cmd + dw)

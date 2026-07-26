@@ -42,6 +42,7 @@ class Sim:
         self.cam.distance, self.cam.elevation, self.cam.azimuth = 0.95, -8, 132
         self.speed = 1.0
         self.v_des = 0.0
+        self.yaw_des = 0.0
         self.shove = 0.0
         self.follow = True
         self.lash = 0.0
@@ -66,6 +67,8 @@ class Sim:
                 self._reset()
             elif a == "drive":
                 self.v_des = v
+            elif a == "turn":
+                self.yaw_des = v
             elif a == "shove":
                 self.shove = v
                 self.shove_until = self.d.time + 0.010
@@ -108,6 +111,7 @@ class Sim:
                 "roll_deg": round(float(np.degrees(self.mach.roll)), 1),
                 "lash_deg": round(float(np.degrees(self.lash)), 2),
                 "v_des": self.v_des,
+                "yaw_des": self.yaw_des,
                 "speed": self.speed,
                 "standing": self.mach.state == STAND,
             }
@@ -125,7 +129,8 @@ class Sim:
                     # Driving only has an effect while still on the wheels;
                     # the machine ignores it once the transition starts.
                     self.d.ctrl[:] = self.mach(o, self.decim * dt,
-                                               v_des=self.v_des)
+                                               v_des=self.v_des,
+                                               yaw_des=self.yaw_des)
 
                 self.d.xfrc_applied[self.torso] = 0.0
                 if self.d.time < self.shove_until:
@@ -211,9 +216,11 @@ kbd{background:#20242b;border:1px solid #2d333c;border-radius:4px;padding:1px 5p
       <button onmousedown="c('drive',0.35)" onmouseup="c('drive',0)" onmouseleave="c('drive',0)">&#9654;&nbsp;forward <kbd>W</kbd></button>
       <button onmousedown="c('drive',-0.35)" onmouseup="c('drive',0)" onmouseleave="c('drive',0)">&#9664;&nbsp;back <kbd>S</kbd></button>
       <button onclick="c('drive',0)">stop</button>
+      <button onmousedown="c('turn',1.0)" onmouseup="c('turn',0)" onmouseleave="c('turn',0)">&#8630;&nbsp;left <kbd>A</kbd></button>
+      <button onmousedown="c('turn',-1.0)" onmouseup="c('turn',0)" onmouseleave="c('turn',0)">right&nbsp;&#8631; <kbd>D</kbd></button>
       <button class=hot onclick="c('shove',1.0)">shove &rarr; <kbd>space</kbd></button>
       <button class=hot onclick="c('shove',-1.0)">&larr; shove</button>
-      <button class=go onclick="c('toggle')">flip mode <kbd>D</kbd></button>
+      <button class=go onclick="c('toggle')">flip mode <kbd>F</kbd></button>
       <button onclick="c('reset')">reset <kbd>R</kbd></button>
     </div>
   </div>
@@ -305,10 +312,12 @@ addEventListener('keydown',e=>{
   if(held[e.key])return; held[e.key]=1;
   if(e.key=='w')c('drive',0.35); else if(e.key=='s')c('drive',-0.35);
   else if(e.key==' '){c('shove',1.0);e.preventDefault()}
-  else if(e.key=='d')c('toggle'); else if(e.key=='r')c('reset');
+  else if(e.key=='a')c('turn',1.0); else if(e.key=='d')c('turn',-1.0);
+  else if(e.key=='f')c('toggle'); else if(e.key=='r')c('reset');
 });
 addEventListener('keyup',e=>{delete held[e.key];
-  if(e.key=='w'||e.key=='s')c('drive',0)});
+  if(e.key=='w'||e.key=='s')c('drive',0);
+  if(e.key=='a'||e.key=='d')c('turn',0)});
 </script></body></html>"""
 
 

@@ -33,6 +33,7 @@ CRUISE = 0.35
 
 CAPTION = {
     "WHEEL":  "wheel mode - actively balancing",
+    "TURN":   "steering - differential wheel speed, no steering joint",
     "SETTLE": "stopping, waiting for a quiet moment",
     "FLIP":   "FLIP - ankles roll 90 degrees",
     "STAND":  "foot mode - standing on the wheel faces, weak ankle loop only",
@@ -81,7 +82,10 @@ def main(out=None, lash_deg=0.0):
          "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
          "-vf", "format=yuv420p", "-crf", "19", out], stdin=subprocess.PIPE)
 
-    FLIP_AT, STAND_FOR, DRIVE_AFTER = 4.0, 5.0, 6.0
+    # 0.6 rad/s: turning harder than that and then stopping can tip it,
+    # because the yaw loop and the settle deceleration interact.
+    TURN_AT, TURN_FOR, TURN_RATE = 2.0, 3.4, 0.6
+    FLIP_AT, STAND_FOR, DRIVE_AFTER = 8.0, 5.0, 6.0
     fired = stood_at = retracted = back_at = None
     duration = 40.0
 
@@ -105,9 +109,11 @@ def main(out=None, lash_deg=0.0):
         # Drive before the flip and again once it is back on its wheels. The
         # machine gates this to zero in every other state by itself.
         drive = CRUISE if (fired is None or back_at is not None) else 0.0
+        turning = TURN_AT <= t < TURN_AT + TURN_FOR
+        yaw = TURN_RATE if turning else 0.0
 
         if k % decim == 0:
-            d.ctrl[:] = mach(obs(m, d), dt, v_des=drive)
+            d.ctrl[:] = mach(obs(m, d), dt, v_des=drive, yaw_des=yaw)
         mujoco.mj_step(m, d)
 
         if k % frame_every == 0:
@@ -123,7 +129,8 @@ def main(out=None, lash_deg=0.0):
                     f"x {d.xpos[torso][0]:+5.2f} m"]
             if lash_deg:
                 rows.append(f"backlash {lash_deg:g} deg")
-            frame = annotate(renderer.render(), CAPTION[NAMES[mach.state]], rows)
+            cap = CAPTION["TURN" if turning else NAMES[mach.state]]
+            frame = annotate(renderer.render(), cap, rows)
             ff.stdin.write(frame.tobytes())
 
     ff.stdin.close()

@@ -18,7 +18,12 @@ import numpy as np
 from src.rsbot.model import (ROLL_FOOT, ROLL_WHEEL, WHEEL_HALF_W, WHEEL_R,
                              ankle_pitch_level, leg_ik, load)
 
-SKIP_PAIRS = {("vhub", "vtire")}          # hub sits inside the tyre by design
+# Pairs that legitimately share material: a hub inside its tyre, and parts
+# that bolt to each other through a lap joint.
+SKIP_PAIRS = {("vhub", "vtire"), ("vankpost", "vrollsv")}
+
+# Anything else may not overlap by more than a print tolerance.
+TOL = 0.0005
 
 
 def _obb(m, d, i):
@@ -72,6 +77,75 @@ def pose(m, d, mode):
     mujoco.mj_forward(m, d)
 
 
+def gap(a, b):
+    """Separation between two oriented boxes, 0 if they touch or overlap.
+
+    Max over the separating axes, which is a lower bound on true distance:
+    it can under-report a gap, never invent one.
+    """
+    (ca, ea, Ra), (cb, eb, Rb) = a, b
+    t = cb - ca
+    worst = -math.inf
+    axes = [Ra[:, i] for i in range(3)] + [Rb[:, i] for i in range(3)]
+    for i in range(3):
+        for j in range(3):
+            c = np.cross(Ra[:, i], Rb[:, j])
+            if np.linalg.norm(c) > 1e-9:
+                axes.append(c / np.linalg.norm(c))
+    for ax in axes:
+        ra = sum(ea[k] * abs(np.dot(ax, Ra[:, k])) for k in range(3))
+        rb = sum(eb[k] * abs(np.dot(ax, Rb[:, k])) for k in range(3))
+        worst = max(worst, abs(np.dot(t, ax)) - (ra + rb))
+    return max(0.0, worst)
+
+
+def connectivity(mode, touch=0.004, verbose=True):
+    """Is the robot one connected object, or a cloud of floating parts?
+
+    Overlap-free is not the same as assembled. Two parts that miss each other
+    by 30 mm pass a penetration check and still look like they are hovering.
+    """
+    m, d = load()
+    pose(m, d, mode)
+    name = lambda i: mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i)
+    vis = [i for i in range(m.ngeom)
+           if m.geom_group[i] == 0 and (name(i) or "") != "floor"
+           and not (name(i) or "").startswith("h_")]
+
+    parent = {i: i for i in vis}
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    nearest = {i: (math.inf, None) for i in vis}
+    for i, j in itertools.combinations(vis, 2):
+        g = gap(_obb(m, d, i), _obb(m, d, j))
+        for a, b in ((i, j), (j, i)):
+            if g < nearest[a][0]:
+                nearest[a] = (g, b)
+        if g <= touch:
+            parent[find(i)] = find(j)
+
+    groups = {}
+    for i in vis:
+        groups.setdefault(find(i), []).append(i)
+    if verbose:
+        print(f"--- {mode} mode: {len(groups)} connected group(s)")
+        if len(groups) > 1:
+            big = max(groups.values(), key=len)
+            for g in sorted(groups.values(), key=len):
+                if g is big:
+                    continue
+                for i in g:
+                    dist, other = nearest[i]
+                    print(f"   FLOATING {name(i):<14} nearest {name(other):<14} "
+                          f"{dist*1000:5.1f} mm away")
+    return groups
+
+
 def audit(mode, verbose=True):
     m, d = load()
     pose(m, d, mode)
@@ -92,7 +166,7 @@ def audit(mode, verbose=True):
         if stem in SKIP_PAIRS:
             continue
         p = penetration(_obb(m, d, i), _obb(m, d, j))
-        if p > 1e-4:
+        if p > TOL:
             hits.append((p, na, nb))
     hits.sort(reverse=True)
     if verbose:
@@ -107,4 +181,9 @@ if __name__ == "__main__":
     for mode in ("wheel", "foot"):
         total += len(audit(mode))
         print()
-    print("clean" if total == 0 else f"{total} overlapping pairs to fix")
+    print("no interpenetration" if total == 0
+          else f"{total} overlapping pairs to fix")
+    print()
+    for mode in ("wheel", "foot"):
+        connectivity(mode)
+        print()

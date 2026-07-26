@@ -153,6 +153,37 @@ The audit also distinguishes three things that all look like overlap:
 Current state: **0 interpenetration in both end poses, 0 through all 26 flip
 poses, 1 connected group.**
 
+## Is it stiff enough, and is anything actually floating?
+
+Two separate worries, two separate checks.
+
+**Floating.** The robot-wide connectivity check uses a 4 mm tolerance, which is
+right for a *running clearance across a joint* - two links that rotate relative
+to each other must not touch - but it is far too generous *inside* a rigid
+part. Checked strictly, parts on the same body had to actually touch, and
+**5 of 11 bodies were not one piece**: the hip servos were 0.6 mm off the
+chassis, the shin's lower arm was detached from its own spine, and the
+roll-bracket tie was floating. That is exactly what "floating servos" looks
+like. All closed; a test now enforces one rigid piece per body.
+
+**Stiffness.** Printed PETG at a conservative E = 2.0 GPa, loaded by the peak
+joint torques measured in sim:
+
+| member | section | length | load | tip deflection |
+|---|---|---|---|---|
+| thigh spine, fore/aft | 20 x 12 mm | 110 mm | 26.4 N (peak knee torque) | **0.73 mm** |
+| thigh spine, sideways | 12 x 20 mm | 110 mm | 3.3 N (RMS) | 0.25 mm |
+| shin spine | 20 x 12 mm | 55 mm | 26.4 N | 0.09 mm |
+| shin aft post | 12 x 12 mm | 30 mm | 18.4 N (peak ankle roll) | 0.05 mm |
+
+For scale, **0.87 deg of servo backlash on a 110 mm link is 1.67 mm of slop** -
+more than twice the worst-case structural deflection, and that is at *peak*
+torque, not RMS.
+
+So the structure is not the weak link; the actuators are. That matches the
+backlash results, and it means thickening these parts buys almost nothing
+until the lash is dealt with.
+
 ## Not modelled
 
 The ankle-pitch drive is not coaxial with its own joint, because the wheel

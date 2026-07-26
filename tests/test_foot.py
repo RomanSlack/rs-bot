@@ -329,3 +329,40 @@ def test_nothing_collides_during_the_flip():
     assert not hits, "; ".join(
         f"{a} x {b} {p*1000:.1f}mm at {f*100:.0f}%"
         for (a, b), (p, f) in sorted(hits.items(), key=lambda kv: -kv[1][0])[:5])
+
+
+@pytest.mark.parametrize("mode", ["wheel", "foot"])
+def test_every_body_is_one_rigid_piece(mode):
+    """Parts on the same body must actually TOUCH each other. The robot-wide
+    connectivity check uses a 4 mm tolerance, which is a running clearance
+    across a joint but is just a gap inside a rigid part - that is what
+    'floating servos' looks like."""
+    import itertools
+    from fitcheck import _obb, gap, penetration, pose
+
+    m, d = load()
+    pose(m, d, mode)
+    name = lambda i: mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i)
+    vis = [i for i in range(m.ngeom)
+           if m.geom_group[i] == 0 and (name(i) or "") != "floor"
+           and not (name(i) or "").startswith("h_")]
+    bodies = {}
+    for i in vis:
+        bodies.setdefault(m.geom_bodyid[i], []).append(i)
+
+    for b, gs in bodies.items():
+        parent = {i: i for i in gs}
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        for i, j in itertools.combinations(gs, 2):
+            if (gap(_obb(m, d, i), _obb(m, d, j)) <= 1e-4
+                    or penetration(_obb(m, d, i), _obb(m, d, j)) > 0):
+                parent[find(i)] = find(j)
+        loose = {find(i) for i in gs}
+        bn = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b)
+        assert len(loose) == 1, f"{bn} is {len(loose)} loose pieces, not one part"

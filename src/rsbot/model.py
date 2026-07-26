@@ -125,7 +125,8 @@ HL, HW, HH = SERVO[0] / 2, SERVO[1] / 2, SERVO[2] / 2
 SHAFT_INSET = 0.010          # shaft centre from the near end of the body
 
 
-SPINE_Y = 0.018      # spine centre-line, outboard of the 24 mm wide wheel
+SPINE_Y = 0.021      # spine centre-line, outboard of the 24 mm wide wheel
+                     # and clear of the tie that crosses the wheel plane aft
 SPY = 0.006          # spine half-thickness
 ANK_Y = 0.032        # ankle structure runs outboard of the shin's, so the
                      # two never touch as the ankle pitches between them
@@ -182,8 +183,8 @@ def _link_geoms(link, side, sgn):
         # the ankle axis belongs here. It steps aft high up, where the radius
         # from the roll axis already clears the servo sweep, then drops at
         # |x| > 32 mm, which also clears the flat wheel.
-        vis.append(_v(f"vshinarm_{side}", "box", f"0.015 {SPY} 0.005",
-                      f"-0.027 {y:.5f} -0.048", C_PRINT))
+        vis.append(_v(f"vshinarm_{side}", "box", f"0.016 {SPY} 0.005",
+                      f"-0.026 {y:.5f} -0.048", C_PRINT))
         vis.append(_v(f"vshinpost_{side}", "box", f"0.006 {SPY} 0.023",
                       f"-0.048 {y:.5f} -0.071", C_PRINT))
     elif link == "ankle":
@@ -215,10 +216,12 @@ def _link_geoms(link, side, sgn):
         # BESIDE the wheel (outboard of its 12 mm half-width) and then steps
         # inboard onto the roll axis, where the radius is under 14 mm and the
         # wheel-servo sweep has nothing to hit.
-        vis.append(_v(f"vrollarm_{side}", "box", "0.021 0.005 0.005",
-                      f"-0.021 {sgn*0.018:.5f} 0", C_PRINT))
-        vis.append(_v(f"vrolltie_{side}", "box", "0.006 0.0035 0.005",
-                      f"-0.050 {sgn*0.0075:.5f} 0", C_PRINT))
+        vis.append(_v(f"vrollarm_{side}", "box", "0.022 0.0057 0.005",
+                      f"-0.022 {sgn*0.0178:.5f} 0", C_PRINT))
+        # Crosses the wheel plane only aft of the tyre, where the radius
+        # from the spin axis is already past 40 mm.
+        vis.append(_v(f"vrolltie_{side}", "box", "0.007 0.00475 0.005",
+                      f"-0.049 {sgn*0.007875:.5f} 0", C_PRINT))
     elif link == "wheel":
         col.append(f'<geom class="wheel" name="wheel_{side}" zaxis="0 1 0" '
                    f'mass="{m}" group="4"/>')
@@ -302,16 +305,16 @@ def _torso_visual():
     g = []
     for sgn in (1, -1):
         g.append(_v(f"vside{sgn}", "box", "0.045 0.0015 0.090",
-                    f"{x} {sgn*0.0345:.4f} 0.090", C_PLATE))
-    g.append(_v("vtop", "box", "0.045 0.0330 0.0015", f"{x} 0 0.1785", C_PLATE))
-    g.append(_v("vshelf1", "box", "0.045 0.033 0.0015", f"{x} 0 0.0200", C_PLATE))
+                    f"{x} {sgn*0.0381:.4f} 0.090", C_PLATE))
+    g.append(_v("vtop", "box", "0.045 0.0366 0.0015", f"{x} 0 0.1785", C_PLATE))
+    g.append(_v("vshelf1", "box", "0.045 0.0366 0.0015", f"{x} 0 0.0200", C_PLATE))
     g.append(_v("vpi", "box", f"{PI5[0]/2} {PI5[1]/2} {PI5[2]/2}",
                 f"{x} 0 0.0300", C_PCB))
     # Stood on end: 105 mm will not fit across a 90 mm bay.
-    g.append(_v("vshelf2", "box", "0.045 0.033 0.0015", f"{x} 0 0.0610", C_PLATE))
+    g.append(_v("vshelf2", "box", "0.045 0.0366 0.0015", f"{x} 0 0.0610", C_PLATE))
     g.append(_v("vbatt", "box", f"{BATT_3S[2]/2} {BATT_3S[1]/2} {BATT_3S[0]/2}",
                 f"{x} 0 0.115", C_BATT))
-    g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0.021 0.0455", C_PCB))
+    g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0.0266 0.0455", C_PCB))
     g += _hip_servos()
     return "\n      ".join(g)
 

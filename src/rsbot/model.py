@@ -118,8 +118,8 @@ LASH_FRICTION = 0.0005
 #
 # The old numbers put 100 g in the shin on the assumption the wheel servo lived
 # there; it is really on the roll bracket, 110 mm further out.
-SEG_MASS = {"thigh": 0.0894, "shin": 0.0854, "ankle": 0.0561,
-            "rollbracket": 0.0601, "wheel": 0.060}
+SEG_MASS = {"thigh": 0.0894, "shin": 0.0889, "ankle": 0.0693,
+            "rollbracket": 0.0600, "wheel": 0.060}
 
 # Mass was derived; this is where that mass SITS and how it is spread out.
 #
@@ -138,14 +138,14 @@ SEG_MASS = {"thigh": 0.0894, "shin": 0.0854, "ankle": 0.0561,
 # LEFT side and torso; the right side mirrors in y.
 # Regenerate with: uv run python -m cad.inertia --emit
 SEG_INERTIA = {
-    "thigh": (0.089438, (+0.000000, +0.001064, -0.080342),
-              (1.082634e-04, 8.980793e-05, 2.648891e-05, 2.633472e-09, -5.026452e-20, -2.568573e-05)),
-    "shin": (0.085428, (-0.006073, +0.041168, -0.040788),
-              (5.280288e-05, 5.066766e-05, 4.486914e-05, -1.050164e-05, -1.267007e-05, -1.394741e-06)),
-    "ankle": (0.056103, (-0.075233, +0.000000, +0.015685),
-              (1.246639e-05, 1.602528e-05, 9.180675e-06, -1.340980e-23, 4.110834e-07, 3.550638e-24)),
-    "rollbracket": (0.060139, (-0.002478, +0.030361, +0.001399),
-              (1.112799e-05, 1.881592e-05, 2.167336e-05, -2.320841e-06, 2.129397e-06, 1.178736e-06)),
+    "thigh": (0.089438, (+0.000000, +0.001062, -0.080342),
+              (1.082750e-04, 8.980793e-05, 2.650052e-05, -1.211697e-20, -4.799863e-20, -2.568232e-05)),
+    "shin": (0.088882, (+0.005481, +0.044922, -0.043143),
+              (6.641551e-05, 5.754323e-05, 3.952030e-05, 4.583732e-07, 1.198234e-05, 1.223624e-05)),
+    "ankle": (0.069320, (-0.067961, +0.008562, +0.012695),
+              (4.103027e-05, 3.885657e-05, 5.473138e-05, -2.072709e-05, 6.810168e-06, 7.534307e-06)),
+    "rollbracket": (0.060009, (-0.002336, +0.030327, +0.001155),
+              (1.113396e-05, 1.786354e-05, 2.116093e-05, -2.304450e-06, 1.513950e-06, 8.870853e-07)),
     "torso": (1.069180, (+0.007624, +0.000249, +0.084388),
               (3.743464e-03, 3.499079e-03, 1.323310e-03, -2.329118e-07, -5.782052e-05, 9.280251e-06)),
     "wheel": (0.060000, (+0.000000, +0.000000, +0.000000),
@@ -281,8 +281,25 @@ def _link_geoms(link, side, sgn, meshes=False):
         # |x| > 32 mm, which also clears the flat wheel.
         vis.append(_v(f"vshinarm_{side}", "box", f"0.016 {SPY} 0.007",
                       f"-0.026 {y:.5f} -0.048", C_PRINT))
-        vis.append(_v(f"vshinpost_{side}", "box", f"0.006 {SPY} 0.023",
-                      f"-0.048 {y:.5f} -0.071", C_PRINT))
+        # The route to the ankle-pitch bearing at (0, +/-68, -110) goes
+        # FORWARD, and both halves of that are forced. It cannot go down the
+        # middle, because the wheel-drive servo turns with the roll bracket and
+        # sweeps an annulus 14..50.9 mm about the roll axis for |x| < 22.6. It
+        # cannot go aft either: in foot mode the axle is 12 mm off the floor
+        # and the shin stands at 27.5 deg, so structure hanging aft at axle
+        # height swings 13 mm THROUGH the floor. Forward, the same tilt lifts
+        # it. See cad/envelope.py, which solves for the bearing's two legal
+        # bands: y = -80..-47 and y = +57..+80.
+        vis.append(_v(f"vshinfarm_{side}", "box", f"0.014 {SPY} 0.007",
+                      f"0.024 {y:.5f} -0.048", C_PRINT))
+        vis.append(_v(f"vshinfpost_{side}", "box", f"0.005 {SPY} 0.011",
+                      f"0.033 {y:.5f} -0.059", C_PRINT))
+        vis.append(_v(f"vshincross_{side}", "box", "0.005 0.029 0.0045",
+                      f"0.033 {sgn*0.044:.5f} -0.0655", C_PRINT))
+        vis.append(_v(f"vshindrop_{side}", "box", "0.005 0.005 0.0265",
+                      f"0.033 {sgn*0.068:.5f} -0.0875", C_PRINT))
+        vis.append(_v(f"vshinback_{side}", "box", "0.019 0.005 0.006",
+                      f"0.019 {sgn*0.068:.5f} -0.108", C_PRINT))
     elif link == "ankle":
         col.append(f'<geom class="ankle" name="ankle_{side}" '
                    f'size="{HW:.5f} {HH:.5f} {HL:.5f}" pos="0 0 {HL:.5f}" '
@@ -295,14 +312,23 @@ def _link_geoms(link, side, sgn, meshes=False):
         # the upright and the flat wheel.
         # Between the roll servo and the wheel, not inside either: the servo
         # case ends at x = -58, and |x| > 40 keeps it clear of the flat wheel.
-        vis.append(_v(f"vankpost_{side}", "box", "0.006 0.006 0.006",
-                      "-0.050 0 0", C_PRINT))
+        vis.append(_v(f"vankpost_{side}", "box", "0.0045 0.006 0.006",
+                      "-0.0515 0 0", C_PRINT))
         # Mounting face the roll servo bolts to, bridging it to the carrier.
         # Kept within 8.5 mm of the roll axis: the roll bracket's tie sweeps
         # an annulus 8.7-19.6 mm out, so anything reaching into that band gets
         # hit partway through the flip.
         vis.append(_v(f"vankface_{side}", "box", "0.002 0.006 0.006",
                       "-0.056 0 0", C_PRINT))
+        # The ankle-pitch joint, which was not drawn at all until now: the
+        # shin had a bore 52.8 mm off the axis and the yoke had no matching
+        # feature, so the two parts came no closer than 10.3 mm.
+        vis.append(_v(f"vyokecross_{side}", "box", "0.005 0.031 0.008",
+                      f"-0.051 {sgn*0.025:.5f} 0", C_PRINT))
+        vis.append(_v(f"vyokefwd_{side}", "box", "0.028 0.005 0.008",
+                      f"-0.028 {sgn*0.058:.5f} 0", C_PRINT))
+        vis.append(_v(f"vyokeboss_{side}", "cylinder", "0.007 0.005",
+                      f"0 {sgn*0.058:.5f} 0", C_PRINT, euler="1.5708 0 0"))
         vis.append(_v(f"vrollsv_{side}", "box", f"{HH:.5f} {HW:.5f} {HL:.5f}",
                       # Lifted off the roll axis so it clears the floor in foot mode,
                       # where the axle is only 12 mm up. Safe despite the larger
@@ -314,18 +340,19 @@ def _link_geoms(link, side, sgn, meshes=False):
         # is the only place a support for a vertical shaft can live.
         vis.append(_v(f"vwhlsv_{side}", "box", f"{HL:.5f} {HH:.5f} {HW:.5f}",
                       f"0 {sgn*(0.0140+HH):.5f} 0", C_SERVO))
-        # Tie from the wheel-drive servo back to the bearing carrier. It runs
-        # BESIDE the wheel (outboard of its 12 mm half-width) and then steps
-        # inboard onto the roll axis, where the radius is under 14 mm and the
-        # wheel-servo sweep has nothing to hit.
-        # Above the wheel servo (its case is +/-12.35 in z), and outboard of
-        # the tyre, so it clears both.
+        # The printed arm the wheel servo bolts to. It was dropped when the
+        # tie and tongue were replaced by the web, which left the bracket as
+        # two loose pieces in the sim - caught by the one-rigid-piece test.
         vis.append(_v(f"vrollarm_{side}", "box", "0.022 0.0057 0.005",
                       f"-0.022 {sgn*0.0178:.5f} 0.01735", C_PRINT))
-        # Crosses the wheel plane only aft of the tyre, where the radius
-        # from the spin axis is already past 40 mm.
-        vis.append(_v(f"vrolltie_{side}", "box", "0.007 0.00275 0.005",
-                      f"-0.049 {sgn*0.00985:.5f} 0.010", C_PRINT))
+        # Web straight from the arm to the roll axis, at x = -45..-41: the one
+        # window forward of the yoke's post that is still outside the 40 mm
+        # wheel. The tie, tongue and corner rib it replaces existed only to
+        # crank round the shin's old post.
+        vis.append(_v(f"vrollweb_{side}", "box", "0.002 0.012 0.011",
+                      f"-0.043 {sgn*0.012:.5f} 0.011", C_PRINT))
+        vis.append(_v(f"vrollhub_{side}", "cylinder", "0.008 0.002",
+                      "-0.043 0 0", C_PRINT, euler="0 1.5708 0"))
     elif link == "wheel":
         col.append(f'<geom class="wheel" name="wheel_{side}" zaxis="0 1 0" '
                    f'group="4"/>')

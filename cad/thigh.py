@@ -50,9 +50,17 @@ def _box(x, y, z):
 
 
 def _gusset(pts_xz, y0, t):
-    """Triangular rib in the x-z plane, spanning y0 to y0 + t."""
+    """Triangular rib in the x-z plane, spanning y0 to y0 + t.
+
+    Normalised by MEASUREMENT rather than by trusting the extrude direction.
+    `bd.extrude` follows the face normal, and that normal flips with the
+    polygon's winding order, so the identical call places the rib at
+    y0..y0+t for one point order and y0+t..y0+2t for the other. The shin's rib
+    landed 12 mm out of position that way, sitting inside the ankle servo, and
+    nothing but cad/envelope.py would have noticed.
+    """
     g = bd.extrude(bd.Plane.XZ * bd.Polygon(*pts_xz), amount=t)
-    return bd.Pos(0, y0 + t, 0) * g
+    return bd.Pos(0, y0 - g.bounding_box().min.Y, 0) * g
 
 
 def build():

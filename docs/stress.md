@@ -127,50 +127,47 @@ perimeters sit at the extreme fibre. Print a coupon and correct it.
 
 ## Results
 
-Every part in its chosen print orientation, worst of in-plane and interlayer.
-Bold is over the allowable.
+Worst of in-plane and interlayer, each part in its chosen print orientation.
 
-| part | PETG | PLA | ABS | PA6-CF | Al 6061-T6 |
-|---|---|---|---|---|---|
-| thigh | 75% | 63% | 92% | 37% | 8% |
-| shin | 63% | 53% | 76% | 30% | 6% |
-| ankle yoke | 6% | 5% | 7% | 3% | 1% |
-| roll bracket | **163%** | **141%** | **205%** | 81% | 17% |
-| chassis | 35% | 30% | 44% | 19% | 4% |
+| part | PETG | ABS | PA6-CF |
+|---|---|---|---|
+| thigh | 76% | 94% | **38%** |
+| shin | **135%** | **167%** | **67%** |
+| ankle yoke | 45% | 58% | **22%** |
+| roll bracket | **146%** | **189%** | **84%** |
+| chassis | 35% | 44% | **18%** |
 
-**PA6-CF passes everything.** ABS and PETG pass everything except the roll
-bracket; the thigh in ABS is marginal at 92%.
+**PA6-CF passes every part.** PETG and ABS both fail the shin and the roll
+bracket, and the thigh in ABS is marginal at 94%.
 
-### How it got there
+The shin and the roll bracket are the two parts that reach the ankle-pitch
+joint, and that is not a coincidence: the bearing is forced 68 mm outboard and
+110 mm down, and no amount of ribbing makes a long cantilever cheap.
 
-The first pass had three parts over the line, two of them badly:
+### What the ribs bought
 
 | part | before | after | what changed |
 |---|---|---|---|
-| thigh | 161% | **75%** | plate 6 -> 9 mm, two corner ribs |
-| shin | 89% | **63%** | ribs at both inside corners |
-| roll bracket | 1596% | **163%** | a real joint instead of a 0.5 mm lap |
+| thigh | 161% | **76%** | plate 6 -> 9 mm, two corner ribs |
+| shin | 322% (interlayer) | **98%** | print orientation, plus one rib |
+| roll bracket | 1596% | **146%** | a plate to the axis, not a crank |
 
-Fifteen grams total, 1.756 -> 1.771 kg. Nothing was thickened uniformly: every
-addition is a triangle at a corner or section where the load actually is,
-because bending stiffness goes as depth cubed and a rib is all depth.
+Two lessons out of the shin, both worth more than the mass:
 
-The roll bracket took four rounds, and each one is worth reading as a lesson:
+**Print orientation was worth more than any rib.** The shin's interlayer went
+322% -> 91% for nothing but building it up in x instead of on its side. Its
+old orientation had been chosen for a shape that no longer existed.
 
-| change | PETG |
-|---|---|
-| as drawn - 2.00 x 0.50 x 2.65 mm lap | 1596% |
-| lap grown in y and z, corner rib | 430% |
-| **tongue** running aft to lap the tie over 12 mm, not 2 | 215% |
-| fillet on the re-entrant corner | 204% |
-| tongue filled down to the tie's inboard face | **163%** |
+**A rib that stops in mid-air moves the concentration, it does not remove it.**
+Two triangles bridging the shin's two hot corners dropped the peak from 167% to
+116% - and the new peak appeared at y = 45, exactly where both of them ended.
+One continuous rib, terminating on structure at both ends, is what worked.
 
-The tongue is the one that mattered, and it is not "more material" - it is
-threading a member through the only gap available, inboard of the shin's post
-at y = 15 and outboard of the yoke's rotation sweep at radius 8.5 mm. The part
-went from 4.4 g to 4.9 g doing it.
+**And the member could not simply be made deeper.** Taking the crossing from
+9 mm to 15 mm buys 116% -> 107%, and then collides with the wheel-drive servo
+5.3 mm deep at 64% of the flip. There is nowhere to put the extra section.
 
-### Print orientation is free and it is not a detail
+### Print orientation is free### Print orientation is free and it is not a detail
 
 `layer` is chosen per part from the load, not by laying each on its biggest
 face. Interlayer utilisation in PETG, across the three axes:

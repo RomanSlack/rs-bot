@@ -18,9 +18,10 @@ def test_model_mass_matches_budget():
     # Look the torso up by name: the scale-reference human is also a
     # top-level body, so index 1 is not the robot.
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    # 1.71 kg, derived rather than estimated: see cad/masses.py. The printed
-    # structure turned out far lighter than the hand-assigned numbers.
-    assert 1.73 <= m.body_subtreemass[t] <= 1.80
+    # 1.80 kg, derived rather than estimated: see cad/masses.py. It has crept
+    # up from 1.756: 15 g of ribs to get the printed parts under PETG, and
+    # 29 g for an ankle-pitch joint that previously was not drawn at all.
+    assert 1.77 <= m.body_subtreemass[t] <= 1.83
 
 
 def test_stance_geometry():

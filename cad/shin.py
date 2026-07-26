@@ -29,12 +29,49 @@ INFILL = 0.60
 SPINE_Y, SPY = 21.0, 6.0      # spine centre-line and half-thickness
 ANKLE_Z = -110.0
 
+# The ankle-pitch bearing sits at (0, PITCH_Y, ANKLE_Z) - ON the axis, which
+# the old bore was 52.8 mm away from. `cad/envelope.py` solves for where it is
+# allowed to be, and there are exactly two bands: y = -80..-47 inboard and
+# y = +56..+80 outboard. Everything between is inside the wheel in one of its
+# two shapes, or inside the wheel-drive servo.
+#
+# Outboard wins. The leg already reaches y = 69 at the ankle-pitch servo, so
+# this costs no width at all, and inboard would put the two legs' bearings
+# 6 mm apart across the centreline.
+# y = 68, not 67, and the band starts at 57 not 56: the wheel-drive servo
+# TURNS with the roll bracket, and its far corner swings out to 50.9 mm,
+# 1.5 mm past its static face. Treating it as a fixed box put this boss where
+# fitcheck found it being clipped 0.9 mm at 16% of the flip.
+PITCH_Y = 68.0                # bearing centre
+PITCH_HALF = 5.0              # bearing block half-width in y
+
 SPINE = ((-10, 10), (SPINE_Y - SPY, SPINE_Y + SPY), (-55, 0))
-# 14 mm deep, not 10. At 10 the arm peaked at 18.8 MPa, which is only 2.1x on
-# a 3x design load and uncomfortably near PETG's ~20 MPa ACROSS layers.
-ARM = ((-42, -10), (SPINE_Y - SPY, SPINE_Y + SPY), (-55, -41))
-POST = ((-54, -42), (SPINE_Y - SPY, SPINE_Y + SPY), (-94, -48))
-# Runs the length of the servo case so its mounting bolts can be far apart.
+
+# The route to the bearing goes FORWARD, and both halves of that are forced.
+#
+# It cannot go down the middle: the wheel-drive servo turns with the roll
+# bracket, so it sweeps an annulus 14..50.9 mm about the roll axis for
+# |x| < 22.6, and that swallows everything below z = -55 near the centreline.
+# So the shin has to leave at |x| > 22.6 - and further than that, because the
+# servo PITCHES too: its corner swings out to sqrt(22.6^2 + 12.35^2) = 25.8 mm.
+# Sweeping only roll put these members at x = 23 and fitcheck found them
+# clipped 2.4 mm at 64% of the flip.
+#
+# It cannot go AFT either, which is what the first two attempts did. In foot
+# mode the axle is 12 mm off the floor and the shin stands at 27.5 deg, so
+# structure hanging aft at axle height swings down: the aft version ended up
+# 13 mm THROUGH the floor. Forward, the same tilt lifts it.
+FARM = ((10, 38), (SPINE_Y - SPY, SPINE_Y + SPY), (-55, -41))
+FPOST = ((28, 38), (SPINE_Y - SPY, SPINE_Y + SPY), (-70, -48))
+# 9 mm deep, and it cannot be more. Deepening it to 15 buys 116% -> 107% of
+# PETG's allowable and then collides with the wheel-drive servo 5.3 mm deep at
+# 64% of the flip: the servo sweeps that space and there is nowhere to put the
+# extra section. The rib below is what carries this member instead.
+CROSS = ((28, 38), (SPINE_Y - SPY, PITCH_Y + PITCH_HALF), (-70, -61))
+DROP = ((28, 38), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -61))
+BACK = ((0, 38), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -102))
+# Runs the length of the ankle servo's case so its mounting bolts can be far
+# apart: 1.63 N.m through bolts 12 mm apart is 136 N each, at 40 mm it is 41.
 STANDOFF = ((-8, 8), (SPINE_Y + SPY, SPINE_Y + SPY + 7), (-62, -18))
 
 # --- fasteners ---------------------------------------------------------------
@@ -55,14 +92,36 @@ SHAFT_INSET = 10.0            # servo output shaft, from the near end of the cas
 # passed at 89% of PETG's allowable, which is passing with nothing to spare;
 # a triangle at a corner is the cheapest way to buy that back, because bending
 # stiffness goes as depth cubed and a rib is all depth.
-RIB_SPINE = ((-10, -41), (-10, -20), (-31, -41))   # spine to arm
-RIB_POST = ((-42, -55), (-42, -76), (-21, -55))    # arm to post
+RIB_SPINE = ((10, -41), (10, -22), (32, -41))      # spine to forward arm
+# The two hottest places on the part, both re-entrant corners, found by asking
+# the FEA rather than by eye: 80 MPa where the outboard crossing meets the
+# descent, and 68 MPa where the forward column meets the crossing. Triangles
+# in the y-z plane, across the full 10 mm width of those members.
+# One rib, running the full width to the descent, so it ends ON something.
+RIB_CROSS = ((27, -61), (27, -45), (63, -61))     # column to crossing
+RIB_X = (28.0, 38.0)
+# (the arm-to-post rib went with the post's lower half)
+
+
+def _gusset_yz(pts_yz, x0, t):
+    """Triangular rib in the y-z plane, spanning x0 to x0 + t. Same
+    measure-don't-trust-the-normal treatment as _gusset."""
+    g = bd.extrude(bd.Plane.YZ * bd.Polygon(*pts_yz), amount=t)
+    return bd.Pos(x0 - g.bounding_box().min.X, 0, 0) * g
 
 
 def _gusset(pts_xz, y0, t):
-    """Triangular rib in the x-z plane, spanning y0 to y0 + t."""
+    """Triangular rib in the x-z plane, spanning y0 to y0 + t.
+
+    Normalised by MEASUREMENT rather than by trusting the extrude direction.
+    `bd.extrude` follows the face normal, and that normal flips with the
+    polygon's winding order, so the identical call places the rib at
+    y0..y0+t for one point order and y0+t..y0+2t for the other. The shin's rib
+    landed 12 mm out of position that way, sitting inside the ankle servo, and
+    nothing but cad/envelope.py would have noticed.
+    """
     g = bd.extrude(bd.Plane.XZ * bd.Polygon(*pts_xz), amount=t)
-    return bd.Pos(0, y0 + t, 0) * g
+    return bd.Pos(0, y0 - g.bounding_box().min.Y, 0) * g
 
 
 def _box(spec):
@@ -72,9 +131,10 @@ def _box(spec):
 
 
 def build():
-    part = _box(SPINE) + _box(ARM) + _box(POST) + _box(STANDOFF)
-    for rib in (RIB_SPINE, RIB_POST):
-        part += _gusset(rib, SPINE_Y - SPY, 2 * SPY)
+    part = (_box(SPINE) + _box(STANDOFF) + _box(FARM) + _box(FPOST)
+            + _box(CROSS) + _box(DROP) + _box(BACK))
+    part += _gusset(RIB_SPINE, SPINE_Y - SPY, 2 * SPY)
+    part += _gusset_yz(RIB_CROSS, RIB_X[0], RIB_X[1] - RIB_X[0])
 
     # Hub at the knee, bolted to the servo horn. It must be centred ON the
     # knee axis at z = 0, or the part does not pivot about the joint - it was
@@ -90,9 +150,14 @@ def build():
     # Ankle pitch bearing: a 623ZZ pressed into a counterbore, with a
     # clearance hole through for the shaft. A plain hole would run the shaft
     # straight against printed plastic.
-    part += bd.Pos(-48, SPINE_Y, -88) * bd.Rot(90, 0, 0) * bd.Cylinder(11, 12)
-    part -= bd.Pos(-48, SPINE_Y, -88) * bd.Rot(90, 0, 0) * bd.Cylinder(SHAFT_R, 14)
-    part -= (bd.Pos(-48, SPINE_Y + SPY - BEARING_W / 2, -88)
+    #
+    # ON the axis this time. The old one was at (-48, 21, -88), which is
+    # 52.8 mm from the line the sim rotates this joint about, so the part
+    # could not have pivoted about its own joint - the same fault as the knee
+    # hub, and a bigger instance of it.
+    part -= (bd.Pos(0, PITCH_Y, ANKLE_Z) * bd.Rot(90, 0, 0)
+             * bd.Cylinder(SHAFT_R, 4 * PITCH_HALF))
+    part -= (bd.Pos(0, PITCH_Y - PITCH_HALF + BEARING_W / 2, ANKLE_Z)
              * bd.Rot(90, 0, 0) * bd.Cylinder(BEARING_OD, BEARING_W))
 
     # Ankle-servo mounting. Spacing matters: the servo's 1.63 N.m reaction is

@@ -109,28 +109,24 @@ def _parts():
             note="held at the hip horn, loaded through the knee servo bolts"),
 
         "shin": dict(
-            step="shin.step", layer=(0, 1, 0),
+            step="shin.step", layer=(1, 0, 0),
             fix=lambda n: np.concatenate([
                 near_axis(n, (8 * np.cos(a), 21, 8 * np.sin(a)), (0, 1, 0), 2.2)
                 for a in np.deg2rad([45, 135, 225, 315])]),
-            # The ankle-pitch bearing bore AS DRAWN. See the caveat in
-            # docs/stress.md: this bore is 53 mm off the axis the sim puts the
-            # ankle-pitch joint on, so the lever arm here is the drawn one,
-            # not the kinematic one.
-            load=lambda n: near_axis(n, (-48, 21, -88), (0, 1, 0), 11.5),
-            at=(-48, 21, -88), key="shin", size=3.0,
-            note="held at the knee horn, loaded at the ankle bearing as drawn"),
+            # The ankle-pitch bearing, now ON its axis.
+            load=lambda n: near_axis(n, (0, 68, -110), (0, 1, 0), 11.5),
+            at=(0, 68, -110), key="shin", size=3.0,
+            note="held at the knee horn, loaded at the ankle-pitch bearing"),
 
         "ankle_yoke": dict(
             step="ankle_yoke.step", layer=(0, 1, 0),
-            # ASSUMED. The part has no ankle-pitch feature to hold it by, so
-            # this stands in the forward end face where that joint has to land.
-            fix=lambda n: in_box(n, (-46, -7, -7), (-43.9, 7, 7)),
+            # Held at its ankle-pitch shaft, which is a real feature now.
+            fix=lambda n: near_axis(n, (0, 58, 0), (0, 1, 0), 8.0),
             load=lambda n: np.concatenate([
                 near_axis(n, (-56, dy, dz), (1, 0, 0), 2.2)
                 for dy in (-4.0, 4.0) for dz in (-4.0, 4.0)]),
-            at=(-56, 0, 0), key="ankle", size=2.0,
-            note="support ASSUMED - the ankle-pitch joint is not drawn"),
+            at=(-56, 0, 0), key="ankle", size=3.0,
+            note="held at the pitch shaft, loaded at the roll servo"),
 
         "roll_bracket": dict(
             step="roll_bracket.step", layer=(0, 0, 1),
@@ -139,12 +135,14 @@ def _parts():
             # the interfaces are taken where they physically have to be - the
             # tie end that meets the yoke, and the two patches of arm the
             # wheel servo must bolt through.
-            fix=lambda n: in_box(n, (-57, 6, 4), (-50, 14, 16)),
+            # Held at the roll hub, which is now a real feature on the real
+            # axis, and loaded where the wheel servo bolts through the arm.
+            fix=lambda n: near_axis(n, (-43, 0, 0), (1, 0, 0), 8.5, half_len=3.0),
             load=lambda n: np.concatenate([
                 in_box(n, (-36.5, 11, 11), (-31.5, 24.5, 23.5)),
                 in_box(n, (-12.5, 11, 11), (-7.5, 24.5, 23.5))]),
-            at=(0, 18, 0), key="rollbracket", size=2.0,
-            note="interfaces ASSUMED - none of its holes exist yet"),
+            at=(0, 18, 0), key="rollbracket", size=2.5,
+            note="held at the roll hub, loaded through the servo bolts"),
 
         "chassis": dict(
             step="chassis.step", layer=(1, 0, 0),
@@ -195,15 +193,35 @@ def analyse(name, spec, wrench, size=None, verbose=True):
     c = nodes[lnodes].mean(axis=0)
     torque = torque + np.cross(np.asarray(spec["at"], float) - c, force)
 
+    # ONE solve per part, not one per material.
+    #
+    # In linear elasticity with prescribed tractions the stress field does not
+    # depend on E at all, and depends on Poisson's ratio only weakly. Measured
+    # on this part, the peak away from the supports across the whole plausible
+    # range of nu:
+    #
+    #     nu     0.33   0.35   0.38   0.40    0.42
+    #     MPa   24.27  22.84  22.85  132.82  25.79
+    #
+    # Every value agrees within about +/-6% except nu = 0.40, which is not
+    # physics: 0.42 is MORE incompressible and behaves perfectly, so it is not
+    # volumetric locking. It is a spurious near-null-space mode that satisfies
+    # equilibrium to 1e-8 and still poisons the stress tail. Solving once at a
+    # representative nu is both more robust and five times faster.
+    NU_REF = 0.35
+    f = fea.distribute(nodes, lnodes, force, torque)
+    u_ref, s_ref = fea.solve(nodes, elems, 1000.0, NU_REF, fixed, [(lnodes, f)])
+    vm = fea.von_mises(s_ref)
+    vm_raw, vm_p, kept = fea.report(vm, nodes, fixed)
+
     out = {}
     for mat, E, nu, s_xy, s_z, rho, note in MATERIALS:
-        f = fea.distribute(nodes, lnodes, force, torque)
-        u, s = fea.solve(nodes, elems, E, nu, fixed, [(lnodes, f)])
-        vm = fea.von_mises(s)
-        il = fea.interlayer(s, spec["layer"])
-        k = knockdown(mat)
-        vm_raw, vm_p, kept = fea.report(vm, nodes, fixed)
+        il = fea.interlayer(s_ref, spec["layer"])
         _, il_p, _ = fea.report(il, nodes, fixed)
+        k = knockdown(mat)
+        # Displacement scales exactly as 1/E, so the reference solve at
+        # E = 1000 MPa rescales without re-solving.
+        u = u_ref * (1000.0 / E)
         out[mat] = dict(u=u, vm=vm, il=il, nodes=nodes, elems=elems,
                         fixed=fixed, defl=float(np.abs(u).max()),
                         vm_raw=vm_raw, vm_p=vm_p, il_p=il_p, kept=kept,

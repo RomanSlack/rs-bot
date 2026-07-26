@@ -104,6 +104,22 @@ Set `inertia="exact"` on every structural mesh. On a robot whose whole design
 turns on a 2.05 kg mass budget and a CoM trimmed to a millimetre, a silent 2%
 error on every part is not acceptable.
 
+## Looking at a part
+
+```bash
+uv run python cad/view.py                 # renders cad/out/shin.stl
+uv run python cad/view.py path/to.stl     # or any other export
+```
+
+Loads the STL into a bare MuJoCo scene and renders side / three-quarter /
+front into one PNG. No CAD GUI needed, and it is worth doing every time: the
+first version of the shin had a lightening pocket that looked reasonable in
+code and turned out to cut a 10 mm slot clean through a 20 mm spine, leaving a
+thin-necked keyhole. It saved about 2 g on a 17 g part and invalidated the
+stiffness figure, which assumes a solid section. Removed after one look.
+
+For a proper CAD GUI on the STEP files, FreeCAD opens them directly.
+
 ## What this buys, concretely
 
 1. **The mass budget stops being a guess.** Every part's mass, centroid and

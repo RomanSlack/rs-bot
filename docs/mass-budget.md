@@ -13,13 +13,13 @@ real CAD mass from `cad/shin.py`.
 | Item | Count | Each | Total |
 |---|---|---|---|
 | Leg servos, STS3215 | 10 | 55 g | 550 g |
-| Printed structure (PETG @ 60% infill) | | | 165 g |
+| Printed structure (PETG @ 60% infill) | | | 172 g |
 | 3S pack | 1 | 180 g | 180 g |
 | Wheels | 2 | 60 g | 120 g |
 | Pi 5 | 1 | 45 g | 45 g |
 | Bus adapter + IMU | | | 15 g |
 | Arm/head ballast (stage 4) | | | 600 g |
-| **Total** | | | **1713 g** |
+| **Total** | | | **1720 g** |
 
 The printed structure came in at **165 g against a 400 g estimate**, which is
 where most of the 337 g went. Estimating structure by eye overshoots badly.
@@ -34,11 +34,11 @@ actually lives on the roll bracket, 110 mm further out.
 |---|---|---|---|
 | torso | 1069 g | 119 g | 2 hip servos, Pi, pack, adapter, IMU, 600 g ballast |
 | thigh x2 | 72.9 g | 17.9 g | knee servo |
-| shin x2 | 72.3 g | **17.3 g (CAD)** | ankle-pitch servo |
+| shin x2 | 75.6 g | **20.6 g (CAD)** | ankle-pitch servo |
 | ankle x2 | 56.8 g | 1.8 g | ankle-roll servo |
 | rollbracket x2 | 59.8 g | 4.8 g | wheel servo |
 | wheel x2 | 60 g | - | tyre and hub, bought |
-| **Total** | **1713 g** | | |
+| **Total** | **1720 g** | | |
 
 ## Torso fore/aft trim
 

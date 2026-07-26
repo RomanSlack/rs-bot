@@ -67,8 +67,10 @@ def build():
         part -= (bd.Pos(0, SPINE_Y + SPY + 3.5, z) * bd.Rot(90, 0, 0)
                  * bd.Cylinder(M2_CLEAR, 20))
 
-    # Lightening pocket down the spine, where there is no load path.
-    part -= bd.Pos(0, SPINE_Y, -34) * bd.Box(10, 40, 30)
+    # No lightening pocket. The first attempt cut a 10 mm slot clean through
+    # a 20 mm spine, leaving a thin-necked keyhole, and the 0.73 mm stiffness
+    # figure in docs/bom.md assumes a SOLID section. It saved about 2 g on a
+    # 17 g part - not a trade worth making.
 
     return part.clean()
 

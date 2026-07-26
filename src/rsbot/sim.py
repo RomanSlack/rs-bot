@@ -43,6 +43,7 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
     dt = decim * m.opt.timestep
 
     max_pitch = 0.0
+    pitch_hist = []
     fell = False
     shove_t = shove[0] if shove else None
     recovered_at = None
@@ -65,6 +66,7 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
         mujoco.mj_step(m, d)
         if viewer is not None:
             viewer(m, d, t)
+        pitch_hist.append(pitch)
 
         if shove and t > shove_t:
             max_pitch = max(max_pitch, abs(pitch))
@@ -78,10 +80,16 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
             fell = True
             break
 
+    # Steady-state oscillation, measured over the back half. A controller can
+    # avoid falling and still limit-cycle violently; max_pitch alone does not
+    # tell them apart, and tuning on max_pitch alone picks the limit cycle.
+    tail = np.array(pitch_hist[len(pitch_hist) // 2:]) if pitch_hist else np.zeros(1)
     return {
         "fell": fell,
         "t_end": d.time,
         "max_pitch": max_pitch,
+        "pitch_rms": float(np.sqrt((tail ** 2).mean())),
+        "pitch_ptp": float(tail.max() - tail.min()) if len(tail) else 0.0,
         "drift": float(d.xpos[torso][0]),
         "recovery": recovered_at,
         "final_pitch": pitch,
@@ -232,7 +240,10 @@ def cost(gains, duration=8.0, backlash=0.0):
         if r["fell"]:
             total += 100.0 + 10.0 * (duration - r["t_end"])
             continue
-        total += abs(r["drift"]) * 2.0 + r["max_pitch"] * 3.0
+        # Oscillation dominates: a robot that wobbles +/-16 deg forever is not
+        # balancing, even though it never falls.
+        total += (abs(r["drift"]) * 2.0 + r["max_pitch"] * 3.0
+                  + r["pitch_rms"] * 60.0 + r["pitch_ptp"] * 30.0)
         if kw.get("shove"):
             total += (r["recovery"] if r["recovery"] is not None else 3.0)
     return total

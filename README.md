@@ -18,10 +18,11 @@ Nothing here is bought yet. Everything runs in MuJoCo.
 **Stages 0 and 0b (sim) - done.** Balances, drives, rejects shoves, and flips
 its wheels flat to stand for 87 s with the controller off.
 
-Gear backlash is modelled, and it is the finding that most changed the plan:
-the passive foot stance needs a low-gain ankle loop to survive it, and wheel
-mode needs different gains. Both are built. With 2 deg of lash the full round
-trip still works. See [docs/backlash.md](docs/backlash.md).
+Gear backlash is modelled, and it is the finding that most changed the plan.
+The passive foot stance needs a low-gain ankle loop to survive it, and the
+balancer needed much lower gain plus a low-pass on the wheel command, without
+which it limit-cycles through the deadzone. Both are built, and the full round
+trip now works with 2-3 deg of lash. See [docs/backlash.md](docs/backlash.md).
 
 Stage 1 hardware has not started.
 

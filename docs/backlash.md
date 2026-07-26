@@ -23,31 +23,58 @@ turn without the encoder seeing it is exactly what poisons the odometry.
 `backlash=0` builds the rigid model with no extra bodies at all, so joint
 indices are unchanged and every existing test still addresses the same model.
 
+## A wrong turn worth recording
+
+The first pass at this re-tuned the balancer against lash and reported that it
+"survives up to 2 deg". That was wrong, and the cost function was why: falling
+was penalised at 100+, oscillation at only 3x max_pitch. The search happily
+returned a set that never fell and **limit-cycled at +/-16 deg with the lash
+switched off entirely** - it had simply found a violent oscillation that stayed
+upright. It looked fine in aggregate metrics and looked drunk on video.
+
+The cost now weights steady-state pitch RMS and peak-to-peak heavily
+(`pitch_rms * 60 + pitch_ptp * 30`, measured over the back half of a run), which
+ranks that gain set at 130 against 15 for the rigid defaults. Lesson: "did not
+fall" is not a fitness function.
+
 ## Results
 
-Gains tuned on the rigid model do not survive any lash at all. Re-tuning is
-mandatory, and it is mostly the outer loop (`kv`, `kx`, `tau_odom`) that moves.
+Two changes fix it, and together they are worth more than any amount of gain
+tuning.
 
-| lash | with rigid-tuned gains | after re-tuning | flip round trip |
-|---|---|---|---|
-| 0 | 1.2 deg pitch | - | ok |
-| 0.5 deg | falls at 2.7 s | 20.4 deg pitch, survives | **fails** |
-| 1.0 deg | falls at 4.5 s | 25.2 deg pitch, survives | **fails** |
-| 2.0 deg | falls at 2.5 s | 24.2 deg pitch, survives | **fails** |
-| 3.0 deg | falls at 1.6 s | **falls at 16.6 s** | fails |
+**Much lower inner-loop gain.** Multi-start search, rather than coordinate
+descent from the rigid optimum, lands at `kp` 10.4 instead of 48. A high-gain
+loop through a deadzone chatters by construction.
 
-Re-tuning at 1 deg took the cost from 564 to 13. Tuned gains at 1 deg:
+**A low-pass on the wheel command** (`tau_cmd`, 80 ms). Slamming the command
+across the deadzone is what drives the limit cycle, and filtering it is what
+actually kills it: at 1 deg of lash the pitch swing drops from 17.7 deg
+peak-to-peak to 0.9. Beyond ~150 ms the lag itself becomes the problem and at
+250 ms the robot falls.
 
-    kp 48.0   kd 1.72   kv 0.64   kx 0.54   tau_odom 0.031
+One gain set now covers both rigid and lashed:
 
-## What this actually means
+    kp 10.435   kd 0.435   kv 0.300   kx 0.500   tau_odom 0.100   tau_cmd 0.08
 
-**Wheel mode survives but stops being pretty.** It holds up to 2 deg of lash,
-but at 20-25 deg of pitch swing rather than 1.2 deg. That is not balancing, it
-is limit-cycling through the deadzone: visible, continuous wobbling. A robot
-that looks drunk rather than one that looks solid.
+| lash | quiet swing | max shove | drift 25 s | round trip |
+|---|---|---|---|---|
+| 0 | 0.1 deg pp | 1.4 N.s | 28 mm | ok |
+| 0.5 deg | 0.1 deg pp | 1.4 N.s | 64 mm | ok |
+| 1 deg | 0.9 deg pp | 1.4 N.s | 76 mm | ok |
+| 2 deg | 9.9 deg pp | 1.4 N.s | 76 mm | ok |
+| 3 deg | 29.6 deg pp | 1.0 N.s | 304 mm | ok |
 
-**Foot mode is the real casualty, and this was the surprise.** The transition
+The old `kp=48` set falls at 0.5 deg and every level above it. The new set is
+identical to it on a rigid robot (same 1.4 N.s shove rejection, same quiet
+pitch) and survives to 3 deg.
+
+The one real cost is position hold: `kx` drops from 0.86 to 0.5, so standing
+drift roughly doubles to about 28 mm over 60 s. Pushing `kx` back above 0.7
+starts costing shove rejection.
+
+## What this means for foot mode
+
+**Foot mode was the real casualty, and this was the surprise.** The transition
 itself completes - it reaches STAND at 8.79 s with 1 deg of lash - and then it
 **falls over while standing still**. Passive static stability is precisely the
 thing that depends on rigidity: lash across hip, knee and ankle lets the body
@@ -55,8 +82,8 @@ rotate 2-3 deg for free, which eats a third of the 9.1 deg tilt margin before
 any servo can even feel it, and the robot builds momentum inside the deadzone.
 
 So the headline claim from stage 0b - "stands with the controller completely
-off" - is a rigid-model result. On real servos it will need a controller, just
-a weak one.
+off" - is a rigid-model result. On real servos it needs a controller, just a
+weak one.
 
 ## The fix: a low-gain ankle loop in foot mode. Built, and it works.
 
@@ -107,10 +134,10 @@ chatters through the deadzone and is unstable. Do not turn it up.
 
 ## Still to do about it
 
-1. **Treat lash as a purchasing spec, not a detail.** The loop rescues foot
-   mode, but wheel mode still degrades from 1.2 deg of pitch swing to 20-25 at
-   1-2 deg of lash, and 3 deg falls. Worth paying for lower-backlash servos, or
-   preloading joints against a spring.
+1. **Lash is still a purchasing spec.** Wheel mode is fine to 1 deg (0.9 deg of
+   swing) and usable at 2 deg (9.9 deg), but 3 deg gives 30 deg of swing and
+   300 mm of drift. Under about 1 deg, backlash stops mattering; over 2 deg it
+   dominates everything.
 2. **Re-tune on hardware.** `balance.LASH_GAINS` is a starting point tuned
    against a guessed lash figure, not an answer.
 

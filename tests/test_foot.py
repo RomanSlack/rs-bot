@@ -70,7 +70,10 @@ def test_transition_reaches_stand_and_holds():
     assert not r["fell"]
     assert r["state"] == "STAND"
     assert r["stand_duration"] > 30.0
-    assert abs(r["drift"]) < 0.05
+    # Lash-tolerant gains hold position more loosely than the old rigid-only
+    # tuning did; ~50 mm over a 40 s rollout that includes a full flip is the
+    # price of not limit-cycling. See docs/backlash.md.
+    assert abs(r["drift"]) < 0.08
     # Standing on the faces, not perched on the rims.
     assert abs(r["wheel_clear"]) < 0.002
 

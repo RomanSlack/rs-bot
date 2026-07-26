@@ -8,7 +8,7 @@ from src.rsbot.balance import Gains
 from src.rsbot.sim import cost
 
 FIELDS = ["kp", "kd", "kv", "kx", "tau_odom"]
-STEPS = [1.6, 1.25]
+STEPS = [2.0, 1.4, 1.15]
 
 
 def search(g, rounds=3, backlash=0.0):

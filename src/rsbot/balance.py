@@ -21,21 +21,25 @@ from .model import (ROLL_WHEEL, WHEEL_R, ankle_pitch_level, leg_ik,
 
 @dataclass
 class Gains:
-    # Tuned by tune.py against the stage-0 cost. See docs/stage-0.md.
+    # Tuned against 1 deg of gear lash, and identical to the old rigid-only
+    # tuning on a rigid model. The earlier kp=48 set balanced a perfect robot
+    # beautifully and fell over at 0.5 deg of lash. See docs/backlash.md.
     # inner loop: pitch -> wheel speed
-    kp: float = 48.0
-    kd: float = 1.719
+    kp: float = 10.435
+    kd: float = 0.435
     # outer loop: odometry -> pitch target
-    kv: float = 0.250
-    kx: float = 0.859
+    kv: float = 0.300
+    kx: float = 0.500
     pitch_max: float = 0.30  # rad, cap on commanded lean
-    tau_odom: float = 0.05   # s, low-pass on wheel-derived speed
+    tau_odom: float = 0.100  # s, low-pass on wheel-derived speed
+    # Low-pass on the wheel command itself. With gear lash, slamming the
+    # command across the deadzone is what drives the limit cycle.
+    tau_cmd: float = 0.08
 
 
-# Gains re-tuned against 1 deg of gear lash. The rigid-model defaults above
-# survive NO backlash at all, so this is the set to start from on hardware.
-# It is mostly the outer loop that has to change. See docs/backlash.md.
-LASH_GAINS = Gains(kp=48.0, kd=1.719, kv=0.640, kx=0.537, tau_odom=0.0312)
+# Kept as a name for the tuned-for-lash set, which is now simply the default:
+# one gain set handles rigid and lashed alike.
+LASH_GAINS = Gains()
 
 
 def pitch_from_quat(q):
@@ -52,12 +56,14 @@ class Balancer:
         self.v_filt = 0.0
         self.x = 0.0
         self.x_ref = 0.0
+        self.w_cmd = 0.0
         self.outer_enabled = True
 
     def reset(self):
         self.v_filt = 0.0
         self.x = 0.0
         self.x_ref = 0.0
+        self.w_cmd = 0.0
         self.outer_enabled = True
 
     def __call__(self, obs, dt, v_des=0.0, pitch_bias=0.0):
@@ -94,6 +100,10 @@ class Balancer:
 
         # Inner: catch the lean by driving the wheels under the CoM.
         w_cmd = (g.kp * (pitch - pitch_des) + g.kd * pitch_rate) / WHEEL_R
+        if g.tau_cmd > 0:
+            a = dt / (g.tau_cmd + dt)
+            self.w_cmd += a * (w_cmd - self.w_cmd)
+            w_cmd = self.w_cmd
 
         hip, knee = leg_ik(self.height)
         # Wheels upright, foot face held level so it is ready to plant.

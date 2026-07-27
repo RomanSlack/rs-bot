@@ -1,5 +1,15 @@
 # The road to ordering
 
+> **NEW, and it outranks everything below: the servo case mounting is not
+> just unverified, it may be the wrong idea.** 40 of this robot's screws go
+> into holes in the servo case. TheRobotStudio's own holder, which is the
+> reference design for this servo, does not use those holes at all - it is a
+> cradle that captures the servo in a cavity. That is why the pattern cannot be
+> recovered the way the horn's was: a mating dimension gets encoded exactly by
+> everyone who mates with it, and nobody mates with these. See `cad/servo.py`.
+>
+> Decide capture-vs-bolt BEFORE printing. It changes four parts.
+>
 > **Status, 2026-07-27: items 1 to 7 are all done.** What each one found is
 > recorded in place below. The conclusion did not change: do not order all of
 > it at once. Buy one servo and one horn first, because the three things CAD

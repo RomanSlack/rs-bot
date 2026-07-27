@@ -73,8 +73,29 @@ IDLER_R = 3.00
 # dimensioned drawing, and reverse-engineering fastener detail out of one is
 # how this project got the horn wrong in the first place.
 #
-# So: treat the pattern as UNVERIFIED and get a real servo or the
-# manufacturer's drawing. It is the top validation-order item.
+# WHY THE HORN TRICK DOES NOT WORK HERE, which is the interesting part.
+#
+# The horn pattern was recovered by measuring parts that BOLT TO the horn: a
+# mating dimension has to be encoded exactly by everyone who mates with it, so
+# three independent parts agreeing to 0.00 mm is as good as a drawing.
+#
+# The case pattern has no such consensus, because in the reference design
+# NOTHING BOLTS TO IT. TheRobotStudio's Base_motor_holder_SO101 is a cradle,
+# 47.6 x 31.4 mm around a 45.4 x 24.8 mm servo, with a cavity the servo drops
+# into: a servo-sized box can be placed inside it overlapping by ~300 mm3. Its
+# own 4-hole patterns (+/-14.64 x +/-9.71 and +/-13.65 x +/-9.71, M2 clearance)
+# match nothing on the servo - they are how the HOLDER bolts to the arm.
+#
+# So the case holes are not a mating dimension anywhere, nobody had to get them
+# right, and there is nothing to cross-check against. That is also why Feetech
+# not publishing a dimensioned drawing has never bitten anyone: the people
+# using these servos in volume do not use those holes.
+#
+# WHICH IS A QUESTION FOR THIS ROBOT. rs-bot puts 40 M2 screws into case holes
+# it cannot confirm exist, where the best-known reference design captures the
+# servo in a cradle instead. Capturing needs no holes and no thread in a
+# 55 g plastic case. See docs/road-to-order.md.
+CASE_MOUNT_CONSENSUS = False     # no other design bolts here to compare with
 CASE_MOUNT_AXIS = "z"            # certain
 CASE_MOUNT_VERIFIED = False      # the positions are not
 CASE_SCREW_PILOT_R = 0.75        # 1.5 mm, an M2 self-tapper

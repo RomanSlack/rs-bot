@@ -169,6 +169,13 @@ def audit(mode, verbose=True, frac=None):
     hits = []
     for i, j in itertools.combinations(vis, 2):
         na, nb = name(i), name(j)
+        # A shaft lives INSIDE bores, and a box model has no bores - every
+        # carrier a shaft passes through reads as a solid block. These pairs
+        # are not unchecked: cad/assemble_check.py intersects the real solids,
+        # where the bores exist, and covers exactly these pairs. Nothing else
+        # is exempted, and no printed part is.
+        if "shaft" in na or "shaft" in nb:
+            continue
         # Geoms on the SAME body cannot move relative to each other, so shared
         # material between two PRINTED pieces is a lap joint, and MuJoCo skips
         # these for the same reason.

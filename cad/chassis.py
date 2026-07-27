@@ -24,6 +24,13 @@ INNER_Y = SIDE_Y - SIDE_T / 2
 TOP_Z, SHELF1_Z, SHELF2_Z = 178.5, 20.0, 61.0
 PLATE_T = 3.0
 
+# The hip servo lives INSIDE the chassis and its output boss passes out
+# through the side plate to reach the thigh hub, so the plate needs a notch.
+# Without it the servo interferes with its own mounting plate by 3467 mm3.
+from cad.servo import LENGTH as SERVO_L, WIDTH as SERVO_W
+HIP_NOTCH_X = SERVO_W / 2 + 0.8
+HIP_NOTCH_Z = SERVO_L + 1.0
+
 HIP_Z = 0.0                   # hip axis
 HIP_BOLTS_X = 17.0            # servo case, bolts either side of the axis
 HIP_BOLTS_Z = 17.0
@@ -47,11 +54,21 @@ def build():
             for dz in (HIP_Z + 5.0, HIP_Z + 5.0 + HIP_BOLTS_Z):
                 side -= (bd.Pos(dx, sgn * SIDE_Y, dz) * bd.Rot(90, 0, 0)
                          * bd.Cylinder(M2_CLEAR, 20))
+        side -= _plate((-HIP_NOTCH_X, HIP_NOTCH_X),
+                       (min(y0, y1) - 1, max(y0, y1) + 1),
+                       (-1, HIP_NOTCH_Z))
         part = side if part is None else part + side
 
     for z, name in ((TOP_Z, "top"), (SHELF1_Z, "shelf1"), (SHELF2_Z, "shelf2")):
-        part += _plate((X0, X1), (-INNER_Y, INNER_Y),
+        shelf = _plate((X0, X1), (-INNER_Y, INNER_Y),
                        (z - PLATE_T / 2, z + PLATE_T / 2))
+        if name == "shelf1":
+            # At the hip servo's height, so it needs the same notch the side
+            # plates do - the servo body passes right through this plane.
+            shelf -= _plate((-HIP_NOTCH_X, HIP_NOTCH_X),
+                            (-INNER_Y - 1, INNER_Y + 1),
+                            (z - PLATE_T, z + PLATE_T))
+        part += shelf
 
     # Pi standoffs and clearance holes on the lower shelf.
     for px, py in PI_HOLES:

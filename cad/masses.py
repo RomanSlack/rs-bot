@@ -28,7 +28,11 @@ import cad.chassis as chassis
 PETG = 1.270          # g/cm3
 INFILL = 0.60         # a print is not solid; see cad/shin.py
 SERVO = 55.0          # STS3215
-WHEEL = 60.0
+# 54.8, not 60: the wheel is now a designed part (cad/wheel.py) rather than a
+# bought one, because nothing sold has a usable side face. Body + TPU + horn.
+WHEEL = 54.8
+# GT2 20T and 40T aluminium pulleys, a 188 mm x 15 mm belt, and the 3 mm shafts.
+BELT_DRIVE = 34.0
 PI5, BATT, DRIVER, IMU = 45.0, 180.0, 10.0, 5.0
 BALLAST = 600.0       # arms (480) + head (120), stage 4
 
@@ -84,6 +88,8 @@ def table():
         total = printed + r["servos"] * SERVO + r["bought"]
         if b == "torso":
             total += IMU + BALLAST
+        if link == "shin":
+            total += BELT_DRIVE      # pulleys, belt and shafts ride on the shin
         out[b] = (printed, r["servos"], r["bought"], total)
     return out
 

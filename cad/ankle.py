@@ -21,7 +21,24 @@ PETG_SOLID, INFILL = 1.270, 0.60
 M2_CLEAR = 1.1
 
 # From the sim, millimetres, relative to the axle.
-POST = ((-56, -47), (-6, 6), (-6, 6))          # bearing carrier, on the roll axis
+# The roll drive, drawn for the first time. Layout along the roll axis:
+#
+#   x = -97.6..-58   roll servo, bolted to the yoke through its CASE screws at
+#                    y = +/-10.2 - outside the coupler's radius, which the old
+#                    4 bolts at +/-4 were not
+#   x = -56.5..-52   coupler disc, bolted to the servo's 25T horn. Belongs to
+#                    the ROLL BRACKET: this is what the servo actually turns
+#   x = -51..-45     yoke's bearing carrier, taking the radial load off the
+#                    servo's own output bearing
+#   x = -45..-41     roll bracket's hub
+#
+# A 3 mm shaft runs -56.5..-41 through all of it. The servo drives one end, the
+# yoke bearing supports the middle, the bracket grips both ends.
+POST = ((-51, -45), (-6, 6), (-6, 6))          # bearing carrier, on the roll axis
+COUPLER_X = (-56.5, -52.0)
+COUPLER_R = 9.0
+ROLL_SHAFT_X = (-56.5, -41.0)
+SERVO_CASE_DY = 10.2          # the STS3215's own case screws
                                                # between servo (ends -58) and
                                                # the flat wheel (needs |x|>40)
 
@@ -39,7 +56,10 @@ PITCH_SHAFT_R = 2.0           # 3 mm shaft, clearance
 # topologically one piece), and the mass is right. What caught it was the FEA
 # refusing to converge: a part with a hinge in it has a rigid-body mode and no
 # amount of constraint on one side fixes that.
-YOKE_CROSS = ((-56, -46), (-6, 59), (-8, 8))
+# Starts at x = -51, not -56: the roll bracket's coupler disc spins at radius 9
+# about the axis over x = -56.5..-52, and the cross used to run straight
+# through it - 734 mm3 of a joint that would simply not turn.
+YOKE_CROSS = ((-51, -45), (-6, 59), (-8, 8))
 YOKE_FWD = ((-56, 0), (56, 66), (-8, 8))
 YOKE_BOSS_Y = (56.0, 66.0)
 ROLL_SV = ((-93.4, -58.0), (-12.35, 12.35), (-6.6, 38.6))
@@ -48,8 +68,10 @@ ROLL_SV = ((-93.4, -58.0), (-12.35, 12.35), (-6.6, 38.6))
 # 2.65 mm - 2.65 mm3 - and the entire wheel load went through it. FEA put the
 # part at 1068% of PETG's allowable, and at 111% in aluminium: no material
 # fixes a 0.5 mm neck. The lap is now about 200 mm3, 75x more, plus a rib.
-ROLL_ARM = ((-44, 0), (12.1, 23.5), (12.35, 22.35))
-ROLL_TIE = ((-56, -42), (7.1, 14.5), (5, 15.5))
+# z starts at 12.9, not 12.35: the wheel servo is half of 24.8 deep in z,
+# so its face is at 12.4 and the old arm shaved into it by 0.05 mm.
+ROLL_ARM = ((-44, 0), (12.1, 23.5), (12.9, 22.9))
+ROLL_TIE = ((-56, -42), (7.1, 14.5), (5, 16.0))
 # The tie, the tongue and the corner rib are all gone. They existed to crank
 # the load from an outboard arm, round the shin's post, to a bearing the part
 # never actually reached - three redesign rounds of dodging a post that was
@@ -87,20 +109,30 @@ def yoke():
     part -= (bd.Pos(0, (y0 + y1) / 2, 0) * bd.Rot(90, 0, 0)
              * bd.Cylinder(PITCH_SHAFT_R, 2 * (y1 - y0)))
 
-    # Roll bearing, on the roll axis (x), seated from the aft face. Moved
-    # inboard to x = -50 so the post can end at -47 and leave the bracket a
-    # window at x = -45..-41 to grip the same shaft - the only place forward of
-    # this post that is still outside the 40 mm wheel.
-    part -= bd.Pos(-50, 0, 0) * bd.Rot(0, 90, 0) * bd.Cylinder(ROLL_SHAFT_R, 40)
-    part -= (bd.Pos(-52, 0, 0) * bd.Rot(0, 90, 0)
+    # Roll bearing seat and the shaft bore through it.
+    part -= bd.Pos(-48, 0, 0) * bd.Rot(0, 90, 0) * bd.Cylinder(ROLL_SHAFT_R, 40)
+    part -= (bd.Pos(-49, 0, 0) * bd.Rot(0, 90, 0)
              * bd.Cylinder(ROLL_BEARING_OD, ROLL_BEARING_W))
 
-    # Face for the roll servo, and its four mounting bolts.
-    part += _box(((-58, -54), (-6, 6), (-6, 6)))
-    for dy in (-4.0, 4.0):
-        for dz in (-4.0, 4.0):
+    # Face the roll servo bolts to. It is a RING, not a plate: the bracket's
+    # coupler disc turns inside it at radius 9, so a solid face would be hit by
+    # the thing it is meant to hold still. Bolts go through the servo's own
+    # case screws at y = +/-10.2, which is outside that radius.
+    # Upper half only. In foot mode the floor is 12 mm below the axle, and a
+    # symmetric ring puts its lower lugs 5 mm THROUGH it - which the
+    # floor-clearance test caught and no interference check ever would. So the
+    # servo is held from above and the sides, using the two case screws at
+    # z = +5 rather than all four.
+    part += (_box(((-58, -51), (-17, 17), (2, 17)))
+             - bd.Pos(-56, 0, 0) * bd.Rot(0, 90, 0)
+             * bd.Cylinder(COUPLER_R + 1.0, 20))
+    for dy in (-SERVO_CASE_DY, SERVO_CASE_DY):
+        for dz in (-10.2, 10.2):
             part -= (bd.Pos(-56, dy, dz) * bd.Rot(0, 90, 0)
                      * bd.Cylinder(M2_CLEAR, 20))
+    # Tie the ring back to the bearing carrier, clear of the coupler. Upper
+    # only, for the same reason.
+    part += _box(((-52, -45), (-6, 6), (6, 16)))
     return part.clean()
 
 
@@ -136,9 +168,21 @@ def roll_bracket():
     part += (bd.Pos((x0 + x1) / 2, 0, 0) * bd.Rot(0, 90, 0)
              * bd.Cylinder(ROLL_HUB_R, x1 - x0))
 
-    # Roll shaft bore, on the axis, through the hub.
-    part -= (bd.Pos((x0 + x1) / 2, 0, 0) * bd.Rot(0, 90, 0)
-             * bd.Cylinder(ROLL_SHAFT_R, 3 * (x1 - x0)))
+    # Coupler disc: bolts to the servo's 25T horn, and is what the servo
+    # actually turns. Joined to the hub by the 3 mm shaft, which is a bought
+    # rod running the whole length.
+    cx0, cx1 = COUPLER_X
+    part += (bd.Pos((cx0 + cx1) / 2, 0, 0) * bd.Rot(0, 90, 0)
+             * bd.Cylinder(COUPLER_R, cx1 - cx0))
+    from cad.servo import HORN_DX, HORN_DY, HORN_SCREW_R
+    for dy in (-HORN_DX, HORN_DX):
+        for dz in (-HORN_DY, HORN_DY):
+            part -= (bd.Pos((cx0 + cx1) / 2, dy, dz) * bd.Rot(0, 90, 0)
+                     * bd.Cylinder(HORN_SCREW_R, 3 * (cx1 - cx0)))
+
+    # Roll shaft bore, on the axis, through hub and coupler alike.
+    part -= (bd.Pos(-48, 0, 0) * bd.Rot(0, 90, 0)
+             * bd.Cylinder(ROLL_SHAFT_R, 60))
 
     # Wheel axle bore and the wheel servo's mounting bolts, through the ARM
     # this time. All four of these used to be drawn at z = 0, on the wheel spin

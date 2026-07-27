@@ -8,7 +8,18 @@
 > recovered the way the horn's was: a mating dimension gets encoded exactly by
 > everyone who mates with it, and nobody mates with these. See `cad/servo.py`.
 >
-> Decide capture-vs-bolt BEFORE printing. It changes four parts.
+> **Investigated, and the answer is: capture is right, but it is a redesign,
+> not a feature.** There IS room - 3 to 4 mm free at the hip, knee and ankle
+> mounts, and the roll and wheel servos are already enclosed on three or four
+> faces. But a rim will not attach: tried on the shin at both ends of the servo
+> and at 6, 10 and 16 mm depth, it fuses as a separate floating solid every
+> time. Every servo mount in this robot is a PLATE on the case's end face with
+> no material anywhere around the case perimeter, so there is nothing for a rim
+> to grow from.
+>
+> `cad.servo.cradle()` exists and its geometry is right; it is deliberately not
+> wired in. Doing this properly means changing how four parts meet their
+> servos, with packaging re-checked each time. Decide it BEFORE printing.
 >
 > **Status, 2026-07-27: items 1 to 7 are all done.** What each one found is
 > recorded in place below. The conclusion did not change: do not order all of

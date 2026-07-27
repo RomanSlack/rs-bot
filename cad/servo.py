@@ -211,3 +211,55 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# --- capturing a servo instead of only bolting to it ---------------------------
+
+CRADLE_WALL = 2.0        # rim thickness; there is 3-4 mm free at every mount
+CRADLE_CLEAR = 0.4       # per side, and it must EXCEED the print tolerance
+CRADLE_DEPTH = 6.0       # how far the rim reaches along the shaft
+
+
+def cradle(centre, depth=CRADLE_DEPTH, wall=CRADLE_WALL, clear=CRADLE_CLEAR,
+           sign=1.0):
+    """A rim that grips the servo case, in a part frame with the SHAFT ALONG Y.
+
+    A servo's reaction is a couple about its shaft, and up to now this robot
+    fed all of it into four M2 self-tapping screws in a 55 g bought plastic
+    case. The ankle's are 12 mm apart, which makes its 1.63 N.m into 136 N per
+    screw. A rim round the case takes the same couple in BEARING across the
+    full 45.4 x 24.8 face instead, which is both a far better joint and the way
+    TheRobotStudio mount this exact servo - their holder is a cradle and does
+    not use the case holes at all.
+
+    NOT WIRED IN, AND HERE IS WHY - this is the useful part.
+
+    The intent was an additive change: drop a rim round each servo, keep the
+    bolt holes, let the screws become retention. It does not work on this
+    design. Tried on the shin's ankle servo at both ends and at depths of 6, 10
+    and 16 mm, the rim touches the shin in NO configuration - it fuses as a
+    second, floating solid every time.
+
+    The reason is structural, not a bug. Every servo mount in this robot is a
+    PLATE on the case's end face, perpendicular to the shaft, with no material
+    anywhere around the case's perimeter. There is nothing for a rim to grow
+    from. Capturing a servo here is not a feature you add, it is a change to
+    how the part meets the servo, on four parts, with the packaging re-checked
+    each time.
+
+    So it is scoped rather than half-done. The helper stays because the
+    geometry is right and the measurement behind it is right: there IS room,
+    3-4 mm free at the hip, knee and ankle mounts, and the roll and wheel
+    servos are already enclosed by structure on three or four faces.
+
+    `centre` is the servo box centre in the part's frame; `sign` picks which
+    way along y the rim reaches from that centre's near face.
+    """
+    cx, cy, cz = centre
+    y0 = cy + sign * HEIGHT / 2.0
+    ymid = y0 - sign * depth / 2.0
+    outer = bd.Pos(cx, ymid, cz) * bd.Box(WIDTH + 2 * wall, depth,
+                                          LENGTH + 2 * wall)
+    inner = bd.Pos(cx, ymid, cz) * bd.Box(WIDTH + 2 * clear, depth + 2.0,
+                                          LENGTH + 2 * clear)
+    return outer - inner

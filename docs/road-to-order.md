@@ -1,5 +1,10 @@
 # The road to ordering
 
+> **Status, 2026-07-27: items 1 to 7 are all done.** What each one found is
+> recorded in place below. The conclusion did not change: do not order all of
+> it at once. Buy one servo and one horn first, because the three things CAD
+> cannot settle all live on that interface.
+
 What is left between here and placing an order, ranked by what actually stops a
 build. Written 2026-07-27, after the wheel, clearance and assembled-strength
 work landed.

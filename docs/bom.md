@@ -7,16 +7,17 @@ dynamics. What it does change is that packaging problems become visible.
 
 ## Parts
 
-| Part | Qty | Size (mm) | Mass | Unit | Total |
-|---|---|---|---|---|---|
-| Feetech STS3215 C018 (12 V, 1:345) | 10 | 45.2 x 24.7 x 35.4 | 55 g | ~$14-16 | ~$150 |
-| Wheel / tyre, 80 dia x 24 | 2 | 80 x 24 | 60 g | ~$8 | ~$16 |
-| Raspberry Pi 5 | 1 | 85 x 56 x 17 | 45 g | ~$80 | ~$80 |
-| 3S LiPo 2200 mAh | 1 | 105 x 34 x 24 | 180 g | ~$25 | ~$25 |
-| TTL bus adapter | 1 | 50 x 30 x 10 | 10 g | ~$12 | ~$12 |
-| IMU (BNO085 class) | 1 | 25 x 20 x 3 | 5 g | ~$25 | ~$25 |
-| Printed PETG structure | | | ~400 g | filament | ~$15 |
-| **Legs only, stage 1** | | | **2.05 kg** | | **~$320** |
+**The order sheet moved to `order-sheet.md`.** What was here was written before
+the CAD port and could not be ordered from: it listed the servo at its invented
+dimensions (45.2 x 24.7 x 35.4, really 45.4 x 24.8 x 39.6), the wheel as a
+bought $8 part when it is printed in two pieces, and 400 g of PETG structure
+against a real 165 g of PA6-CF. It had no fasteners, bearings, belt, pulleys or
+cables, which is most of the part count. Total mass 2.05 kg against a real
+1.858.
+
+This file keeps the part of it that was worth keeping: WHY the parts are what
+they are, and what modelling them at full size revealed. The quantities and
+prices live in the order sheet.
 
 Servo torque at 3S is worth noting: 30 kg.cm is the 12 V figure, and a 3S pack
 sits at 11.1 V nominal, so expect about **2.7 N.m** rather than 2.9. RMS demand

@@ -72,26 +72,45 @@ the real CAD before drawing anything against it.**
 
 ## What is still fiction
 
-Ranked by how much it would cost to get wrong.
+Most of the original list has been closed. What is left is what CAD cannot
+answer.
 
-1. **Fasteners are unspecified.** Heat-set inserts versus self-tapping is not
-   decided anywhere. Use inserts for anything taken apart more than twice.
-2. **Bearing bores are nominal.** A printed bore needs measuring and
-   offsetting, usually 0.1-0.2 mm. Print one and measure before committing.
-3. **No wire routing at all.** Ten daisy-chained bus servos, cables crossing
-   every joint including one that rotates 90 degrees. Completely unmodelled.
-4. **No fatigue analysis.** Everything is static ultimate. A part at 78% can
-   still fail after ten thousand flips.
-5. **No tool-access check.** Nothing verifies a driver can reach each bolt in
-   assembly order.
-6. **Material properties are published figures**, not coupons off your printer
-   with your filament. Expect +/- 20%.
-7. **Mesh convergence was never run** on the FEA. Peaks could move.
+1. **The servo horn bolt pattern is assumed.** The horn is a bought part and
+   its pattern is not in the servo STEP, so it was never measured, and four of
+   the five printed parts bolt to a horn. There is a decoy in that file: the
+   case has four screws at each end on a 9.9 x 9.9 rectangle, almost exactly
+   what this project believes the horn to be. This is now the single most
+   load-bearing assumption in the robot.
+2. **The servo case mounting positions are assumed**, same reason. What IS
+   verified is that every servo hole runs along the shaft axis and that all 28
+   holes in the printed parts agree with it.
+3. **There is no central horn screw in the CAD.** A horn is fixed to its spline
+   by an axial screw; nothing models it or checks access to it, and it is the
+   only screw actually fitted on the robot at a horn joint.
+4. **Bearing bores are nominal.** A printed bore needs measuring and
+   offsetting, usually 0.1-0.2 mm. So does the 0.35 mm tyre press fit.
+5. **Cable channels do not exist.** The runs are modelled now
+   (`cad/wiring.py`) and three of them pass through printed structure, so the
+   thigh, shin and yoke need channels cut before they are ordered.
+6. **Material and fatigue properties are published figures**, not coupons off
+   the machine that will make these parts. Expect +/- 20%.
+
+Closed since this list was written: fasteners are specified
+(`cad/fasteners.py`), tool access is checked in build order
+(`cad/toolaccess.py`), tolerance is stacked along the chain rather than
+pair-by-pair, mesh convergence is run on the two parts near their limit and
+both have settled, and fatigue is solved on the flip at 1x with PA6-CF passing
+everything at 70% worst.
 
 ## What to buy, and what not to
 
-**Printed parts are not the risk.** You can reprint a bracket for pennies. The
-irreversible spend is the bought parts, so that is where the checking went:
+**Printed parts USED to be treated as not the risk**, on the grounds that you
+can reprint a bracket for pennies. That is false here: the operator has no
+printer, so every part comes from a service and a reprint is real money and one
+to two weeks. Printed-part correctness now matters about as much as bought-part
+correctness, and `road-to-order.md` re-ranks the remaining work on that basis.
+
+The bought parts are still where the irreversible spend is:
 
 | | decision | why |
 |---|---|---|
@@ -113,6 +132,9 @@ uv run python -m cad.stress          # FEA, every part, every material
 uv run python -m cad.printability    # overhangs, walls, bed
 uv run python -m cad.loads           # joint loads, with its statics control test
 uv run python -m cad.servo           # the measured servo, vs what was assumed
+uv run python -m cad.fasteners       # the bolt list, and do the screws line up
+uv run python -m cad.toolaccess      # can a driver reach every screw
+uv run python -m cad.wiring          # where the cables go, and how much slack
 uv run python serve.py               # drive it, localhost:8781
 ```
 
@@ -125,12 +147,12 @@ sweep the manoeuvre the robot actually performs.
 
 ## Where it stands
 
-**1.863 kg.** Up from 1.756, and every gram of that increase is a fiction that
-came out: ribs to get the parts under PETG, an ankle-pitch joint that was never
-drawn, a belt drive that was specified but never weighed.
+**1.858 kg**, every gram derived from geometry rather than assigned.
 
 The robot balances, drives, steers, flips both ways, and survives 2 deg of gear
 lash against a measured 0.87 in the real servo.
 
-**It is not ready to order.** Work the "still fiction" list top-down. Items 1
-and 2 are cheap and they are the ones that stop an assembly dead.
+**It is not ready to order, and the fix is cheap.** Buy ONE servo and one horn
+first. That settles items 1, 2 and 3 - the whole top of the list - plus the
+printed bore tolerance, for the price of a coffee and a week. See
+`road-to-order.md` and `order-sheet.md`.

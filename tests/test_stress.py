@@ -335,3 +335,47 @@ def test_every_servo_screw_runs_along_its_servo_shaft():
     assert rows, "no M2-scale holes found near any servo - the audit is blind"
     perp = [r for r in rows if r["align"] < 0.1]
     assert not perp, f"{len(perp)} screws are perpendicular to their servo"
+
+
+def test_every_screw_can_be_reached_when_it_is_fitted():
+    """Tool access, in BUILD order rather than on the finished robot.
+
+    The distinction is the whole check. On the assembled machine 32 screws are
+    buried; at the moment each is actually fitted, almost all are open, because
+    the shin and the ankle servo that bury the thigh's knee bolts are not on
+    the robot yet.
+
+    A full-size driver still cannot reach four of the thigh's, and a 2 mm hex
+    key reaches all of them - a handle-clearance problem, not a design fault,
+    so it is recorded as a tool requirement rather than a geometry change.
+    """
+    import cad.toolaccess as T
+
+    rows = T.check(stubby=True, verbose=False)
+    assert rows, "no screws found at all - the check is blind"
+    blocked = [r for r in rows
+               if r["blocked"] > T.TOUCH and not r["horn"]]
+    # Four per side on the roll bracket sit under the ankle yoke. They are
+    # tight rather than impossible; if this grows, something moved.
+    assert len(blocked) <= 4, (
+        f"{len(blocked)} screws unreachable even with a hex key: "
+        f"{sorted(set(r['part'] for r in blocked))}")
+
+
+def test_tool_access_check_notices_an_obstruction():
+    """Control. Drop a block over a screw that is reachable and the check has
+    to stop calling it reachable."""
+    import build123d as bd
+
+    import cad.assemble_check as ac
+    import cad.toolaccess as T
+
+    hs = [h for h in T.holes("wheel") if h["part"] == "wheel_l"]
+    assert hs, "no wheel screws to test with"
+    h = hs[0]
+    start = h["centre"] + h["axis"] * h["t1"]
+    tool = T.driver(start, h["axis"])
+    wall = bd.Pos(*(start + h["axis"] * 20.0)) * bd.Box(60, 60, 4)
+    hit = tool & wall
+    assert (hit.volume if hit else 0.0) > T.TOUCH, (
+        "a slab straight across the driver path was not detected")

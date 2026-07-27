@@ -71,7 +71,10 @@ def make_ctrl(hip, knee, apitch, aroll, wheel, wheel_r=None):
 # lives on the simple collision shapes, which are moved to geom group 4 and
 # hidden. Nothing here changes the dynamics. See docs/bom.md.
 
-SERVO = (0.0452, 0.0247, 0.0354)      # STS3215 body, L x W x H
+# STS3215, MEASURED off TheRobotStudio's STEP model rather than taken from a
+# product listing. See cad/servo.py. The third figure is along the OUTPUT
+# SHAFT and was 4.2 mm short, which is exactly where the horn clearances are.
+SERVO = (0.0454, 0.0248, 0.0396)      # STS3215 body, L x W x H(shaft)
 SERVO_HORN_R = 0.0100                 # 25T output horn
 PI5 = (0.085, 0.056, 0.017)
 BATT_3S = (0.105, 0.034, 0.024)       # 2200 mAh 3S pack
@@ -160,7 +163,7 @@ _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
 # joint occupies the plane perpendicular to that joint's axis. Getting this
 # backwards is what made the first pass interpenetrate.
 HL, HW, HH = SERVO[0] / 2, SERVO[1] / 2, SERVO[2] / 2
-SHAFT_INSET = 0.010          # shaft centre from the near end of the body
+SHAFT_INSET = 0.0102         # shaft centre from the near end (measured)
 
 
 SPINE_Y = 0.021      # spine centre-line, outboard of the 24 mm wide wheel
@@ -290,16 +293,16 @@ def _link_geoms(link, side, sgn, meshes=False):
         # height swings 13 mm THROUGH the floor. Forward, the same tilt lifts
         # it. See cad/envelope.py, which solves for the bearing's two legal
         # bands: y = -80..-47 and y = +57..+80.
-        vis.append(_v(f"vshinfarm_{side}", "box", f"0.014 {SPY} 0.007",
-                      f"0.024 {y:.5f} -0.048", C_PRINT))
+        vis.append(_v(f"vshinfarm_{side}", "box", f"0.0165 {SPY} 0.007",
+                      f"0.0265 {y:.5f} -0.048", C_PRINT))
         vis.append(_v(f"vshinfpost_{side}", "box", f"0.005 {SPY} 0.011",
-                      f"0.033 {y:.5f} -0.059", C_PRINT))
-        vis.append(_v(f"vshincross_{side}", "box", "0.005 0.029 0.0045",
-                      f"0.033 {sgn*0.044:.5f} -0.0655", C_PRINT))
+                      f"0.038 {y:.5f} -0.059", C_PRINT))
+        vis.append(_v(f"vshincross_{side}", "box", "0.005 0.0315 0.0045",
+                      f"0.038 {sgn*0.0465:.5f} -0.0655", C_PRINT))
         vis.append(_v(f"vshindrop_{side}", "box", "0.005 0.005 0.0265",
-                      f"0.033 {sgn*0.068:.5f} -0.0875", C_PRINT))
-        vis.append(_v(f"vshinback_{side}", "box", "0.019 0.005 0.006",
-                      f"0.019 {sgn*0.068:.5f} -0.108", C_PRINT))
+                      f"0.038 {sgn*0.071:.5f} -0.0875", C_PRINT))
+        vis.append(_v(f"vshinback_{side}", "box", "0.0215 0.005 0.006",
+                      f"0.0215 {sgn*0.071:.5f} -0.108", C_PRINT))
     elif link == "ankle":
         col.append(f'<geom class="ankle" name="ankle_{side}" '
                    f'size="{HW:.5f} {HH:.5f} {HL:.5f}" pos="0 0 {HL:.5f}" '
@@ -323,12 +326,12 @@ def _link_geoms(link, side, sgn, meshes=False):
         # The ankle-pitch joint, which was not drawn at all until now: the
         # shin had a bore 52.8 mm off the axis and the yoke had no matching
         # feature, so the two parts came no closer than 10.3 mm.
-        vis.append(_v(f"vyokecross_{side}", "box", "0.005 0.031 0.008",
-                      f"-0.051 {sgn*0.025:.5f} 0", C_PRINT))
+        vis.append(_v(f"vyokecross_{side}", "box", "0.005 0.0325 0.008",
+                      f"-0.051 {sgn*0.0265:.5f} 0", C_PRINT))
         vis.append(_v(f"vyokefwd_{side}", "box", "0.028 0.005 0.008",
-                      f"-0.028 {sgn*0.058:.5f} 0", C_PRINT))
+                      f"-0.028 {sgn*0.061:.5f} 0", C_PRINT))
         vis.append(_v(f"vyokeboss_{side}", "cylinder", "0.007 0.005",
-                      f"0 {sgn*0.058:.5f} 0", C_PRINT, euler="1.5708 0 0"))
+                      f"0 {sgn*0.061:.5f} 0", C_PRINT, euler="1.5708 0 0"))
         vis.append(_v(f"vrollsv_{side}", "box", f"{HH:.5f} {HW:.5f} {HL:.5f}",
                       # Lifted off the roll axis so it clears the floor in foot mode,
                       # where the axle is only 12 mm up. Safe despite the larger

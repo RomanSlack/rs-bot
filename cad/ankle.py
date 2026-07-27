@@ -39,9 +39,9 @@ PITCH_SHAFT_R = 2.0           # 3 mm shaft, clearance
 # topologically one piece), and the mass is right. What caught it was the FEA
 # refusing to converge: a part with a hinge in it has a rigid-body mode and no
 # amount of constraint on one side fixes that.
-YOKE_CROSS = ((-56, -46), (-6, 56), (-8, 8))
-YOKE_FWD = ((-56, 0), (53, 63), (-8, 8))
-YOKE_BOSS_Y = (53.0, 63.0)
+YOKE_CROSS = ((-56, -46), (-6, 59), (-8, 8))
+YOKE_FWD = ((-56, 0), (56, 66), (-8, 8))
+YOKE_BOSS_Y = (56.0, 66.0)
 ROLL_SV = ((-93.4, -58.0), (-12.35, 12.35), (-6.6, 38.6))
 # The arm reaches 4 mm further aft and the tie is deeper and wider, so the two
 # actually LAP instead of grazing. They used to overlap in a box 2.00 x 0.50 x

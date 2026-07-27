@@ -261,8 +261,17 @@ def report(field, nodes, fixed, exclude_mm=4.0, pct=99.5, min_frac=0.35):
 
 # --- meshing -----------------------------------------------------------------
 
-def mesh_step(path, size=3.0, order=2):
-    """(nodes mm, elems) from a STEP file."""
+def mesh_step(path, size=3.0, order=2, curvature=0):
+    """(nodes mm, elems) from a STEP file.
+
+    `curvature` > 0 switches to curvature-driven sizing: `size` becomes a
+    ceiling for flat regions while curved features get `curvature` elements
+    around them. A whole-leg assembly is 230 mm long and carries M2 holes
+    2.2 mm across; uniform sizing has to resolve the holes everywhere and the
+    mesh reaches 105k nodes, which is past what the direct solver can factor.
+    Curvature sizing keeps the holes and coarsens the bulk, and the holes are
+    not what an assembly-level deflection answer depends on anyway.
+    """
     import gmsh
     gmsh.initialize()
     try:
@@ -272,7 +281,10 @@ def mesh_step(path, size=3.0, order=2):
         gmsh.model.occ.importShapes(str(path))
         gmsh.model.occ.synchronize()
         gmsh.option.setNumber("Mesh.MeshSizeMax", size)
-        gmsh.option.setNumber("Mesh.MeshSizeMin", size / 4)
+        gmsh.option.setNumber("Mesh.MeshSizeMin",
+                              1.0 if curvature else size / 4)
+        if curvature:
+            gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", curvature)
         gmsh.option.setNumber("Mesh.ElementOrder", order)
         gmsh.option.setNumber("Mesh.Optimize", 1)
         gmsh.model.mesh.generate(3)

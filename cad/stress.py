@@ -41,18 +41,34 @@ OUT = Path(__file__).parent / "out"
 INFILL = 0.60
 
 # name, E MPa, nu, in-plane ultimate MPa, interlayer ultimate MPa, g/cm3, note
+#
+# The first four are filaments for a printer you own. The MJF/SLS rows are what
+# a print service actually sells, and they are here because the operator does
+# not have a printer - a material that scores well and cannot be ordered is not
+# a result. See docs/materials.md for the sourcing and the numbers.
 MATERIALS = [
     ("PETG",      2000.0, 0.40,  47.0,  22.0, 1.27, "the baseline"),
     ("PLA",       3500.0, 0.36,  55.0,  28.0, 1.24, "stiffer, brittle, creeps warm"),
     ("ABS",       2200.0, 0.35,  38.0,  17.0, 1.04, "tough, warps"),
     ("PA6-CF",    6000.0, 0.38,  95.0,  38.0, 1.15, "nylon + carbon; needs a hot end"),
+    # Powder bed. No infill and no layer plane worth the name, so both
+    # allowables are the same number and neither is knocked down.
+    ("MJF PA12",  1800.0, 0.40,  48.0,  48.0, 1.01, "JLCPCB PA12-HP, isotropic"),
+    ("SLS PA12GF", 2600.0, 0.40, 45.0,  45.0, 1.30, "PCBWay PA12+35%GF, isotropic"),
+    # Service FDM. Anisotropic like any filament, and infill-limited like any
+    # filament, so it is knocked down with the rest.
+    ("FDM PA12CF", 4000.0, 0.38, 70.0,  30.0, 1.10, "JLC3DP FDM; NOT a datasheet"),
     ("Al 6061-T6", 69000.0, 0.33, 276.0, 276.0, 2.70, "machined, isotropic"),
 ]
-PRINTED = {"PETG", "PLA", "ABS", "PA6-CF"}
+# Materials laid down as filament: infill-limited, and with a weak axis.
+FDM = {"PETG", "PLA", "ABS", "PA6-CF", "FDM PA12CF"}
+# Fused from powder: solid parts, near-isotropic. Getting these two sets
+# backwards is a silent factor of 1/0.6 on the answer.
+POWDER = {"MJF PA12", "SLS PA12GF"}
 
 
 def knockdown(name):
-    return INFILL if name in PRINTED else 1.0
+    return INFILL if name in FDM else 1.0
 
 
 # --- node selection ----------------------------------------------------------
@@ -169,6 +185,37 @@ def _parts():
             frame=lambda v: np.array([v[0], v[2], -v[1]]),
             note="held at the horn screws, loaded on the sole through the tyre"),
 
+        # THE WHOLE LEG, fused, in world coordinates. Every entry above is one
+        # part rigidly clamped at its own bolt holes, which is a wall where a
+        # compliant neighbour should be, and none of them add up. This one is
+        # held at the hip and loaded at the wheel, so it answers the question
+        # the parts list cannot: how far does the foot actually move.
+        #
+        # Rigid joints, so it is a LOWER BOUND on deflection. See fused_leg.
+        "leg_assembly": dict(
+            step="leg_assembly.step", layer=(1, 0, 0),
+            # Clamped at the hip servo horn, at the top of the thigh.
+            fix=lambda n: near_axis(n, (0, 60, 247), (0, 1, 0), 14.0,
+                                    half_len=30.0),
+            # Loaded on the arm patch the wheel servo bolts to, which is where
+            # the wheel's reaction enters the PRINTED structure. Not on the
+            # servo case itself, even though the wheel physically hangs off its
+            # horn: the case is a bought box fused to the leg over one 22.7 x
+            # 10.8 mm face, and pushing on the far side of it makes the system
+            # ill-conditioned enough that the solve stops converging. It is in
+            # the solid, so it still has to seat and still carries its mass;
+            # it just is not where the load is applied. Same idealisation the
+            # per-part roll_bracket entry makes, and the deflection agrees with
+            # it to 0.02 mm.
+            load=lambda n: in_box(n, (-44, 72.0, 50.0), (1, 85.0, 57.0)),
+            # Curvature-driven, not uniform. Uniform 3 mm (which the M2 holes
+            # force) gives 105k nodes and 314k DOF, and the direct solve does
+            # not converge at that size - it came back with a residual 128x the
+            # applied load. Curvature sizing keeps the holes resolved, coarsens
+            # the 230 mm of straight leg between them, and lands at 38k nodes.
+            at=(0, 60, 40), key="wheel", size=8.0, curvature=8,
+            note="held at the hip, loaded at the wheel - the whole load path"),
+
         "chassis": dict(
             step="chassis.step", layer=(1, 0, 0),
             # BOTH hips held, not one. The first version held one hip's four
@@ -196,7 +243,8 @@ def _parts():
 
 def analyse(name, spec, wrench, size=None, verbose=True):
     """Mesh once, solve once per material. Returns a dict of results."""
-    nodes, elems = fea.mesh_step(OUT / spec["step"], size=size or spec["size"])
+    nodes, elems = fea.mesh_step(OUT / spec["step"], size=size or spec["size"],
+                                 curvature=spec.get("curvature", 0))
     fea.check_ordering(nodes, elems)
     fixed = np.unique(spec["fix"](nodes))
     lnodes = np.unique(spec["load"](nodes))
@@ -393,6 +441,12 @@ def main(only=None, size=None):
     # thing to debug because every other number moves and one does not.
     import cad.robot
     cad.robot.export_all()
+    # The fused leg is built from the posed parts, so it cannot come from a
+    # part module the way the others do.
+    import build123d as bd
+
+    import cad.assemble_check as ac
+    bd.export_step(ac.fused_leg("wheel"), str(OUT / "leg_assembly.step"))
     print("measuring loads from the sim...")
     design = loads.design_loads()
     parts = _parts()

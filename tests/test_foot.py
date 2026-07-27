@@ -266,11 +266,13 @@ def test_visual_parts_carry_no_mass_or_collision():
                 and not name.startswith("h_"):   # visual build
             assert m.geom_contype[i] == 0 and m.geom_conaffinity[i] == 0, name
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    # 1.863 kg. The last 59 g is drive hardware that was specified but never
-    # weighed: the ankle-pitch belt, its two pulleys and shafts (34 g a side),
-    # against a wheel that got 5 g lighter once it was designed rather than
-    # assumed.
-    assert m.body_subtreemass[t] == pytest.approx(1.863, abs=3e-3)
+    # 1.858 kg, and this number is now regenerated rather than trailing the
+    # geometry: the ankle and torso rows of SEG_INERTIA had gone stale against
+    # their own CAD and were 2 g heavy between them. The wheel has moved twice
+    # since it stopped being a bought part - down when the tread was cut in,
+    # back up when the tyre got the press fit and retaining bead that stop it
+    # spinning on the rim (cad/wheel.py).
+    assert m.body_subtreemass[t] == pytest.approx(1.858, abs=3e-3)
 
 
 def test_no_real_part_hits_the_floor_in_either_mode():

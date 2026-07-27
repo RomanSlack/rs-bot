@@ -442,3 +442,44 @@ def test_nothing_fails_in_fatigue_in_the_material_we_would_order():
     assert rows, "the fatigue pass produced nothing"
     bad = [r for r in rows if r[1] == "PA6-CF" and max(r[2], r[3]) >= 1.0]
     assert not bad, f"PA6-CF fails in fatigue on {[r[0] for r in bad]}"
+
+
+def test_the_cable_runs_that_need_channels_are_known():
+    """Wiring did not exist at all. This pins what modelling it found, so the
+    situation cannot quietly get worse before the channels are cut.
+
+    The runs are STRAIGHT LINES between measured connector ports, which is the
+    shortest possible path - so a run reported blocked is blocked for every
+    real routing too. A run reported clear is not cleared; it just has not been
+    routed yet.
+    """
+    import cad.wiring as W
+
+    blocked = {}
+    for mode in ("wheel", "foot"):
+        rows = W.check(mode, verbose=False)
+        assert len(rows) == 8, f"{mode}: expected 8 runs, got {len(rows)}"
+        blocked[mode] = [r for r in rows if r["blocked"] > W.TOUCH]
+    assert len(blocked["wheel"]) <= 4, "more wheel-mode runs are obstructed"
+    assert len(blocked["foot"]) <= 6, "more foot-mode runs are obstructed"
+    # The thigh and shin are the two that must carry a channel.
+    parts = set()
+    for rs in blocked.values():
+        for r in rs:
+            parts |= set(r["by"])
+    assert {"thigh_l", "shin_l"} <= parts
+
+
+def test_the_roll_joint_needs_a_service_loop():
+    """The ankle rolls 90 degrees, so the ports either side of it move relative
+    to each other and the cable between them changes length. That slack has to
+    exist in both poses or it goes tight in one and snags in the other. Nobody
+    had ever computed it."""
+    import cad.wiring as W
+
+    rows = W.slack(verbose=False)
+    worst = max(abs(r[3]) for r in rows)
+    assert worst > 1.0, (
+        "no run changes length across the flip, which cannot be right for a "
+        "joint that turns 90 degrees - the port model is probably broken")
+    assert worst < 25.0, f"a run moves {worst:.0f} mm; that needs a real route"

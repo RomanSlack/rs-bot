@@ -144,6 +144,31 @@ def _parts():
             at=(0, 18, 0), key="rollbracket", size=2.5,
             note="held at the roll hub, loaded through the servo bolts"),
 
+        # The part the whole robot stands on in foot mode, and it was not in
+        # this set at all until now.
+        "wheel_body": dict(
+            step="wheel_body.step", layer=(0, 0, 1),
+            # Held at the four horn screws through the hub. The horn pocket
+            # hollows the hub out to r = 10 from z = -12 to -8, so the screws
+            # only pass through solid material above that - hence z = -5.
+            fix=lambda n: np.concatenate([
+                near_axis(n, (dx, dy, -5.0), (0, 0, 1), 2.4, half_len=3.0)
+                for dx in (-4.95, 4.95) for dy in (-5.0, 5.0)]),
+            # Ground arrives through the TPU, which sits on the sole backing
+            # ring at z = 8. That is the long way round from the hub, out a
+            # spoke and up the rim, and it is foot mode: the whole robot on
+            # this one annulus.
+            load=lambda n: near_axis(n, (0, 0, 8.0), (0, 0, 1), 37.5,
+                                     half_len=1.6),
+            at=(0, 0, 0), key="wheel", size=2.5,
+            # The CAD spins about z; the sim spins about y. The sole is
+            # INBOARD, which is sim -y for the left wheel (the wheel-drive
+            # servo is outboard at +y), so CAD +z maps to sim -y. Get the sign
+            # wrong and the load lands on the hub face, which is solid, and
+            # the part passes for the wrong reason.
+            frame=lambda v: np.array([v[0], v[2], -v[1]]),
+            note="held at the horn screws, loaded on the sole through the tyre"),
+
         "chassis": dict(
             step="chassis.step", layer=(1, 0, 0),
             # BOTH hips held, not one. The first version held one hip's four
@@ -381,6 +406,10 @@ def main(only=None, size=None):
             f, t, gov = (*spec["wrench"], "its own payload")
         else:
             f, t, gov = design[spec["key"]]
+        # A part whose STEP is not drawn in the sim body's frame says so, and
+        # the wrench is rotated before it is applied rather than after.
+        if spec.get("frame"):
+            f, t = spec["frame"](f), spec["frame"](t)
         res = analyse(name, spec, (f, t), size=size)
         written.append(sheet(name, spec, res, (f, t), stamp))
         for mat, *_ in MATERIALS:

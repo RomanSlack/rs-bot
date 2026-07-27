@@ -183,10 +183,48 @@ def body_inertials():
         M, com, I = compose(pieces)
         out[link] = (M / 1000.0, com / 1000.0, I / 1000.0 / 1e6)
 
-    # The wheel is bought: tyre and hub, no printed structure.
-    M, com, I = compose(_pieces(m, "wheel_l"))
-    out["wheel"] = (M / 1000.0, com / 1000.0, I / 1000.0 / 1e6)
+    out["wheel"] = _wheel_inertia()
     return out
+
+
+# The wheel's CAD frame spins about z, with the sole at +z. The sim's wheel
+# body spins about y, and the sole is INBOARD, which is sim -y on the left leg
+# because the wheel-drive servo is outboard at +y. So CAD +z maps to sim -y.
+WHEEL_CAD2SIM = np.array([[1.0, 0.0, 0.0],
+                          [0.0, 0.0, -1.0],
+                          [0.0, 1.0, 0.0]])
+
+
+def _wheel_inertia():
+    """The wheel, from its two real solids plus the bought horn.
+
+    NOT from the sim's own geoms, the way every bought part here is. The wheel
+    stopped being bought when nothing sold turned out to have a usable side
+    face, but this kept composing it from the two cylinders the sim draws: half
+    the mass at the hub, and the tyre filled in solid. That got the mass right
+    and the spin inertia HALF the real value, because the real tyre is a thin
+    band of TPU out at r = 37-40 and almost all of the spin inertia is in it.
+
+    Densities come from cad/wheel.py, not masses.PETG: this is the one part
+    that is not PETG, and the body and the tyre are not the same material as
+    each other.
+    """
+    import cad.wheel as wheel
+
+    pieces = []
+    for build, g_mm3 in ((wheel.body, wheel.PA6CF / 1000.0 * wheel.INFILL),
+                         (wheel.tyre, wheel.TPU / 1000.0)):
+        part = build()
+        g = part.volume * g_mm3
+        com, I = solid_inertia(part, g)
+        pieces.append((g, com, I))
+    # The bought 25T horn: a small steel disc down in the hub pocket.
+    pieces.append((2.0, np.array([0.0, 0.0, -wheel.HALF_W + 2.0]),
+                   _cyl_inertia(2.0, wheel.HORN_R, 2.0, np.eye(3))))
+
+    M, com, I = compose(pieces)
+    R = WHEEL_CAD2SIM
+    return M / 1000.0, (R @ com) / 1000.0, (R @ I @ R.T) / 1000.0 / 1e6
 
 
 def mirror(com, I):

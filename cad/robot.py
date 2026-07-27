@@ -25,6 +25,7 @@ import cad.ankle as ankle  # noqa: E402
 import cad.chassis as chassis  # noqa: E402
 import cad.shin as shin  # noqa: E402
 import cad.thigh as thigh  # noqa: E402
+import cad.wheel as wheel  # noqa: E402
 from fitcheck import pose  # noqa: E402
 from src.rsbot.model import load  # noqa: E402
 
@@ -34,6 +35,7 @@ W, H = 620, 780
 C_PRINT = "0.88 0.45 0.13 1"
 C_SERVO = "0.13 0.13 0.15 1"
 C_WHEEL = "0.09 0.09 0.10 1"
+C_HUB = "0.55 0.56 0.60 1"
 
 SERVO_L, SERVO_W, SERVO_H = 45.2, 24.7, 35.4
 
@@ -46,6 +48,14 @@ PARTS = {
     "rollbracket": ("roll_bracket", C_PRINT),
 }
 
+# The wheel is drawn from its real solids too, not as the pair of cylinders the
+# sim carries for it. Two parts in two materials, and it needs a rotation the
+# others do not: the CAD spins about z with the sole at +z, the sim body spins
+# about y with the sole INBOARD. So +90 deg about x on the left and -90 on the
+# right - which also says something useful, that the two wheels are the same
+# part flipped over, not a mirrored pair. One part number, print two.
+WHEEL_PARTS = [("wheel_body", C_HUB), ("wheel_tyre", C_WHEEL)]
+
 
 def export_all():
     OUT.mkdir(exist_ok=True)
@@ -53,6 +63,7 @@ def export_all():
     thigh.main(export=True)
     shin.main(export=True)
     ankle.main(export=True)
+    wheel.main(export=True)
 
 
 def _quat(mat):
@@ -85,12 +96,34 @@ def build_scene(mode="wheel"):
                 f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">'
                 f'<geom type="mesh" mesh="{key}" rgba="{rgba}"/></body>')
 
-    # Wheels and servo blocks, straight from the sim's own visual geoms.
+    # The wheels, from their own solids.
+    for side, euler in (("l", "1.5708 0 0"), ("r", "-1.5708 0 0")):
+        bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f"wheel_{side}")
+        p = d.xpos[bid]
+        q = _quat(d.xmat[bid].reshape(3, 3))
+        geoms = ""
+        for stem, rgba in WHEEL_PARTS:
+            key = f"{stem}_{side}"
+            if key not in seen:
+                seen[key] = True
+                assets.append(
+                    f'<mesh name="{key}" file="{OUT / (stem + ".stl")}" '
+                    f'scale="0.001 0.001 0.001"/>')
+            # Named so check_wheel_orientation can find one to measure.
+            tag = f' name="wheelchk_{key}"' if stem == "wheel_tyre" else ""
+            geoms += (f'<geom type="mesh" mesh="{key}"{tag} euler="{euler}" '
+                      f'rgba="{rgba}"/>')
+        bodies.append(f'<body pos="{p[0]} {p[1]} {p[2]}" '
+                      f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">{geoms}</body>')
+
+    # Servo blocks and electronics, straight from the sim's own visual geoms.
+    # vtire/vhub are NOT in this list any more: the real wheel is drawn above,
+    # and leaving the cylinders in would hide it inside a solid 80 mm disc.
     for i in range(m.ngeom):
         n = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i) or ""
         if m.geom_group[i] != 0 or n == "floor" or n.startswith("h_"):
             continue
-        if not n.startswith(("vtire", "vhub", "vhipsv", "vkneesv", "vanksv",
+        if not n.startswith(("vhipsv", "vkneesv", "vanksv",
                              "vrollsv", "vwhlsv", "vpi", "vbatt", "vdriver")):
             continue
         p, q = d.geom_xpos[i], _quat(d.geom_xmat[i].reshape(3, 3))
@@ -106,6 +139,14 @@ def build_scene(mode="wheel"):
                       f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">{g}</body>')
 
     return f'''<mujoco>
+  <!-- angle="radian" to match rsbot.xml. MuJoCo defaults to DEGREES, and this
+       scene did not say either way: the wheel's euler="1.5708 0 0" was read as
+       1.57 degrees, so it never rotated. The wheel then kept its CAD frame and
+       the picture showed it flat in wheel mode and upright in foot mode - the
+       two modes exactly swapped, in the one artefact whose whole job is to
+       show the modes. Physics was never affected; every other consumer of this
+       rotation uses build123d, whose Rot() really is degrees. -->
+  <compiler angle="radian"/>
   <visual><global offwidth="{W}" offheight="{H}"/>
     <headlight ambient="0.48 0.48 0.48" diffuse="0.6 0.6 0.6" specular="0.15 0.15 0.15"/>
     <quality shadowsize="4096"/><map znear="0.01" zfar="40"/></visual>
@@ -123,9 +164,44 @@ def build_scene(mode="wheel"):
 </mujoco>'''
 
 
+def check_wheel_orientation(xml, mode):
+    """The wheel must be UPRIGHT in wheel mode and FLAT in foot mode.
+
+    This exists because the picture got it backwards and nothing noticed. A
+    render is the one check a human reads directly, so when it lies it is
+    believed. Measured off the built scene's own mesh vertices, not off the
+    numbers that went in, so a units bug in the XML cannot pass it.
+    """
+    m = mujoco.MjModel.from_xml_string(xml)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+
+    gid = next(i for i in range(m.ngeom)
+               if (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i) or "")
+               .startswith("wheelchk"))
+    mid = m.geom_dataid[gid]
+    lo, cnt = m.mesh_vertadr[mid], m.mesh_vertnum[mid]
+    v = m.mesh_vert[lo:lo + cnt].astype(float)
+    R = d.geom_xmat[gid].reshape(3, 3)
+    w = v @ R.T                                   # into world axes
+    span = w.max(axis=0) - w.min(axis=0)
+
+    # 80 mm across the disc, 24 mm through it. Which axis is which is the
+    # entire question.
+    thin = int(np.argmin(span))
+    want = 1 if mode == "wheel" else 2            # y when rolling, z when flat
+    ok = thin == want and span[thin] < 0.030
+    print(f"   wheel is {'UPRIGHT' if thin == 1 else 'FLAT' if thin == 2 else '?'}"
+          f" in {mode} mode  (span {1000*span[0]:.0f} x {1000*span[1]:.0f} x "
+          f"{1000*span[2]:.0f} mm)  {'ok' if ok else 'WRONG WAY ROUND'}")
+    return ok
+
+
 def main(mode="wheel"):
     export_all()
-    m = mujoco.MjModel.from_xml_string(build_scene(mode))
+    xml = build_scene(mode)
+    check_wheel_orientation(xml, mode)
+    m = mujoco.MjModel.from_xml_string(xml)
     d = mujoco.MjData(m)
     mujoco.mj_forward(m, d)
     r = mujoco.Renderer(m, H, W)

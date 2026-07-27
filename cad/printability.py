@@ -97,9 +97,18 @@ PARTS = {
     "ankle_yoke": ("ankle_yoke.stl", ["POST", "YOKE_CROSS", "YOKE_FWD"]),
     "roll_bracket": ("roll_bracket.stl", ["ROLL_ARM"]),
     "chassis": ("chassis.stl", []),
+    # Both halves of the wheel. The tyre is the one part here that is not
+    # rigid, and it still has to be printable: it carries the tread grooves and
+    # the bead recess, and if either goes under the minimum wall it cannot be
+    # ordered no matter how good the geometry is.
+    "wheel_body": ("wheel_body.stl", []),
+    "wheel_tyre": ("wheel_tyre.stl", []),
 }
 MODULES = {"shin": "cad.shin", "ankle_yoke": "cad.ankle",
            "roll_bracket": "cad.ankle"}
+# Print orientation for parts that have no FEA entry to take it from. The tyre
+# lies flat on its sole: that face is the one that must come out clean.
+LAYER = {"wheel_tyre": (0, 0, 1)}
 
 
 def main():
@@ -113,7 +122,7 @@ def main():
     print(f"{'part':<14}{'footprint mm':>22}{'fits bed':>10}"
           f"{'overhang':>10}{'thin features':>16}")
     for name, (stl, boxnames) in PARTS.items():
-        R = _rotate_to(specs[name]["layer"])
+        R = _rotate_to(specs[name]["layer"] if name in specs else LAYER[name])
         normals, tris = _stl(OUT / stl)
         over, total = overhang(normals, tris, R)
         fp = footprint(tris, R)

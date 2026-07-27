@@ -28,9 +28,14 @@ import cad.chassis as chassis
 PETG = 1.270          # g/cm3
 INFILL = 0.60         # a print is not solid; see cad/shin.py
 SERVO = 55.0          # STS3215
-# 54.8, not 60: the wheel is now a designed part (cad/wheel.py) rather than a
+# 54.0, not 60: the wheel is now a designed part (cad/wheel.py) rather than a
 # bought one, because nothing sold has a usable side face. Body + TPU + horn.
-WHEEL = 54.8
+# It has moved twice: down to 52.1 when the tread was cut in, back up when the
+# tyre got a real press fit and a retaining bead instead of being a slip fit
+# that would have spun on the rim. `uv run python -m cad.wheel` prints the
+# current figure and this has to be moved to match it by hand; cad/inertia.py's
+# check_masses is what catches it if you forget.
+WHEEL = 54.04
 # GT2 20T and 40T aluminium pulleys, a 188 mm x 15 mm belt, and the 3 mm shafts.
 BELT_DRIVE = 34.0
 PI5, BATT, DRIVER, IMU = 45.0, 180.0, 10.0, 5.0

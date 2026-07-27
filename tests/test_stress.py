@@ -131,3 +131,96 @@ def test_ankle_pitch_range_is_clear_of_the_shin():
         moved = bd.Pos(0, 0, shin.ANKLE_Z) * bd.Rot(0, float(deg), 0) * yk
         v = (sh & moved).volume
         assert v < 1.0, f"yoke hits the shin at {deg:+d} deg pitch ({v:.0f} mm3)"
+
+
+# --- the wheel, which is also the foot ---------------------------------------
+#
+# These run on the REAL solids placed by the REAL robot pose, because every
+# claim the wheel makes is about where it sits on the machine, not about its
+# own drawing.
+
+def _wheel_on_the_robot(mode):
+    """(rigid body, TPU tyre) posed as they sit on the robot in `mode`."""
+    import build123d as bd
+    import mujoco
+
+    import cad.assemble_check as ac
+    import cad.wheel as W
+    from fitcheck import pose
+    from src.rsbot.model import load
+
+    m, d = load()
+    pose(m, d, mode)
+    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "wheel_l")
+    loc = ac._loc(d.xpos[bid], d.xmat[bid])
+    return (loc * (bd.Rot(90, 0, 0) * W.body()),
+            loc * (bd.Rot(90, 0, 0) * W.tyre()))
+
+
+@pytest.mark.parametrize("mode,least", [("wheel", 1.5), ("foot", 2.0)])
+def test_the_robot_stands_on_rubber_not_on_plastic(mode, least):
+    """The whole reason this part is printed instead of bought.
+
+    The 80 x 24 wheel in the original BOM stood its plastic hub 0.5 mm PROUD of
+    the tyre, so in foot mode the robot would have stood on a hard boss. The
+    margin has to beat a print tolerance, not just be positive: the services
+    quote +/-0.3 mm, so anything under about a millimetre is not a result.
+    """
+    body, tyre = _wheel_on_the_robot(mode)
+    rigid = body.bounding_box().min.Z
+    rubber = tyre.bounding_box().min.Z
+    assert rigid > rubber + least, (
+        f"{mode} mode: rigid is {rigid - rubber:.2f} mm above the rubber, "
+        f"wanted more than {least}")
+
+
+def test_the_tyre_is_actually_retained_on_the_rim():
+    """It used to be a slip fit - bore and rim both exactly r = 37.0, zero
+    interference - and the check said "must be 0" and passed. Drive torque at
+    the rim is about 78 N at stall, so it would have spun the first time the
+    robot moved.
+
+    Tested by function: move the tyre the two ways it can come off and confirm
+    the bead is in the way. Measured in the bead zone, because over the whole
+    part the bore press fit is 1500 mm3 and drowns both signals.
+    """
+    import build123d as bd
+
+    import cad.wheel as W
+
+    b, t = W.body(), W.tyre()
+    zc = -W.HALF_W + W.BEAD_INSET + W.BEAD_W / 2
+    zone = bd.Pos(0, 0, zc) * bd.Box(4 * W.R, 4 * W.R, W.BEAD_W)
+    seated = (b & t & zone).volume
+    spun = (b & (bd.Rot(0, 0, 180.0 / W.BEAD_N) * t) & zone).volume
+    slid = (b & (bd.Pos(0, 0, 1.0) * t) & zone).volume
+
+    # ABSOLUTE engagement volumes, not ratios to `seated`. The first version of
+    # this test asserted spun > 3 x seated, and it passed with the press fit
+    # and the bead both removed: seated went to nearly zero, so the ratio stayed
+    # large while the actual engagement was nothing. A ratio with a denominator
+    # that can vanish is a check that cannot fail.
+    assert seated > 20.0, (
+        f"press fit is only {seated:.1f} mm3 in the bead zone - the bore is "
+        f"not undersize enough to grip")
+    assert spun - seated > 100.0, (
+        f"teeth engage only {spun - seated:.1f} mm3: it can spin on the rim")
+    assert slid - seated > 100.0, (
+        f"lip catches only {slid - seated:.1f} mm3: it can walk off the rim")
+
+
+@pytest.mark.parametrize("mode", ["wheel", "foot"])
+def test_the_assembled_picture_shows_the_right_mode(mode):
+    """The render had the two modes swapped and nothing caught it.
+
+    cad/robot.py builds its own MJCF, and that scene never said what units its
+    angles were in. MuJoCo defaults to DEGREES, so the wheel's euler of 1.5708
+    was applied as 1.57 degrees and the mesh never turned: flat in wheel mode,
+    upright in foot mode, exactly backwards. Physics was untouched - everything
+    else rotates the wheel through build123d, whose Rot() is really degrees -
+    but the render is the artefact a human actually looks at, so when it lies
+    it gets believed.
+    """
+    import cad.robot as robot
+
+    assert robot.check_wheel_orientation(robot.build_scene(mode), mode)

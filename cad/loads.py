@@ -155,14 +155,26 @@ def design_loads(cases=None):
     (which is the part's own frame rotated by that joint's angle; at the poses
     these peaks occur in the two agree within a few degrees)."""
     cases = cases or survey()
-    out = {}
-    for part, child in CHILD.items():
+
+    def worst(child):
         options = [("flip x3", *[v * SF for v in cases["flip"][child]]),
                    ("shove x1.5", *[v * SF_LIMIT for v in cases["shove"][child]]),
                    ("tipover x1", *cases["tipover"][child])]
-        name, f, t = max(options,
-                         key=lambda o: np.linalg.norm(o[1]) + 40 * np.linalg.norm(o[2]))
+        return max(options,
+                   key=lambda o: np.linalg.norm(o[1]) + 40 * np.linalg.norm(o[2]))
+
+    out = {}
+    for part, child in CHILD.items():
+        name, f, t = worst(child)
         out[part] = (f, t, name)
+
+    # The wheel is the leaf, so it is never anyone's parent and never got a key
+    # of its own - yet it is the part the whole robot stands on in foot mode.
+    # Its load path is the axle reaction, which the recorder already has under
+    # "wheel" because the wheel is the rollbracket's child. Same wrench, read
+    # from the other end.
+    name, f, t = worst("wheel")
+    out["wheel"] = (f, t, name)
     return out
 
 

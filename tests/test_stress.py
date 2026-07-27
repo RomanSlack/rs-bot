@@ -209,6 +209,25 @@ def test_the_tyre_is_actually_retained_on_the_rim():
         f"lip catches only {slid - seated:.1f} mm3: it can walk off the rim")
 
 
+def test_the_wheel_has_running_clearance_to_everything_static():
+    """The wheel turns continuously, so for it any contact is a rub rather than
+    a mating face. The roll bracket's arm ran parallel to the wheel's whole
+    face at 0.1 mm, which is inside the tolerance band of both parts.
+    """
+    import cad.assemble_check as ac
+
+    for mode in ("wheel", "foot"):
+        items = dict(ac.parts(mode))
+        wheel = items["wheel_l"]
+        for name, other in items.items():
+            if name == "wheel_l" or not ac.running_pair("wheel_l", name):
+                continue
+            g = ac.gap(wheel, other)
+            assert g >= ac.TIGHT_MM, (
+                f"{mode} mode: wheel_l to {name} is {g:.2f} mm, "
+                f"needs {ac.TIGHT_MM} to survive a +/-0.3 mm print tolerance")
+
+
 @pytest.mark.parametrize("mode", ["wheel", "foot"])
 def test_the_assembled_picture_shows_the_right_mode(mode):
     """The render had the two modes swapped and nothing caught it.
@@ -224,3 +243,45 @@ def test_the_assembled_picture_shows_the_right_mode(mode):
     import cad.robot as robot
 
     assert robot.check_wheel_orientation(robot.build_scene(mode), mode)
+
+
+def test_the_leg_is_one_connected_load_path():
+    """The assembled model exists because every other entry in cad/stress.py is
+    one part rigidly clamped at its own bolt holes - a wall where a compliant
+    neighbour should be, and nothing ever adds the deflections up.
+
+    Fusing it is also a check in its own right. An exact boolean union only
+    closes if the parts really touch, and the first attempt came back as TWO
+    solids: the wheel-drive servo floats 0.5 mm off the bracket it bolts to.
+    That is excluded deliberately and is tracked in docs/assembled-strength.md;
+    if anything ELSE stops touching, this is what catches it.
+    """
+    import cad.assemble_check as ac
+
+    leg = ac.fused_leg("wheel")          # raises if it is not exactly 1 solid
+    assert leg.volume > 200_000.0, "the fused leg lost most of its volume"
+
+
+def test_every_servo_seats_flat_on_what_it_bolts_to():
+    """A servo case on a standoff puts its reaction couple into the mounting
+    bolts in BENDING, with no friction preload to help.
+
+    The wheel-drive servo used to float 0.5 mm off the roll bracket, from
+    clearing a 0.05 mm interference by moving 0.55. Nothing reported it,
+    because the only assembly check was for interference and 0.5 mm of air
+    reads exactly like 20 mm of air.
+
+    Seating is exact contact, not interference: the case is a bought part and
+    the bracket may not eat into it.
+    """
+    import cad.assemble_check as ac
+
+    pairs = [("rollbracket_l", "vwhlsv_l"), ("ankle_l", "vrollsv_l"),
+             ("shin_l", "vanksv_l"), ("thigh_l", "vkneesv_l")]
+    items = dict(ac.parts("wheel"))
+    for bracket, servo in pairs:
+        assert ac.gap(items[bracket], items[servo]) < 1e-6, (
+            f"{servo} does not seat on {bracket}: it is on a standoff")
+        hit = items[bracket] & items[servo]
+        v = hit.volume if hit else 0.0
+        assert v < 1.0, f"{bracket} cuts {v:.1f} mm3 into the {servo} case"

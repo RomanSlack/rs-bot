@@ -18,11 +18,13 @@ import sys
 import build123d as bd
 import mujoco
 import numpy as np
+from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 
 import cad.ankle as ankle
 import cad.chassis as chassis
 import cad.shin as shin
 import cad.thigh as thigh
+import cad.wheel as wheel
 from fitcheck import pose
 from src.rsbot.model import load
 
@@ -50,7 +52,16 @@ def parts(mode):
     pose(m, d, mode)
     built = {"torso": chassis.build(), "thigh": thigh.build(),
              "shin": shin.build(), "ankle": ankle.yoke(),
-             "rollbracket": ankle.roll_bracket()}
+             "rollbracket": ankle.roll_bracket(),
+             # The wheel was not in this check at all, which is a hole in it:
+             # it is the part with the most neighbours - servo, roll bracket,
+             # ankle yoke, the floor - and the only one that changes shape.
+             # Body and tyre go in FUSED, because they are an interference fit
+             # now and as separate solids their own press fit would read as a
+             # fault. Rot(90, 0, 0) is the CAD frame (spin about z, sole at +z)
+             # mapped into the sim's wheel body frame (spin about y, sole
+             # inboard); the right side then mirrors in y with everything else.
+             "wheel": bd.Rot(90, 0, 0) * (wheel.body() + wheel.tyre())}
 
     out = []
     for stem, solid in built.items():
@@ -72,10 +83,74 @@ def parts(mode):
     return out
 
 
+LEG_CHAIN = ["thigh_l", "vkneesv_l", "shin_l", "vanksv_l",
+             "ankle_l", "vrollsv_l", "rollbracket_l", "vwhlsv_l"]
+
+
+def fused_leg(mode="wheel"):
+    """The whole left leg as ONE solid, posed, in world coordinates.
+
+    Every part in cad/stress.py is solved alone, rigidly clamped at its own
+    bolt holes. That is non-conservative twice over: a real neighbour is
+    compliant, not a wall, and nothing ever adds the deflections up. This is
+    what you mesh to ask the assembled question.
+
+    The servo cases are IN, because they are part of the load path: the shin
+    hangs off the knee servo's case, not off the thigh directly.
+
+    Fusing is a check in its own right, because an exact union only closes if
+    the parts really touch. The first attempt returned TWO solids: the
+    wheel-drive servo was floating 0.5 mm off the bracket it bolts to, which
+    nothing had ever reported because assemble_check only tested interference
+    and 0.5 mm of air reads like 20 mm of air. That gap is closed and the servo
+    is now in the chain. See docs/assembled-strength.md.
+
+    Fusing across the servo output shafts models every joint as RIGID, so this
+    UNDERSTATES deflection: real gearboxes wind up and the servos have 0.87 deg
+    of measured backlash on top. It is the structural contribution only.
+    """
+    items = dict(parts(mode))
+    u = None
+    for n in LEG_CHAIN:
+        u = items[n] if u is None else u + items[n]
+    u = u.clean()
+    if len(u.solids()) != 1:
+        raise RuntimeError(
+            f"the leg fused into {len(u.solids())} solids, not 1 - something "
+            f"in {LEG_CHAIN} is not touching its neighbour")
+    return u
+
+
+def gap(a, b):
+    """Minimum distance between two solids, mm. 0.0 if they touch or overlap."""
+    d = BRepExtrema_DistShapeShape(a.wrapped, b.wrapped)
+    d.Perform()
+    return d.Value() if d.IsDone() else float("nan")
+
+
+# Anything closer than this and a tolerance stack can close it. The services
+# quote +/-0.3 mm (JLCPCB MJF, PCBWay SLS), so two printed parts facing each
+# other can each be 0.3 mm out and eat 0.6 mm of whatever gap was drawn.
+TIGHT_MM = 0.8
+
+# But most 0.00 mm pairs in this robot are SUPPOSED to touch: a printed part
+# bolted flat to a servo case, or two parts meeting at a bearing. Flagging
+# those makes the check noise, and a check that always shouts gets muted, which
+# is the same failure as a check that cannot fail.
+#
+# The wheel is different, and it is the reason this exists. It is the only body
+# that turns continuously, through 360 degrees, forever - so for the wheel any
+# contact at all is a rub, not a mating face. Everything else either bolts up
+# or moves through a limited range that fitcheck.py already sweeps.
+def running_pair(na, nb):
+    """True if these two move against each other without a bolt between."""
+    return na.startswith("wheel") != nb.startswith("wheel")
+
+
 def main(mode="wheel"):
     items = parts(mode)
     print(f"--- {mode} mode: {len(items)} solids")
-    worst = []
+    worst, tight, mates = [], [], 0
     for (na, a), (nb, b) in itertools.combinations(items, 2):
         try:
             inter = a & b
@@ -84,11 +159,31 @@ def main(mode="wheel"):
             v = 0.0
         if v > 1.0:
             worst.append((v, na, nb))
+            continue
+        # NOT interfering is not the same as fitting. This check used to stop
+        # at the line above, so a pair 0.1 mm apart reported exactly like a
+        # pair 20 mm apart - and one really was 0.1 mm: the roll bracket's arm
+        # against the face of a wheel that turns at 40 rad/s.
+        try:
+            g = gap(a, b)
+        except Exception:
+            continue
+        if g < TIGHT_MM and running_pair(na, nb):
+            tight.append((g, na, nb))
+        elif g < 0.01:
+            mates += 1
+
     worst.sort(reverse=True)
     for v, na, nb in worst:
         print(f"   {na:<14} x {nb:<14} {v:9.1f} mm3")
     print(f"   {len(worst)} interfering pairs")
-    return worst
+    tight.sort()
+    for g, na, nb in tight:
+        print(f"   TIGHT {na:<14} x {nb:<14} {g:7.2f} mm  "
+              f"(running clearance, needs > {TIGHT_MM})")
+    print(f"   {len(tight)} running pairs under {TIGHT_MM} mm"
+          f"   [{mates} bolted/bearing faces in contact, as designed]")
+    return worst + tight
 
 
 if __name__ == "__main__":

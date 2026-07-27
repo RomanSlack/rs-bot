@@ -68,9 +68,27 @@ ROLL_SV = ((-93.4, -58.0), (-12.35, 12.35), (-6.6, 38.6))
 # 2.65 mm - 2.65 mm3 - and the entire wheel load went through it. FEA put the
 # part at 1068% of PETG's allowable, and at 111% in aluminium: no material
 # fixes a 0.5 mm neck. The lap is now about 200 mm3, 75x more, plus a rib.
-# z starts at 12.9, not 12.35: the wheel servo is half of 24.8 deep in z,
-# so its face is at 12.4 and the old arm shaved into it by 0.05 mm.
-ROLL_ARM = ((-44, 0), (12.1, 23.5), (12.9, 22.9))
+# z starts at 12.40, which is EXACTLY the wheel servo's face (the case is
+# 24.8 deep in z, so half of it is 12.4). The arm seats flat on the servo, the
+# way the other fourteen bolted faces in this robot do.
+#
+# It was 12.9. That came from clearing a 0.05 mm interference by moving 0.55,
+# which left the servo floating 0.5 mm off the bracket it bolts to - visible to
+# nobody, because assemble_check only tested for interference and 0.5 mm of air
+# reads exactly like 20 mm of air. A servo on a 0.5 mm standoff puts its
+# reaction couple into the bolts in BENDING with no friction preload, and this
+# design has already been bitten by that once: the ankle servo's bolts were
+# 12 mm apart, which turned its 1.63 N.m into 136 N per bolt.
+#
+# y starts at 12.9, not 12.1. The wheel face is at 12.0 and the arm plate runs
+# parallel to it across the whole face, from the hub out to the rim, so 12.1
+# was a 0.1 mm RUNNING clearance against a part that turns at 40 rad/s. That is
+# a drawing clearance, not a manufacturing one: JLCPCB quote +/-0.3 mm on MJF
+# and PCBWay the same on SLS, so a 0.1 mm gap is inside the tolerance band of
+# both parts and the wheel would have rubbed on a good fraction of builds.
+# Moved out 0.8 mm, keeping the plate thickness, so the gap is 0.9 mm and
+# survives a worst-case stack on both sides.
+ROLL_ARM = ((-44, 0), (12.9, 24.3), (12.4, 22.9))
 ROLL_TIE = ((-56, -42), (7.1, 14.5), (5, 16.0))
 # The tie, the tongue and the corner rib are all gone. They existed to crank
 # the load from an outboard arm, round the shin's post, to a bearing the part

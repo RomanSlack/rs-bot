@@ -285,3 +285,53 @@ def test_every_servo_seats_flat_on_what_it_bolts_to():
         hit = items[bracket] & items[servo]
         v = hit.volume if hit else 0.0
         assert v < 1.0, f"{bracket} cuts {v:.1f} mm3 into the {servo} case"
+
+
+# --- fasteners ---------------------------------------------------------------
+
+def test_servo_shaft_axis_matches_the_joint_it_drives():
+    """The control test, kept because it caught a complete false alarm.
+
+    cad/servo.py writes the servo as (length, width, height-along-shaft), so
+    the shaft is its local z. The SIM does not use that order: it writes each
+    servo's three dimensions in whatever sequence puts the case where it goes,
+    which puts the shaft on local y for four of the five and local x for the
+    roll servo.
+
+    Assume local z and cad/fasteners reports every screw in the robot as
+    perpendicular to its servo - "nothing bolts to anything", entirely false,
+    and entirely convincing. A check whose input is wrong does not fail; it
+    answers a different question fluently. This is what makes the input
+    checkable: a servo's shaft IS the axis of the joint it drives.
+    """
+    import mujoco
+
+    import cad.fasteners as F
+    from fitcheck import pose
+    from src.rsbot.model import load
+
+    m, d = load()
+    pose(m, d, "wheel")
+    frames = F._servo_frames("wheel")
+    pairs = [("vhipsv1", "hip_l"), ("vkneesv_l", "knee_l"),
+             ("vanksv_l", "ankle_pitch_l"), ("vrollsv_l", "ankle_roll_l"),
+             ("vwhlsv_l", "wheel_l")]
+    for sname, jname in pairs:
+        _, _, shaft = frames[sname]
+        jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        axis = d.xmat[m.jnt_bodyid[jid]].reshape(3, 3) @ m.jnt_axis[jid]
+        assert abs(float(np.dot(shaft, axis))) > 0.99, (
+            f"{sname}'s derived shaft is not {jname}'s axis - the servo box "
+            f"axis order was misread and every fastener result is wrong")
+
+
+def test_every_servo_screw_runs_along_its_servo_shaft():
+    """A screw at 90 degrees to the hole it enters cannot be fitted, whatever
+    the bolt pattern turns out to be. This is the fastener check that does not
+    depend on the pattern, which is unverified."""
+    import cad.fasteners as F
+
+    rows = F.audit(verbose=False)
+    assert rows, "no M2-scale holes found near any servo - the audit is blind"
+    perp = [r for r in rows if r["align"] < 0.1]
+    assert not perp, f"{len(perp)} screws are perpendicular to their servo"

@@ -487,3 +487,111 @@ def main(only=None, size=None):
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     main(only=args[0] if args else None)
+
+
+# --- does the mesh have anything to say? --------------------------------------
+
+def converge(name, sizes=(3.0, 2.4, 1.9), verbose=True):
+    """Solve one part at several mesh densities and report the peak.
+
+    cad/fea.py is verified against a cantilever, which validates the ELEMENT.
+    It says nothing about whether the mesh on THESE parts is fine enough, and
+    the margins that matter are thin: the shin sits at 86% of PA6-CF and the
+    roll bracket at 94%. A peak that is still climbing at the finest mesh is a
+    peak nobody knows the value of.
+
+    What to look for is not a small change, it is a change that is SETTLING. A
+    stress concentration at a sharp re-entrant corner never settles - it grows
+    without limit as the mesh refines, because the exact solution is infinite
+    there. That is a geometry problem, not a mesh problem, and this is how you
+    tell the two apart.
+    """
+    spec = _parts()[name]
+    design = loads.design_loads()
+    if spec["key"] is None:
+        f, t = spec["wrench"]
+    else:
+        f, t, _ = design[spec["key"]]
+    if spec.get("frame"):
+        f, t = spec["frame"](f), spec["frame"](t)
+
+    out = []
+    for s in sizes:
+        res = analyse(name, spec, (f, t), size=s, verbose=False)
+        r = res["PA6-CF"]
+        out.append((s, len(r["nodes"]), r["vm_p"], r["defl"]))
+    if verbose:
+        print(f"{name}: peak von Mises and tip deflection vs mesh size")
+        print(f"   {'size mm':>8}{'nodes':>9}{'MPa':>9}{'change':>9}"
+              f"{'defl mm':>10}")
+        prev = None
+        for s, n, p, d in out:
+            ch = "" if prev is None else f"{(p - prev) / prev * 100:+8.1f}%"
+            print(f"   {s:>8.1f}{n:>9}{p:>9.2f}{ch:>9}{d:>10.3f}")
+            prev = p
+    return out
+
+
+# --- fatigue ------------------------------------------------------------------
+#
+# Everything above is static ultimate. Stage 2's exit criterion is 20
+# consecutive transitions and the design intent is thousands, so the question
+# is not whether a part survives one flip at three times the load, it is
+# whether it survives ten thousand at one times.
+#
+# Printed polymers are worse at this than the handbook figure for the bulk
+# material, and worse again across layers. These are endurance ratios - the
+# fraction of static ultimate a part can take indefinitely - and they are
+# LITERATURE VALUES, not coupons off your printer. That is the same fiction the
+# material table carries, and the validation order is what fixes it.
+FATIGUE_RATIO = {           # at ~1e4 cycles
+    "PETG": 0.40, "PLA": 0.35, "ABS": 0.40, "PA6-CF": 0.45,
+    "MJF PA12": 0.45, "SLS PA12GF": 0.42, "FDM PA12CF": 0.42,
+    "Al 6061-T6": 0.50,
+}
+SF_FATIGUE = 1.0            # the flip load itself, unfactored, once per cycle
+
+
+def fatigue(only=None, cycles=10000, verbose=True):
+    """Every part against the ENDURANCE limit, on the flip load at 1x.
+
+    Not a rescaling of the static table, because that would be wrong: the
+    static table reports whichever case is worst, and for the thigh and shin
+    that is `tipover x1` - falling over sideways. A tipover is a one-off event,
+    not a fatigue cycle. What repeats ten thousand times is the FLIP, so the
+    flip at 1x is what gets solved here.
+    """
+    cases = loads.survey()
+    parts = _parts()
+    rows = []
+    for name, spec in parts.items():
+        if only and name != only:
+            continue
+        if spec["key"] is None:
+            f, t = spec["wrench"]                    # the chassis' own payload
+            f, t = f / 3.0, t / 3.0                  # its SF3 taken back off
+        else:
+            child = loads.CHILD.get(spec["key"], spec["key"])
+            f, t = cases["flip"][child]
+        if spec.get("frame"):
+            f, t = spec["frame"](f), spec["frame"](t)
+        res = analyse(name, spec, (f, t), verbose=False)
+        for mat, r in res.items():
+            ratio = FATIGUE_RATIO.get(mat)
+            if ratio is None:
+                continue
+            rows.append((name, mat, r["util"] / ratio, r["util_il"] / ratio))
+
+    if verbose:
+        print(f"fatigue at ~{cycles} cycles: the FLIP at 1x against the "
+              f"endurance limit")
+        print(f"   {'part':<14}{'material':<12}{'in-plane':>10}"
+              f"{'interlayer':>12}")
+        for part, mat, u, ui in rows:
+            flag = "  <-- OVER" if max(u, ui) >= 1.0 else ""
+            print(f"   {part:<14}{mat:<12}{u*100:>9.0f}%{ui*100:>11.0f}%{flag}")
+        over = [r for r in rows if max(r[2], r[3]) >= 1.0]
+        print()
+        print(f"   {len(over)} of {len(rows)} part/material pairs fail in "
+              f"fatigue")
+    return rows

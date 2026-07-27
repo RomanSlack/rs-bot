@@ -399,3 +399,46 @@ def test_no_running_clearance_closes_under_a_worst_case_tolerance_stack():
         assert not closed, (
             f"{mode} mode: {len(closed)} pair(s) close at worst case, "
             f"tightest {closed[0][3]} x {closed[0][4]} at {closed[0][0]:.2f} mm")
+
+
+def test_the_peaks_that_matter_have_converged():
+    """cad/fea.py is verified against a cantilever, which validates the ELEMENT
+    and says nothing about whether the mesh on these parts is fine enough.
+
+    Only the two parts near their limit are checked, because refinement is slow
+    and they are the ones where a moving peak would change the answer: the roll
+    bracket at 94% of PA6-CF and the shin at 86%.
+
+    What matters is not that the change is small, it is that it is SETTLING. A
+    peak on a sharp re-entrant corner grows without limit as the mesh refines,
+    because the exact solution there is infinite; that is a geometry fault, and
+    this is how it is told apart from a mesh that is simply coarse.
+    """
+    from cad import stress
+
+    for part in ("roll_bracket", "shin"):
+        out = stress.converge(part, sizes=(3.0, 2.2), verbose=False)
+        coarse, fine = out[0][2], out[-1][2]
+        assert fine > 0, f"{part}: the fine solve returned nothing"
+        change = abs(fine - coarse) / coarse
+        assert change < 0.10, (
+            f"{part}: peak moved {change:.1%} from a 3.0 mm mesh to 2.2 mm, "
+            f"{coarse:.1f} -> {fine:.1f} MPa. It has not converged, so the "
+            f"utilisation quoted for it is not a number")
+
+
+def test_nothing_fails_in_fatigue_in_the_material_we_would_order():
+    """Everything else here is static ultimate, but stage 2 asks for 20
+    consecutive transitions and the intent is thousands.
+
+    The load case is the point: the static table reports whichever case is
+    worst, and for the thigh and shin that is a TIPOVER, which is a one-off
+    event and not a fatigue cycle. What repeats is the flip, so the flip at 1x
+    is what is solved against the endurance limit.
+    """
+    from cad import stress
+
+    rows = stress.fatigue(verbose=False)
+    assert rows, "the fatigue pass produced nothing"
+    bad = [r for r in rows if r[1] == "PA6-CF" and max(r[2], r[3]) >= 1.0]
+    assert not bad, f"PA6-CF fails in fatigue on {[r[0] for r in bad]}"

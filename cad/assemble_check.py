@@ -147,6 +147,64 @@ def running_pair(na, nb):
     return na.startswith("wheel") != nb.startswith("wheel")
 
 
+# --- worst-case tolerance stack ------------------------------------------------
+#
+# Every pairwise gap above is measured on NOMINAL geometry. Real parts are not
+# nominal: the services quote +/-0.3 mm, and the error between two parts is not
+# one tolerance but one per interface separating them along the assembly chain.
+# The wheel is four joints away from the chassis, so its position relative to
+# the chassis can be out by five tolerances, not one.
+#
+# This is an analytic stack rather than a perturbed solve, because offsetting
+# these solids by 0.3 mm fails outright in OCC - they have too many features.
+# An analytic stack is also the honest worst case: it assumes every error lines
+# up the wrong way, which is what "worst case" means.
+TOL = 0.3
+
+STACK_ORDER = ["torso", "thigh", "shin", "ankle", "rollbracket", "wheel"]
+
+
+def _chain_depth(na, nb):
+    """How many toleranced interfaces separate two parts."""
+    def idx(n):
+        stem = n.split("_")[0]
+        return STACK_ORDER.index(stem) if stem in STACK_ORDER else None
+    ia, ib = idx(na), idx(nb)
+    if ia is None or ib is None:
+        return 1                      # a bought part bolted straight on
+    if na.endswith("_l") != nb.endswith("_l") and "torso" not in (na, nb):
+        # opposite legs: up one chain and down the other
+        return ia + ib + 1
+    return abs(ia - ib) + 1
+
+
+def stack(mode="wheel", verbose=True):
+    """Nominal gap minus the worst-case stack, for every pair that must not
+    touch. A pair that clears at nominal and closes at worst case is a part
+    that fits in CAD and rubs on the bench."""
+    items = parts(mode)
+    rows = []
+    for (na, a), (nb, b) in itertools.combinations(items, 2):
+        if not running_pair(na, nb):
+            continue
+        try:
+            g = gap(a, b)
+        except Exception:
+            continue
+        d = _chain_depth(na, nb)
+        rows.append((g - d * TOL, g, d, na, nb))
+    rows.sort()
+    if verbose:
+        print(f"--- {mode} mode: worst-case stack at +/-{TOL} mm per interface")
+        for worst, g, d, na, nb in rows[:8]:
+            flag = "  <-- CLOSES" if worst <= 0 else ""
+            print(f"   {na:<14} x {nb:<14} nominal {g:6.2f}  "
+                  f"{d} interfaces  worst {worst:6.2f}{flag}")
+        n = sum(1 for r in rows if r[0] <= 0)
+        print(f"   {n} of {len(rows)} running pairs close at worst case")
+    return rows
+
+
 def main(mode="wheel"):
     items = parts(mode)
     print(f"--- {mode} mode: {len(items)} solids")

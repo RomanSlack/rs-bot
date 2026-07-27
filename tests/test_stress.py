@@ -379,3 +379,23 @@ def test_tool_access_check_notices_an_obstruction():
     hit = tool & wall
     assert (hit.volume if hit else 0.0) > T.TOUCH, (
         "a slab straight across the driver path was not detected")
+
+
+def test_no_running_clearance_closes_under_a_worst_case_tolerance_stack():
+    """Nominal gaps are not real gaps. The services quote +/-0.3 mm and the
+    error between two parts is one tolerance PER INTERFACE along the chain, so
+    the wheel can be five tolerances out relative to the chassis.
+
+    The tightest pair is the wheel against the roll bracket: 0.90 mm nominal,
+    two interfaces, 0.30 mm left at worst case. That is why the running-clearance
+    threshold is 0.8 and not something rounder.
+    """
+    import cad.assemble_check as ac
+
+    for mode in ("wheel", "foot"):
+        rows = ac.stack(mode, verbose=False)
+        assert rows, "the stack check found no running pairs at all"
+        closed = [r for r in rows if r[0] <= 0]
+        assert not closed, (
+            f"{mode} mode: {len(closed)} pair(s) close at worst case, "
+            f"tightest {closed[0][3]} x {closed[0][4]} at {closed[0][0]:.2f} mm")

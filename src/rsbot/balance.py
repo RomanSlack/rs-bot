@@ -21,7 +21,7 @@ from .model import (ROLL_WHEEL, WHEEL_R, ankle_pitch_level, leg_ik,
 
 @dataclass
 class Gains:
-    # Tuned against 1 deg of gear lash at the CAD-derived mass of 1.756 kg,
+    # Tuned against 0 AND 1 deg of gear lash at the CAD-derived mass of 1.863 kg,
     # with the CAD-derived INERTIA TENSORS rather than the primitive capsules.
     # Gains depend on the mass distribution, not just the mass: correcting the
     # distribution alone - same total, same centre of mass to within a few mm -
@@ -33,7 +33,7 @@ class Gains:
     kd: float = 1.058
     # outer loop: odometry -> pitch target
     kv: float = 0.35
-    kx: float = 0.400
+    kx: float = 0.4
     pitch_max: float = 0.309  # rad, cap on commanded lean
     tau_odom: float = 0.11  # s, low-pass on wheel-derived speed
     # Low-pass on the wheel command itself. With gear lash, slamming the

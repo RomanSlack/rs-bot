@@ -71,7 +71,10 @@ def make_ctrl(hip, knee, apitch, aroll, wheel, wheel_r=None):
 # lives on the simple collision shapes, which are moved to geom group 4 and
 # hidden. Nothing here changes the dynamics. See docs/bom.md.
 
-SERVO = (0.0452, 0.0247, 0.0354)      # STS3215 body, L x W x H
+# STS3215, MEASURED off TheRobotStudio's STEP model rather than taken from a
+# product listing. See cad/servo.py. The third figure is along the OUTPUT
+# SHAFT and was 4.2 mm short, which is exactly where the horn clearances are.
+SERVO = (0.0454, 0.0248, 0.0396)      # STS3215 body, L x W x H(shaft)
 SERVO_HORN_R = 0.0100                 # 25T output horn
 PI5 = (0.085, 0.056, 0.017)
 BATT_3S = (0.105, 0.034, 0.024)       # 2200 mAh 3S pack
@@ -138,18 +141,18 @@ SEG_MASS = {"thigh": 0.0894, "shin": 0.0889, "ankle": 0.0693,
 # LEFT side and torso; the right side mirrors in y.
 # Regenerate with: uv run python -m cad.inertia --emit
 SEG_INERTIA = {
-    "thigh": (0.089438, (+0.000000, +0.001062, -0.080342),
-              (1.082750e-04, 8.980793e-05, 2.650052e-05, -1.211697e-20, -4.799863e-20, -2.568232e-05)),
-    "shin": (0.088882, (+0.005481, +0.044922, -0.043143),
-              (6.641551e-05, 5.754323e-05, 3.952030e-05, 4.583732e-07, 1.198234e-05, 1.223624e-05)),
-    "ankle": (0.069320, (-0.067961, +0.008562, +0.012695),
-              (4.103027e-05, 3.885657e-05, 5.473138e-05, -2.072709e-05, 6.810168e-06, 7.534307e-06)),
-    "rollbracket": (0.060009, (-0.002336, +0.030327, +0.001155),
-              (1.113396e-05, 1.786354e-05, 2.116093e-05, -2.304450e-06, 1.513950e-06, 8.870853e-07)),
-    "torso": (1.069180, (+0.007624, +0.000249, +0.084388),
-              (3.743464e-03, 3.499079e-03, 1.323310e-03, -2.329118e-07, -5.782052e-05, 9.280251e-06)),
-    "wheel": (0.060000, (+0.000000, +0.000000, +0.000000),
-              (1.908250e-05, 3.264000e-05, 1.908250e-05, 0.000000e+00, 0.000000e+00, 4.979948e-11)),
+    "thigh": (0.090187, (+0.000000, -0.000805, -0.080357),
+              (1.129334e-04, 8.998957e-05, 3.107577e-05, -1.247795e-20, -4.154540e-20, -2.777948e-05)),
+    "shin": (0.125175, (+0.005662, +0.056758, -0.051407),
+              (1.866848e-04, 1.471591e-04, 9.130730e-05, 8.984832e-06, 9.993500e-06, 5.610963e-05)),
+    "ankle": (0.069883, (-0.069429, +0.008011, +0.009838),
+              (4.220066e-05, 4.190962e-05, 6.017443e-05, -2.186850e-05, 5.755341e-06, 5.507253e-06)),
+    "rollbracket": (0.060786, (-0.002996, +0.031392, +0.001177),
+              (1.371858e-05, 2.010654e-05, 2.577258e-05, -3.759901e-06, 1.514666e-06, 9.907841e-07)),
+    "torso": (1.060988, (+0.007662, +0.000226, +0.084716),
+              (3.672659e-03, 3.461730e-03, 1.285137e-03, -2.010004e-07, -5.510582e-05, 8.451926e-06)),
+    "wheel": (0.054800, (+0.000000, +0.000000, +0.000000),
+              (1.742868e-05, 2.981120e-05, 1.742868e-05, 0.000000e+00, 0.000000e+00, 4.548352e-11)),
 }
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
@@ -160,7 +163,7 @@ _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
 # joint occupies the plane perpendicular to that joint's axis. Getting this
 # backwards is what made the first pass interpenetrate.
 HL, HW, HH = SERVO[0] / 2, SERVO[1] / 2, SERVO[2] / 2
-SHAFT_INSET = 0.010          # shaft centre from the near end of the body
+SHAFT_INSET = 0.0102         # shaft centre from the near end (measured)
 
 
 SPINE_Y = 0.021      # spine centre-line, outboard of the 24 mm wide wheel
@@ -262,8 +265,8 @@ def _link_geoms(link, side, sgn, meshes=False):
         # wheel-drive servo SWEEPS as the ankle rolls: that servo turns with
         # the roll bracket and carves an annulus 14-50 mm from the roll axis,
         # for |x| < 23 mm. Clearing the two end poses is not enough.
-        vis.append(_v(f"vshin_{side}", "box", f"0.010 {SPY} 0.0275",
-                      f"0 {y:.5f} -0.0275", C_PRINT))
+        vis.append(_v(f"vshin_{side}", "box", f"0.010 {SPY} 0.0245",
+                      f"0 {y:.5f} -0.0245", C_PRINT))
         # Ankle-pitch servo. It cannot be coaxial with its own joint, because
         # the wheel already owns that axle, so it sits high on the shin and
         # drives down through a belt that is not drawn.
@@ -271,10 +274,10 @@ def _link_geoms(link, side, sgn, meshes=False):
         # position its inner corner sits 49 mm from the roll axis, just inside
         # the wheel-servo sweep, and clips it at mid-flip by 2.4 mm.
         vis.append(_v(f"vankstand_{side}", "box", f"0.008 0.0035 0.022",
-                      f"0 {sgn*(SPINE_Y+SPY+0.0035):.5f} {-0.110+0.0700:.5f}",
+                      f"0 {sgn*(SPINE_Y+SPY+0.0035):.5f} {-0.110+0.0768:.5f}",
                       C_PRINT))
         vis.append(_v(f"vanksv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                      f"0 {outb+sgn*0.007:.5f} {-0.110+0.0700:.5f}", C_SERVO))
+                      f"0 {outb+sgn*0.007:.5f} {-0.110+0.0768:.5f}", C_SERVO))
         # The SHIN carries the ankle bearing, so the member reaching down to
         # the ankle axis belongs here. It steps aft high up, where the radius
         # from the roll axis already clears the servo sweep, then drops at
@@ -290,16 +293,16 @@ def _link_geoms(link, side, sgn, meshes=False):
         # height swings 13 mm THROUGH the floor. Forward, the same tilt lifts
         # it. See cad/envelope.py, which solves for the bearing's two legal
         # bands: y = -80..-47 and y = +57..+80.
-        vis.append(_v(f"vshinfarm_{side}", "box", f"0.014 {SPY} 0.007",
-                      f"0.024 {y:.5f} -0.048", C_PRINT))
+        vis.append(_v(f"vshinfarm_{side}", "box", f"0.0185 {SPY} 0.007",
+                      f"0.0285 {y:.5f} -0.042", C_PRINT))
         vis.append(_v(f"vshinfpost_{side}", "box", f"0.005 {SPY} 0.011",
-                      f"0.033 {y:.5f} -0.059", C_PRINT))
-        vis.append(_v(f"vshincross_{side}", "box", "0.005 0.029 0.0045",
-                      f"0.033 {sgn*0.044:.5f} -0.0655", C_PRINT))
+                      f"0.042 {y:.5f} -0.059", C_PRINT))
+        vis.append(_v(f"vshincross_{side}", "box", "0.005 0.0315 0.0045",
+                      f"0.042 {sgn*0.0465:.5f} -0.0655", C_PRINT))
         vis.append(_v(f"vshindrop_{side}", "box", "0.005 0.005 0.0265",
-                      f"0.033 {sgn*0.068:.5f} -0.0875", C_PRINT))
-        vis.append(_v(f"vshinback_{side}", "box", "0.019 0.005 0.006",
-                      f"0.019 {sgn*0.068:.5f} -0.108", C_PRINT))
+                      f"0.042 {sgn*0.071:.5f} -0.0875", C_PRINT))
+        vis.append(_v(f"vshinback_{side}", "box", "0.0215 0.005 0.006",
+                      f"0.0215 {sgn*0.071:.5f} -0.108", C_PRINT))
     elif link == "ankle":
         col.append(f'<geom class="ankle" name="ankle_{side}" '
                    f'size="{HW:.5f} {HH:.5f} {HL:.5f}" pos="0 0 {HL:.5f}" '
@@ -312,34 +315,38 @@ def _link_geoms(link, side, sgn, meshes=False):
         # the upright and the flat wheel.
         # Between the roll servo and the wheel, not inside either: the servo
         # case ends at x = -58, and |x| > 40 keeps it clear of the flat wheel.
-        vis.append(_v(f"vankpost_{side}", "box", "0.0045 0.006 0.006",
-                      "-0.0515 0 0", C_PRINT))
+        vis.append(_v(f"vankpost_{side}", "box", "0.003 0.006 0.006",
+                      "-0.048 0 0", C_PRINT))
+        # Ring the roll servo bolts to, with the coupler turning inside it.
+        vis.append(_v(f"vankring_{side}", "box", "0.0035 0.017 0.002",
+                      "-0.0545 0 0.015", C_PRINT))
+        vis.append(_v(f"vanktie_{side}", "box", "0.0035 0.006 0.005",
+                      "-0.0485 0 0.011", C_PRINT))
         # Mounting face the roll servo bolts to, bridging it to the carrier.
         # Kept within 8.5 mm of the roll axis: the roll bracket's tie sweeps
         # an annulus 8.7-19.6 mm out, so anything reaching into that band gets
         # hit partway through the flip.
-        vis.append(_v(f"vankface_{side}", "box", "0.002 0.006 0.006",
-                      "-0.056 0 0", C_PRINT))
+
         # The ankle-pitch joint, which was not drawn at all until now: the
         # shin had a bore 52.8 mm off the axis and the yoke had no matching
         # feature, so the two parts came no closer than 10.3 mm.
-        vis.append(_v(f"vyokecross_{side}", "box", "0.005 0.031 0.008",
-                      f"-0.051 {sgn*0.025:.5f} 0", C_PRINT))
+        vis.append(_v(f"vyokecross_{side}", "box", "0.003 0.0325 0.008",
+                      f"-0.048 {sgn*0.0265:.5f} 0", C_PRINT))
         vis.append(_v(f"vyokefwd_{side}", "box", "0.028 0.005 0.008",
-                      f"-0.028 {sgn*0.058:.5f} 0", C_PRINT))
+                      f"-0.028 {sgn*0.061:.5f} 0", C_PRINT))
         vis.append(_v(f"vyokeboss_{side}", "cylinder", "0.007 0.005",
-                      f"0 {sgn*0.058:.5f} 0", C_PRINT, euler="1.5708 0 0"))
+                      f"0 {sgn*0.061:.5f} 0", C_PRINT, euler="1.5708 0 0"))
         vis.append(_v(f"vrollsv_{side}", "box", f"{HH:.5f} {HW:.5f} {HL:.5f}",
                       # Lifted off the roll axis so it clears the floor in foot mode,
                       # where the axle is only 12 mm up. Safe despite the larger
                       # radius because |x| > 23 mm puts it outside the wheel-servo sweep.
-                      f"{-(0.058+HH):.5f} 0 0.016", C_SERVO))
+                      f"{-(0.058+HH):.5f} 0 0.0125", C_SERVO))
     elif link == "rollbracket":
         # Wheel-drive servo and bearing block, OUTBOARD. The 90 deg roll maps
         # +y onto +z, so outboard becomes directly above the flat wheel, which
         # is the only place a support for a vertical shaft can live.
         vis.append(_v(f"vwhlsv_{side}", "box", f"{HL:.5f} {HH:.5f} {HW:.5f}",
-                      f"0 {sgn*(0.0140+HH):.5f} 0", C_SERVO))
+                      f"0 {sgn*(0.0135+HH):.5f} 0", C_SERVO))
         # The printed arm the wheel servo bolts to. It was dropped when the
         # tie and tongue were replaced by the web, which left the bracket as
         # two loose pieces in the sim - caught by the one-rigid-piece test.
@@ -353,6 +360,13 @@ def _link_geoms(link, side, sgn, meshes=False):
                       f"-0.043 {sgn*0.012:.5f} 0.011", C_PRINT))
         vis.append(_v(f"vrollhub_{side}", "cylinder", "0.008 0.002",
                       "-0.043 0 0", C_PRINT, euler="0 1.5708 0"))
+        # Coupler disc bolted to the roll servo's horn - what the servo turns -
+        # and the 3 mm shaft joining it to the hub.
+        vis.append(_v(f"vrollcoup_{side}", "cylinder", "0.009 0.00225",
+                      "-0.05425 0 0", C_PRINT, euler="0 1.5708 0"))
+        vis.append(_v(f"vrollshaft_{side}", "cylinder", "0.0015 0.00775",
+                      "-0.04875 0 0", C_HORN, euler="0 1.5708 0"))
+
     elif link == "wheel":
         col.append(f'<geom class="wheel" name="wheel_{side}" zaxis="0 1 0" '
                    f'group="4"/>')
@@ -436,11 +450,29 @@ def _torso_visual(meshes=False):
     """
     x = 0.0085
     g = []
+    # Each side plate is fore and aft segments plus a bridge above, not one
+    # slab: the hip servo lives INSIDE the chassis and its output boss passes
+    # out through the plate to reach the thigh hub, so there is a notch there.
+    # Modelled as one slab it reads as a 4.2 mm interpenetration, which is not
+    # a fault - it is a hole nobody had drawn.
+    notch_x, notch_z = 0.0124, 0.0454
     for sgn in (1, -1):
-        g.append(_v(f"vside{sgn}", "box", "0.045 0.0015 0.090",
-                    f"{x} {sgn*0.0381:.4f} 0.090", C_PLATE))
+        for x0, x1 in ((-0.0365, -notch_x), (notch_x, 0.0535)):
+            g.append(_v(f"vside{sgn}f{x0:.3f}", "box",
+                        f"{(x1-x0)/2:.5f} 0.0015 {notch_z/2:.5f}",
+                        f"{(x0+x1)/2:.5f} {sgn*0.0381:.4f} {notch_z/2:.5f}",
+                        C_PLATE))
+        g.append(_v(f"vside{sgn}", "box", "0.045 0.0015 0.0673",
+                    f"{x} {sgn*0.0381:.4f} {notch_z+0.0673:.5f}", C_PLATE))
     g.append(_v("vtop", "box", "0.045 0.0366 0.0015", f"{x} 0 0.1785", C_PLATE))
-    g.append(_v("vshelf1", "box", "0.045 0.0366 0.0015", f"{x} 0 0.0200", C_PLATE))
+        # Shelf 1 is at the hip servo's height, so it is two segments with a gap
+    # where the servo passes - not a narrowed slab. Narrowing it cleared the
+    # servo and left the shelf 2 mm short of the side plates, which the
+    # one-rigid-piece test called out as a torso in four loose parts.
+    for x0, x1 in ((-0.0365, -0.0124), (0.0124, 0.0535)):
+        g.append(_v(f"vshelf1{x0:.3f}", "box",
+                    f"{(x1-x0)/2:.5f} 0.0366 0.0015",
+                    f"{(x0+x1)/2:.5f} 0 0.0200", C_PLATE))
     # Sits ON 4 mm standoffs above the shelf, not on the shelf itself: the
     # PCB needs clearance underneath for its through-hole legs.
     g.append(_v("vpistand", "box", "0.040 0.026 0.002", f"{x} 0 0.0235", C_PLATE))
@@ -452,7 +484,7 @@ def _torso_visual(meshes=False):
                 f"{x} 0 0.115", C_BATT))
     # Above the Pi now that the Pi sits on standoffs, still bolted to the
     # side plate.
-    g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0.0266 0.0495", C_PCB))
+    g.append(_v("vdriver", "box", "0.025 0.010 0.005", f"{x} 0 0.0545", C_PCB))
     if meshes:
         g = _swap_meshes(g, "torso", "l", 1)
     g += _hip_servos()

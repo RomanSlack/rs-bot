@@ -46,6 +46,7 @@ SOLIDS = {"thigh": thigh.build, "shin": shin.build,
           "torso": chassis.build}
 
 PETG_G_MM3 = masses.PETG / 1000.0        # g/cm3 -> g/mm3
+ANKLE_Z_MM = -110.0
 INFILL = masses.INFILL
 
 
@@ -156,6 +157,17 @@ def body_inertials():
         printed_g = vol * PETG_G_MM3 * INFILL
         com, I = solid_inertia(part, printed_g)
         pieces = [(printed_g, com, I)] + _pieces(m, body)
+        if link == "shin":
+            # The ankle-pitch belt drive rides on the shin: a 40T pulley at the
+            # joint, a 20T at the servo shaft, the belt and two shafts. Lumped
+            # at their weighted centroid, out in the belt plane at y = 84.5 -
+            # which is 84 mm off the leg's centreline, so where it sits matters
+            # more than what it weighs.
+            import cad.belt as belt
+            y = (belt.BELT_Y0 + belt.BELT_Y1) / 2
+            for g, z in ((14.0, ANKLE_Z_MM), (7.0, belt.SERVO_SHAFT_Z),
+                         (13.0, (ANKLE_Z_MM + belt.SERVO_SHAFT_Z) / 2)):
+                pieces.append((g, np.array([0.0, y, z]), np.zeros((3, 3))))
         if link == "torso":
             # The IMU, and 600 g standing in for the arms and head that arrive
             # at stage 4. Kept as the same uniform box, in the same place, that

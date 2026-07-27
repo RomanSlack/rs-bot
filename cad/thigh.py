@@ -21,11 +21,14 @@ SPINE_Y = 21.0
 SPY_OUT = 10.0                # half-thickness, 20 mm total
 KNEE_Z = -110.0
 
-HUB_R, HORN_BORE, HORN_BOLTS = 13.0, 4.0, 8.0
+HUB_R, HORN_BORE = 13.0, 4.0
 M2_CLEAR = 1.1
 
-SERVO_L, SERVO_W, SERVO_H = 45.2, 24.7, 35.4
-SHAFT_INSET = 10.0
+# From cad/servo.py, measured off a real STEP model. These were 45.2/24.7/35.4
+# and 10.0, invented from a product listing; the height was 4.2 mm short and it
+# is the axis the horn sits on.
+from cad.servo import LENGTH as SERVO_L, WIDTH as SERVO_W, HEIGHT as SERVO_H
+from cad.servo import SHAFT_INSET, HORN_DX, HORN_DY, HORN_SCREW_R
 SERVO_Y_HI = SPINE_Y - 6.0                    # servo's outboard face, y = 15
 SERVO_Y_LO = SERVO_Y_HI - SERVO_H             # inboard face, y = -20.4
 SERVO_Z_LO = KNEE_Z - SHAFT_INSET             # -120.0
@@ -71,10 +74,12 @@ def build():
     # Hip hub, centred ON the hip axis.
     part += bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HUB_R, 12)
     part -= bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HORN_BORE, 14)
-    for i in range(4):
-        a = np.deg2rad(45 + 90 * i)
-        part -= (bd.Pos(HORN_BOLTS * np.cos(a), SPINE_Y, HORN_BOLTS * np.sin(a))
-                 * bd.Rot(90, 0, 0) * bd.Cylinder(M2_CLEAR, 20))
+    # The real horn pattern: a 9.9 x 10.0 mm rectangle, not a circle at r = 8.
+    # Every one of these holes used to be 0.71 mm out of position.
+    for dx in (-HORN_DX, HORN_DX):
+        for dz in (-HORN_DY, HORN_DY):
+            part -= (bd.Pos(dx, SPINE_Y, dz) * bd.Rot(90, 0, 0)
+                     * bd.Cylinder(HORN_SCREW_R, 20))
 
     # Cross-member over the top of the servo, then down the inboard side.
     part += _box((-10, 10), (SERVO_Y_LO - PLATE_T, SPINE_Y + SPY_OUT),

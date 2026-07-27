@@ -42,10 +42,10 @@ ANKLE_Z = -110.0
 # TURNS with the roll bracket, and its far corner swings out to 50.9 mm,
 # 1.5 mm past its static face. Treating it as a fixed box put this boss where
 # fitcheck found it being clipped 0.9 mm at 16% of the flip.
-PITCH_Y = 68.0                # bearing centre
+PITCH_Y = 71.0                # bearing centre
 PITCH_HALF = 5.0              # bearing block half-width in y
 
-SPINE = ((-10, 10), (SPINE_Y - SPY, SPINE_Y + SPY), (-55, 0))
+SPINE = ((-10, 10), (SPINE_Y - SPY, SPINE_Y + SPY), (-49, 0))
 
 # The route to the bearing goes FORWARD, and both halves of that are forced.
 #
@@ -61,25 +61,26 @@ SPINE = ((-10, 10), (SPINE_Y - SPY, SPINE_Y + SPY), (-55, 0))
 # mode the axle is 12 mm off the floor and the shin stands at 27.5 deg, so
 # structure hanging aft at axle height swings down: the aft version ended up
 # 13 mm THROUGH the floor. Forward, the same tilt lifts it.
-FARM = ((10, 38), (SPINE_Y - SPY, SPINE_Y + SPY), (-55, -41))
-FPOST = ((28, 38), (SPINE_Y - SPY, SPINE_Y + SPY), (-70, -48))
+FARM = ((10, 47), (SPINE_Y - SPY, SPINE_Y + SPY), (-49, -35))
+FPOST = ((37, 47), (SPINE_Y - SPY, SPINE_Y + SPY), (-70, -48))
 # 9 mm deep, and it cannot be more. Deepening it to 15 buys 116% -> 107% of
 # PETG's allowable and then collides with the wheel-drive servo 5.3 mm deep at
 # 64% of the flip: the servo sweeps that space and there is nowhere to put the
 # extra section. The rib below is what carries this member instead.
-CROSS = ((28, 38), (SPINE_Y - SPY, PITCH_Y + PITCH_HALF), (-70, -61))
-DROP = ((28, 38), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -61))
-BACK = ((0, 38), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -102))
+CROSS = ((37, 47), (SPINE_Y - SPY, PITCH_Y + PITCH_HALF), (-70, -61))
+DROP = ((37, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -61))
+BACK = ((0, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -102))
 # Runs the length of the ankle servo's case so its mounting bolts can be far
 # apart: 1.63 N.m through bolts 12 mm apart is 136 N each, at 40 mm it is 41.
-STANDOFF = ((-8, 8), (SPINE_Y + SPY, SPINE_Y + SPY + 7), (-62, -18))
+STANDOFF = ((-8, 8), (SPINE_Y + SPY, SPINE_Y + SPY + 7), (-56, -12))
 
 # --- fasteners ---------------------------------------------------------------
 M2_CLEAR = 1.1                # radius, clearance for M2
 HUB_R = 13.0                  # hub outer radius
 HORN_BORE = 4.0               # radius, clearance over the servo output boss
-HORN_BOLTS = 8.0              # bolt circle radius; MUST sit outside HORN_BORE
-                              # and inside HUB_R, or the holes cut thin air
+# The real horn pattern, from cad/servo.py: a 9.9 x 10.0 mm rectangle. It was
+# a bolt circle at r = 8, so every hole was 0.71 mm out of position.
+from cad.servo import HORN_DX, HORN_DY, HORN_SCREW_R
 BEARING_OD = 5.0              # radius, 623ZZ outer race (10 mm dia)
 BEARING_W = 4.0               # 623ZZ width
 SHAFT_R = 2.0                 # radius, clearance for the 3 mm shaft
@@ -92,14 +93,14 @@ SHAFT_INSET = 10.0            # servo output shaft, from the near end of the cas
 # passed at 89% of PETG's allowable, which is passing with nothing to spare;
 # a triangle at a corner is the cheapest way to buy that back, because bending
 # stiffness goes as depth cubed and a rib is all depth.
-RIB_SPINE = ((10, -41), (10, -22), (32, -41))      # spine to forward arm
+RIB_SPINE = ((10, -35), (10, -18), (41, -35))      # spine to forward arm
 # The two hottest places on the part, both re-entrant corners, found by asking
 # the FEA rather than by eye: 80 MPa where the outboard crossing meets the
 # descent, and 68 MPa where the forward column meets the crossing. Triangles
 # in the y-z plane, across the full 10 mm width of those members.
 # One rib, running the full width to the descent, so it ends ON something.
-RIB_CROSS = ((27, -61), (27, -45), (63, -61))     # column to crossing
-RIB_X = (28.0, 38.0)
+RIB_CROSS = ((27, -61), (27, -45), (66, -61))     # column to crossing
+RIB_X = (37.0, 47.0)
 # (the arm-to-post rib went with the post's lower half)
 
 
@@ -141,11 +142,10 @@ def build():
     # 14 mm below it, which no amount of stress margin would have saved.
     part += bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HUB_R, 12)
     part -= bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HORN_BORE, 14)
-    for i in range(4):
-        ang = np.deg2rad(45 + 90 * i)
-        part -= (bd.Pos(HORN_BOLTS * np.cos(ang), SPINE_Y,
-                        HORN_BOLTS * np.sin(ang))
-                 * bd.Rot(90, 0, 0) * bd.Cylinder(M2_CLEAR, 20))
+    for dx in (-HORN_DX, HORN_DX):
+        for dz in (-HORN_DY, HORN_DY):
+            part -= (bd.Pos(dx, SPINE_Y, dz) * bd.Rot(90, 0, 0)
+                     * bd.Cylinder(HORN_SCREW_R, 20))
 
     # Ankle pitch bearing: a 623ZZ pressed into a counterbore, with a
     # clearance hole through for the shaft. A plain hole would run the shaft

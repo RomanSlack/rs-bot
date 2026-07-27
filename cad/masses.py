@@ -35,7 +35,7 @@ SERVO = 55.0          # STS3215
 # that would have spun on the rim. `uv run python -m cad.wheel` prints the
 # current figure and this has to be moved to match it by hand; cad/inertia.py's
 # check_masses is what catches it if you forget.
-WHEEL = 54.04
+WHEEL = 54.01
 # GT2 20T and 40T aluminium pulleys, a 188 mm x 15 mm belt, and the 3 mm shafts.
 BELT_DRIVE = 34.0
 PI5, BATT, DRIVER, IMU = 45.0, 180.0, 10.0, 5.0

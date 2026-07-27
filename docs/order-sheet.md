@@ -42,7 +42,7 @@ assumption you get to make afterwards.
 | part | qty | note |
 |---|---|---|
 | Feetech STS3215 (12 V, 1:345) | 10 | 5 per leg |
-| 25T metal servo horn | 10 | **pattern unverified, see below** |
+| 25T metal servo horn | 10 | pattern now measured, see `cad/servo.py` |
 | 623ZZ bearing, 3 x 10 x 4 | 4 | ankle pitch, both legs |
 | 3 mm shaft, 30 mm | 4 | ankle pitch and ankle roll |
 | GT2 pulley, 20T | 2 | ankle pitch drive, servo end |
@@ -67,10 +67,11 @@ one belongs to.
 | part | qty |
 |---|---|
 | M2 x 10 self-tapping | 40 |
-| M2.5 x 8 socket cap | 36 |
+| M3 x 8 socket cap | 32 |
+| M2.5 x 8 socket cap | 4 |
 | M2.5 x 10 socket cap | 8 |
 | M2.5 x 6 socket cap | 4 |
-| M2.5 heat-set insert, 3.5 mm bore x 4.0 deep | 48 |
+| M2.5 heat-set insert, 3.5 mm bore x 4.0 deep | 16 |
 
 Buy 25% spares. They cost nothing and one missing M2 stops a build for a week.
 
@@ -79,8 +80,14 @@ Buy 25% spares. They cost nothing and one missing M2 stops a build for a week.
 | interface | screw | threads into |
 |---|---|---|
 | part to servo **case** | M2 self-tapping | the servo's own 1.5 mm pilot |
-| part to servo **horn** | M2.5 | a heat-set insert in the printed part |
+| part to servo **horn** | **M3** | the horn, which is metal and tapped |
 | part to part | M2.5 | a heat-set insert |
+
+The horn screw is M3 and not M2.5, and that is measured rather than assumed:
+TheRobotStudio's own SO-ARM101 parts carry 3.0-3.2 mm clearance holes on the
+horn pattern. A clearance hole in the plastic means the thread is in the horn,
+so a horn joint needs **no insert** - which is why the insert count fell from
+48 to 16.
 
 Inserts for anything taken apart more than twice, which is every servo mount on
 a robot that has not been built yet.
@@ -108,23 +115,21 @@ modes, so each needs a service loop of at least that plus an 8 mm bend radius.
 `road-to-order.md` argues for a **~$30 validation order first**, and these are
 the three reasons, in order of what they would cost to get wrong:
 
-1. **The servo horn bolt pattern is assumed.** The horn is a bought part and
-   its pattern is not in the servo STEP, so it has never been measured. Four of
-   the five printed parts bolt to a horn. There is a decoy, too: the case
-   carries four screws at *each* end on a 9.9 x 9.9 rectangle, almost exactly
-   what this project believes the horn to be, and centred 1.25 mm off the
-   shaft. **Measure a real horn before committing the structure.**
-2. **The servo case mounting positions are assumed** for the same reason. What
-   is verified is that every hole runs along the shaft axis, and that all 28
-   holes in the printed parts agree with it.
+1. ~~The horn bolt pattern is assumed.~~ **Now measured** off three
+   TheRobotStudio SO-ARM101 parts that bolt to the same horn, six patterns
+   agreeing to 0.00 mm. It moved the screw from M2.5 to M3 and grew every horn
+   hole in this robot by 0.7 mm.
+2. **The servo case mounting positions are still assumed.** What is verified is
+   that every servo hole runs along the shaft axis and that all 36 holes in the
+   printed parts agree with it.
 3. **There is no central horn screw anywhere in the CAD.** A horn is fixed to
    its spline by an axial screw. Nothing models it, sizes it, or checks you can
    reach it, and it is the *only* screw actually fitted on the robot at a horn
    joint, because the four pattern screws are done on the bench.
+4. **Cable channels do not exist** in the thigh, shin or ankle yoke.
 
-**Buy one servo and one horn first.** It settles all three, plus the printed
-bore tolerance and the 0.35 mm tyre press fit, for the price of a coffee and a
-week.
+**Buy one servo and one horn first.** It settles 2 and 3, plus the printed bore
+tolerance and the 0.35 mm tyre press fit, for the price of a coffee and a week.
 
 ## Mass, for the record
 

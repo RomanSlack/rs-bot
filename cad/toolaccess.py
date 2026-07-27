@@ -104,7 +104,7 @@ def holes(mode="wheel"):
                 d = f.axis_of_rotation.direction
             except Exception:
                 continue
-            if r is None or not (0.9 < r < 1.6):
+            if r is None or not (0.9 < r < 1.8):
                 continue
             c = f.center()
             centre = np.array([c.X, c.Y, c.Z])

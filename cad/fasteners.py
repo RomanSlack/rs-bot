@@ -30,7 +30,10 @@ fluently.
                           the part, into the servo's own 1.5 mm pilot. The
                           servo supplies the thread, so the printed part needs
                           nothing but a clean hole.
-    part -> servo HORN    M2.5 into a HEAT-SET INSERT in the printed part.
+    part -> servo HORN    M3 through a 3.2 mm CLEARANCE hole, into the horn,
+                          which is metal and tapped. No insert: the thread is
+                          bought. Measured off TheRobotStudio's own parts, see
+                          cad/servo.py.
     part -> part          M2.5 into a heat-set insert.
 
 Inserts for anything taken apart more than twice, which is every servo mount on
@@ -38,8 +41,9 @@ a robot that has not been built yet. The cost is that an insert needs a 3.5 mm
 bore where a clearance hole needs 2.5, and enough wall around it to take the
 melt without bulging.
 
-The horn interface is specified here but NOT verified: the horn is a bought
-part and its bolt pattern is not in the servo STEP. See cad/servo.py.
+The horn pattern IS verified now, measured off three of TheRobotStudio's
+SO-ARM101 parts that bolt to the same horn. It moved the screw from M2.5 to M3
+and every horn hole in this robot grew 0.7 mm. See cad/servo.py.
 """
 
 import sys
@@ -55,6 +59,7 @@ import cad.servo as servo
 # Radii, because everything downstream cuts cylinders.
 M2_CLEAR_R = 1.10          # 2.2 mm, an M2 screw passes
 M25_CLEAR_R = 1.35         # 2.7 mm, an M2.5 screw passes
+M3_CLEAR_R = 1.60          # 3.2 mm, an M3 screw passes - the horn size
 M25_INSERT_R = 1.75        # 3.5 mm bore for an M2.5 heat-set insert
 M25_INSERT_DEPTH = 4.0     # and how deep it sits
 INSERT_WALL = 1.2          # minimum material round an insert bore
@@ -68,19 +73,15 @@ M25_HEAD_R = 2.25          # M2.5 socket cap
 #
 # (interface, screw, threads into, count, note)
 SCHEDULE = [
-    ("thigh -> hip servo horn", "M2.5 x 8", "insert in thigh", 4,
-     "horn pattern ASSUMED, see cad/servo.py"),
+    ("thigh -> hip servo horn", "M3 x 8", "the horn, tapped", 4, ""),
     ("thigh -> knee servo case", "M2 x 10", "servo pilot", 4, ""),
-    ("shin -> knee servo horn", "M2.5 x 8", "insert in shin", 4,
-     "horn pattern ASSUMED"),
+    ("shin -> knee servo horn", "M3 x 8", "the horn, tapped", 4, ""),
     ("shin -> ankle servo case", "M2 x 10", "servo pilot", 4, ""),
     ("ankle yoke -> ankle pitch shaft", "M2.5 x 8", "insert in yoke", 2, ""),
     ("ankle yoke -> roll servo case", "M2 x 10", "servo pilot", 4, ""),
-    ("roll bracket -> roll servo horn", "M2.5 x 8", "insert in bracket", 4,
-     "horn pattern ASSUMED"),
+    ("roll bracket -> roll servo horn", "M3 x 8", "the horn, tapped", 4, ""),
     ("roll bracket -> wheel servo case", "M2 x 10", "servo pilot", 4, ""),
-    ("wheel body -> wheel servo horn", "M2.5 x 8", "insert in wheel", 4,
-     "horn pattern ASSUMED"),
+    ("wheel body -> wheel servo horn", "M3 x 8", "the horn, tapped", 4, ""),
     ("chassis -> hip servo case", "M2 x 10", "servo pilot", 8,
      "both hips, 4 each"),
     ("chassis side plates -> top", "M2.5 x 10", "insert in chassis", 8, ""),
@@ -122,8 +123,14 @@ def _servo_frames(mode="wheel"):
     return out
 
 
-def part_hole_axes(solid, rmin=0.9, rmax=1.6):
-    """Every M2/M2.5-scale cylindrical hole in a part: (radius, centre, axis)."""
+def part_hole_axes(solid, rmin=0.9, rmax=1.8):
+    """Every fastener-scale cylindrical hole in a part: (radius, centre, axis).
+
+    rmax is 1.8, not 1.6. When the horn screw went from M2.5 to M3 the holes
+    grew to r = 1.60 and a 1.6 ceiling silently dropped half of them - the
+    audit went from 28 holes to 14 and still said "every screw lines up",
+    because it was no longer looking at the ones that had changed.
+    """
     out = []
     for f in solid.faces():
         if str(getattr(f, "geom_type", "")).upper().find("CYLINDER") < 0:

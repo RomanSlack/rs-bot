@@ -83,31 +83,47 @@ CASE_FACE_Y = 12.40
 CASE_MOUNTS = [(-19.55, -10.25), (4.95, -10.25),
                (-15.75, 10.25), (4.95, 10.25)]
 
-# --- the horn bolt pattern, NOT measured ---------------------------------------
+# --- the horn bolt pattern, MEASURED -------------------------------------------
 #
-# READ THIS BEFORE TRUSTING THE NUMBERS BELOW.
+# The horn is a separate bought part and is NOT in the servo STEP - that file
+# holds one solid, the bare case. So the pattern cannot come from there, and
+# for a long time it was simply assumed.
 #
-# The shaft position and the horn seating face ARE verified against the STEP:
-# the 25T spline sits at x = 12.50 +/- 1.64, y = 0, running z = 18.60..20.20,
-# and the face it seats on is the plane at z = 18.70. Those are solid.
+# It is now measured, from the other end: TheRobotStudio's own SO-ARM101 parts,
+# which bolt to this exact horn on this exact servo. A part that mates with the
+# horn carries the horn's pattern as its own clearance holes.
 #
-# The bolt pattern is not, and cannot be, because the horn is a separate bought
-# part and this STEP is the servo without it. There is no hole anywhere in this
-# model that corresponds to these.
+#     Rotation_Pitch_SO101   two patterns   r = 1.60   +/-4.95 x +/-4.95
+#     Wrist_Roll_Pitch_SO101 two patterns   r = 1.60   +/-4.95 x +/-4.95
+#     Upper_arm_SO101        two patterns   r = 1.50   +/-4.95 x +/-4.95
 #
-# There IS a decoy, and it is a good one. The case has four r = 1.25 screws at
-# each end, on a 9.9 x 9.9 mm rectangle - almost exactly the "9.9 x 10.0" this
-# project believes the horn pattern to be. They are NOT it: they appear at both
-# z ends, which a horn pattern cannot, and they are centred on x = 11.25 rather
-# than on the shaft at 12.50. Anyone re-deriving the horn pattern from this file
-# will find them and think they have found the horn.
+# Six independent patterns across three parts, all agreeing on position to
+# 0.00 mm. Rotation_Pitch is vendored next to the servo (Apache-2.0, same
+# source) so this is re-derivable rather than a claim.
 #
-# Four of the five printed parts bolt to a horn, so this is the single most
-# load-bearing assumption left in the robot. It is a validation-order item:
-# measure a real horn before committing the structure. See docs/road-to-order.md.
-HORN_DX, HORN_DY = 4.95, 5.00            # ASSUMED, about the shaft
-HORN_SCREW_R = 1.25                      # ASSUMED, 2.5 mm clearance
-HORN_VERIFIED = False
+# WHAT THAT CHANGED, and it is not the position:
+#
+#     spacing   4.95 x 5.00  ->  4.95 x 4.95    0.05 mm, immaterial
+#     hole      r = 1.25     ->  r = 1.60       0.70 mm on diameter, and it is
+#                                               the difference between M2.5 and
+#                                               M3. Every horn hole in this
+#                                               robot was too small for its
+#                                               screw.
+#
+# A 3.2 mm hole in a printed part is an M3 CLEARANCE hole, so the screw passes
+# through the plastic and threads into the horn, which is metal and tapped.
+# That means no heat-set insert at a horn joint - the thread is bought.
+#
+# THE DECOY IS STILL THERE, and it is why this was believable for so long. The
+# case carries four r = 1.25 screws at EACH end on a 9.9 x 9.9 rectangle, which
+# is the right size and the wrong everything else: it appears at both z ends,
+# which a horn pattern cannot, and it is centred on x = 11.25 rather than on
+# the shaft at 12.50. The assumed values were almost exactly these.
+HORN_DX, HORN_DY = 4.95, 4.95            # measured, about the shaft
+HORN_SCREW_R = 1.60                      # 3.2 mm, M3 clearance
+HORN_SCREW = "M3"
+HORN_VERIFIED = True
+HORN_REF = "vendor/refs/Rotation_Pitch_SO101.step"
 
 # The case screws, measured, kept so the decoy above is checkable rather than
 # just described.

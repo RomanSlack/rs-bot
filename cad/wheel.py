@@ -48,8 +48,13 @@ SPOKE_T = 5.0
 
 # 25T horn, the bought part that gives a real spline interface.
 HORN_R = 10.0            # boss the horn sits in
-HORN_BOLT_DX, HORN_BOLT_DY = 4.95, 5.00
-HORN_BOLT_R = 1.35       # M2.5 clearance
+# Imported rather than repeated. These were a local copy of the horn pattern
+# and drifted from it: 4.95 x 5.00 with a 2.7 mm hole, against a measured
+# 4.95 x 4.95 with a 3.2 mm one. A second copy of a number is a second place
+# for it to be wrong.
+from cad.servo import HORN_DX as HORN_BOLT_DX  # noqa: E402
+from cad.servo import HORN_DY as HORN_BOLT_DY  # noqa: E402
+from cad.servo import HORN_SCREW_R as HORN_BOLT_R  # noqa: E402
 SHAFT_BORE = 3.2         # over the 5.9 mm spline boss
 
 # Tread. Cut INTO the band, never added on top: every clearance rule in the

@@ -144,6 +144,23 @@ def _parts():
             at=(-56, 0, 0), key="ankle", size=3.0,
             note="held at the pitch shaft, loaded at the roll servo"),
 
+        # CAVEAT ON THIS PART'S NUMBER. When the horn holes were corrected
+        # from an assumed M2.5 to a measured M3, the roll bracket's peak went
+        # 53.7 -> 41.7 MPa and its DEFLECTION went 2.46 -> 1.83 mm. Removing
+        # material cannot make a part stiffer under the same load, and the load
+        # is identical to three decimal places (52.04 N, flip x3, checked
+        # against the committed tree). Rebuilding the old holes in the current
+        # tree does not reproduce the old number either: 41.3 against 41.6.
+        #
+        # So the change is not the geometry and not the load, which leaves the
+        # mesh and the node sets these lambdas select from it. Both values are
+        # individually mesh-converged, which means convergence is not the test
+        # that catches this: the boundary conditions themselves move.
+        #
+        # Treat this part's utilisation as the softest number in the study, and
+        # do not celebrate the improvement. Selecting held and loaded nodes by
+        # coordinate is convenient and it is why - a named-face selection would
+        # not drift when the mesh does.
         "roll_bracket": dict(
             step="roll_bracket.step", layer=(0, 0, 1),
             # Selected on solid material, not on holes: this part has none.

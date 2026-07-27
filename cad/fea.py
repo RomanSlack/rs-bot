@@ -26,6 +26,8 @@ Verified against a cantilever with a known closed-form answer before being
 used on anything - see `verify()`.
 """
 
+from cad import THREADS
+
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
@@ -265,6 +267,8 @@ def mesh_step(path, size=3.0, order=2):
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
+        # gmsh threads its mesher too; cap it with everything else.
+        gmsh.option.setNumber("General.NumThreads", THREADS)
         gmsh.model.occ.importShapes(str(path))
         gmsh.model.occ.synchronize()
         gmsh.option.setNumber("Mesh.MeshSizeMax", size)
@@ -323,6 +327,8 @@ def verify(size=3.0, verbose=True):
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
+        # gmsh threads its mesher too; cap it with everything else.
+        gmsh.option.setNumber("General.NumThreads", THREADS)
         gmsh.model.occ.addBox(0, -b / 2, -h / 2, L, b, h)
         gmsh.model.occ.synchronize()
         gmsh.option.setNumber("Mesh.MeshSizeMax", size)

@@ -184,6 +184,16 @@ PRINTED_VIS = ("vthigh", "vshin", "vankstand", "vshinarm", "vshinpost",
 MESH_STEM = {"thigh": "thigh", "shin": "shin", "ankle": "ankle_yoke",
              "rollbracket": "roll_bracket", "torso": "chassis"}
 
+# The wheel is two parts in two materials and needs a rotation the others do
+# not: its CAD spins about z with the sole at +z, the sim body spins about y
+# with the sole INBOARD. +90 deg about x on the left, -90 on the right - which
+# also says the two wheels are the same part flipped over, not a mirrored pair.
+# It is kept separate from MESH_STEM because that machinery assumes one mesh
+# per link, no rotation, and mirrored by a negative y scale. None of those hold
+# here, and forcing it would have shown the wheel in the wrong mode.
+MESH_MULTI = {"wheel": [("wheel_body", C_HUB), ("wheel_tyre", C_TIRE)]}
+MESH_EULER = {"wheel": {"l": "1.5708 0 0", "r": "-1.5708 0 0"}}
+
 
 def _inertial(link, sgn):
     """The <inertial> for one link, mirrored in y for the right side.
@@ -206,6 +216,17 @@ def _inertial(link, sgn):
 
 def _swap_meshes(vis, link, side, sgn):
     """Printed stand-in boxes out, the real part in."""
+    if link in MESH_MULTI:
+        # The wheel: drop the tyre/hub cylinders, put both real solids in.
+        kept = [g for g in vis
+                if f'name="vtire_{side}"' not in g
+                and f'name="vhub_{side}"' not in g]
+        e = MESH_EULER[link][side]
+        return kept + [
+            f'<geom name="cad_{stem}_{side}" type="mesh" '
+            f'mesh="cad_{stem}_{side}" euler="{e}" rgba="{rgba}" '
+            f'contype="0" conaffinity="0" mass="0" group="0"/>'
+            for stem, rgba in MESH_MULTI[link]]
     kept = [g for g in vis
             if not any(f'name="{p}_{side}"' in g or f'name="{p}"' in g
                        for p in PRINTED_VIS)]
@@ -374,7 +395,7 @@ def _link_geoms(link, side, sgn, meshes=False):
                    euler="1.5708 0 0"),
                 _v(f"vhub_{side}", "cylinder", "0.024 0.0115", "0 0 0", C_HUB,
                    euler="1.5708 0 0")]
-    if meshes and link in MESH_STEM:
+    if meshes and (link in MESH_STEM or link in MESH_MULTI):
         vis = _swap_meshes(vis, link, side, sgn)
     return col + vis
 
@@ -509,6 +530,17 @@ def _mesh_assets(meshes):
                     f"export the STLs before loading the model with meshes=True")
             out.append(f'<mesh name="cad_{stem}_{side}" file="{f}" '
                        f'scale="0.001 {0.001 * sgn} 0.001"/>')
+    for link, parts in MESH_MULTI.items():
+        for stem, _rgba in parts:
+            f = CAD_OUT / f"{stem}.stl"
+            if not f.exists():
+                raise FileNotFoundError(
+                    f"{f} is missing - run `uv run python -m cad.robot` once to "
+                    f"export the STLs before loading the model with meshes=True")
+            for side in ("l", "r"):
+                # NOT mirrored: same part, flipped by the euler below.
+                out.append(f'<mesh name="cad_{stem}_{side}" file="{f}" '
+                           f'scale="0.001 0.001 0.001"/>')
     return "\n    ".join(out)
 
 

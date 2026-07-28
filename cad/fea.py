@@ -26,6 +26,8 @@ Verified against a cantilever with a known closed-form answer before being
 used on anything - see `verify()`.
 """
 
+import os
+
 from cad import THREADS
 
 import numpy as np
@@ -156,11 +158,35 @@ def _solve_spd(K, f):
     return y / d
 
 
+# A direct sparse factorisation is exact and fast, and its memory is NOT
+# linear in the mesh. Fill-in on a 3D elasticity problem grows far faster than
+# the node count, and a 65k-node solve on this machine reached 32 GB of
+# resident memory - enough that the kernel OOM-killer went looking for
+# something to kill and took the user's IDE (9.5 GB) with it.
+#
+# Nothing warned. The solve just got slower and then the desktop lost an
+# application, which is a terrible way to find out.
+#
+# So: refuse up front, with a number, rather than discover it by exhaustion.
+# ~55k nodes is 165k DOF and factors inside a few GB. Above that, coarsen the
+# mesh or use curvature sizing (see mesh_step). RSBOT_MAX_NODES overrides it
+# for a machine with more headroom.
+MAX_NODES = int(os.environ.get("RSBOT_MAX_NODES", 55_000))
+
+
 def solve(nodes, elems, E, nu, fixed, loads):
     """fixed: node indices held at zero. loads: (node_ids, (n,3) forces).
 
     Returns (displacement (N,3), stress (N,6) nodally averaged).
     """
+    if len(nodes) > MAX_NODES:
+        raise MemoryError(
+            f"{len(nodes)} nodes ({3*len(nodes)} DOF) is past the "
+            f"{MAX_NODES}-node ceiling for a direct solve. Fill-in is "
+            f"superlinear: 65k nodes took 32 GB here and the OOM-killer took "
+            f"an unrelated application with it. Coarsen the mesh, use "
+            f"curvature sizing, or raise RSBOT_MAX_NODES if this machine has "
+            f"the headroom.")
     K = stiffness(nodes, elems, E, nu)
     n = len(nodes) * 3
     f = np.zeros(n)

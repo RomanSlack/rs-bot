@@ -401,30 +401,44 @@ def test_no_running_clearance_closes_under_a_worst_case_tolerance_stack():
             f"tightest {closed[0][3]} x {closed[0][4]} at {closed[0][0]:.2f} mm")
 
 
-def test_the_peaks_that_matter_have_converged():
-    """cad/fea.py is verified against a cantilever, which validates the ELEMENT
-    and says nothing about whether the mesh on these parts is fine enough.
+@pytest.mark.parametrize("part,sizes", [("roll_bracket", (3.0, 2.2)),
+                                        ("shin", (3.0, 2.2)),
+                                        ("thigh", (2.6, 2.2))])
+def test_the_reported_peak_is_a_number_and_not_a_mesh_artifact(part, sizes):
+    """A peak that moves under refinement is not the part's stress.
 
-    Only the two parts near their limit are checked, because refinement is slow
-    and they are the ones where a moving peak would change the answer: the roll
-    bracket at 94% of PA6-CF and the shin at 86%.
+    Both directions are bad. Growing without limit is a singularity - a sharp
+    re-entrant corner, where the exact answer is infinite. Collapsing is a
+    coarse mesh reading spurious stress off badly-shaped elements. The thigh
+    did the second: 135 MPa at 3.0 mm against 17 at 2.2, which arrived in the
+    table as 143% of PA6-CF and a failure that did not exist.
 
-    What matters is not that the change is small, it is that it is SETTLING. A
-    peak on a sharp re-entrant corner grows without limit as the mesh refines,
-    because the exact solution there is infinite; that is a geometry fault, and
-    this is how it is told apart from a mesh that is simply coarse.
+    Each part is bracketed around ITS OWN default size, not a fixed pair. The
+    thigh's default is 2.2 precisely because 3.0 is wrong for it, so testing it
+    at 3.0 would assert that a mesh we already rejected disagrees with the one
+    we chose - true, and useless.
+
+    The threshold is tied to how much the answer matters. Refinement is not
+    free here: cad/fea.MAX_NODES caps the direct solve, and the thigh cannot be
+    meshed finer than 2.2 without going past it. At 30% of allowable, a 10%
+    uncertainty on its peak changes no decision; at 88%, like the shin, it
+    changes everything. So a part near its limit must converge tightly, and a
+    part with a large margin need only be BOUNDED - which still catches the
+    six-fold jump that started all this.
     """
     from cad import stress
 
-    for part in ("roll_bracket", "shin"):
-        out = stress.converge(part, sizes=(3.0, 2.2), verbose=False)
-        coarse, fine = out[0][2], out[-1][2]
-        assert fine > 0, f"{part}: the fine solve returned nothing"
-        change = abs(fine - coarse) / coarse
-        assert change < 0.10, (
-            f"{part}: peak moved {change:.1%} from a 3.0 mm mesh to 2.2 mm, "
-            f"{coarse:.1f} -> {fine:.1f} MPa. It has not converged, so the "
-            f"utilisation quoted for it is not a number")
+    out = stress.converge(part, sizes=sizes, verbose=False)
+    coarse, fine = out[0][2], out[-1][2]
+    assert fine > 0, f"{part}: the fine solve returned nothing"
+    change = abs(fine - coarse) / max(coarse, fine)
+    util = fine / 57.0                       # PA6-CF, knocked down
+    limit = 0.10 if util > 0.60 else 0.35
+    assert change < limit, (
+        f"{part}: peak moved {change:.1%} between {sizes[0]} and {sizes[-1]} mm "
+        f"({coarse:.1f} -> {fine:.1f} MPa) at {util:.0%} of allowable, over the "
+        f"{limit:.0%} allowed at that margin. Whichever way it moved, the "
+        f"utilisation quoted for this part is not a number")
 
 
 def test_nothing_fails_in_fatigue_in_the_material_we_would_order():

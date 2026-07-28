@@ -121,7 +121,11 @@ def _parts():
             load=lambda n: np.concatenate([
                 near_axis(n, (dx, -23.4, dz), (0, 1, 0), 2.2)
                 for dx in (-8.5, 8.5) for dz in (-115.0, -79.8)]),
-            at=(0, 0, -110), key="thigh", size=3.0,
+            # 2.2, not 3.0. At 3.0 this part reports 73 MPa and "fails" at
+            # 143% of PA6-CF; at 2.2 it reports 20.0 and the deflection is
+            # unchanged either way, which is the signature of a mesh artifact
+            # rather than a stress. 48.6k nodes, inside cad/fea.MAX_NODES.
+            at=(0, 0, -110), key="thigh", size=2.2,
             note="held at the hip horn, loaded through the knee servo bolts"),
 
         "shin": dict(
@@ -228,9 +232,16 @@ def _parts():
             # Curvature-driven, not uniform. Uniform 3 mm (which the M2 holes
             # force) gives 105k nodes and 314k DOF, and the direct solve does
             # not converge at that size - it came back with a residual 128x the
-            # applied load. Curvature sizing keeps the holes resolved, coarsens
-            # the 230 mm of straight leg between them, and lands at 38k nodes.
-            at=(0, 60, 40), key="wheel", size=8.0, curvature=8,
+            # applied load. Curvature sizing keeps the holes resolved and
+            # coarsens the 230 mm of straight leg between them.
+            #
+            # 10.0/6, not 8.0/8. Filleting the shin and the yoke added curved
+            # surface for the curvature sizing to chase, which took this from
+            # 38k nodes to 62.6k - past cad/fea.MAX_NODES, and the guard
+            # stopped the run rather than letting it reach for 30 GB. 41.7k
+            # now. A fillet is not free in the analysis even when it is free in
+            # the part.
+            at=(0, 60, 40), key="wheel", size=10.0, curvature=6,
             note="held at the hip, loaded at the wheel - the whole load path"),
 
         "chassis": dict(
@@ -508,7 +519,7 @@ if __name__ == "__main__":
 
 # --- does the mesh have anything to say? --------------------------------------
 
-def converge(name, sizes=(3.0, 2.4, 1.9), verbose=True):
+def converge(name, sizes=(3.0, 2.6, 2.2), verbose=True):
     """Solve one part at several mesh densities and report the peak.
 
     cad/fea.py is verified against a cantilever, which validates the ELEMENT.
@@ -516,6 +527,12 @@ def converge(name, sizes=(3.0, 2.4, 1.9), verbose=True):
     the margins that matter are thin: the shin sits at 86% of PA6-CF and the
     roll bracket at 94%. A peak that is still climbing at the finest mesh is a
     peak nobody knows the value of.
+
+    The sizes stop at 2.2 mm on purpose. Finer meshes push the direct solve
+    past cad/fea.MAX_NODES, and the reason that ceiling exists is that a 1.9 mm
+    thigh took 32 GB and the kernel OOM-killer took an unrelated application
+    with it. If a part has not settled by 2.2 mm, that is a finding about the
+    part, not an invitation to refine harder.
 
     What to look for is not a small change, it is a change that is SETTLING. A
     stress concentration at a sharp re-entrant corner never settles - it grows

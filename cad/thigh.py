@@ -14,6 +14,22 @@ from pathlib import Path
 import build123d as bd
 import numpy as np
 
+# --- cable channel -------------------------------------------------------------
+#
+# The bus lead from this part's servo to the next runs straight through here.
+# cad/wiring.py found it, and the runs are modelled as the STRAIGHT LINE between
+# measured connector ports - the shortest possible path - so anything it hits is
+# hit by every real routing too.
+#
+# Cut at CABLE_CH_R, the 4.4 mm bundle plus room to lay it in without pinching.
+# A relief where the path grazes the surface, a tunnel where it does not; either
+# way it is the cable's space reserved, instead of discovered at the bench with
+# the parts already printed.
+CABLE_CH_R = 3.0
+CABLE_A = (-1.6, -10.0, 2.9)
+CABLE_B = (-0.6, -10.0, -116.9)
+
+
 
 OUT = Path(__file__).parent / "out"
 PETG_SOLID, INFILL = 1.270, 0.60
@@ -100,6 +116,10 @@ def build():
         for dz in (SERVO_Z_LO + 5.0, SERVO_Z_HI - 5.0):
             part -= (bd.Pos(dx, SERVO_Y_LO - PLATE_T / 2, dz)
                      * bd.Rot(90, 0, 0) * bd.Cylinder(M2_CLEAR, 40))
+
+    # Reserve the cable run. See CABLE_CH_R.
+    from cad.wiring import tube as _tube
+    part -= _tube(CABLE_A, CABLE_B, r=CABLE_CH_R)
 
     # NOT FILLETED, and the honest reason is narrower than it first looked.
     #

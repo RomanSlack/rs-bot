@@ -100,13 +100,21 @@ a robot that has not been built yet.
 | soldering iron with M2.5 insert tip | 48 inserts |
 | calipers | the validation order is worthless without them |
 
-## 5. Cable channels do not exist yet
+## 5. Cable channels: cut, with one exception
 
-`cad/wiring.py` reports that the hip-to-knee run passes through the thigh and
-the knee-to-ankle run through the shin, and that in foot mode the roll-to-wheel
-run fouls the ankle yoke. Those parts need channels cut before they are
-ordered. The runs across the ankle roll change length by 6.3 mm between the two
-modes, so each needs a service loop of at least that plus an 8 mm bend radius.
+The thigh, shin and ankle yoke now carry a 6 mm channel along the cable run,
+cut for BOTH poses because the paths move between them. Wheel mode is clear on
+all eight runs; foot mode has one left.
+
+**The roll-to-wheel run is not solved and cannot be by a channel.** It crosses
+the ankle roll joint, so its far end is on a bracket that turns 90 degrees, and
+its shortest path passes through the WHEEL in foot mode. You cannot groove a
+part that spins. That run needs a routed path tucked inboard of the wheel, held
+by a clip, taking up the 6.3 mm of length change as a service loop with an
+8 mm bend radius.
+
+Decide that route before ordering: it may want a tie point on the yoke, and a
+tie point is a printed feature.
 
 ---
 

@@ -16,6 +16,22 @@ from pathlib import Path
 import build123d as bd
 import numpy as np
 
+# --- cable channel, roll servo to wheel servo ----------------------------------
+#
+# This run crosses the ankle ROLL joint, so its far end is on a bracket that
+# turns 90 degrees and the cable sweeps a long arc between the modes. Only the
+# end anchored on this part stays put.
+#
+# So both extremes get a channel: the cable has to live somewhere in both poses,
+# and reserving one of them reserves the wrong one half the time. cad/wiring.py
+# measures the length change at 6.3 mm, which is the service loop this has to
+# let it take up.
+CABLE_CH_R = 3.0
+CABLE_A = (-78.3, 5.2, -6.9)          # roll servo port, fixed on the yoke
+CABLE_B_WHEEL = (-0.5, 28.1, -19.4)
+CABLE_B_FOOT = (-0.6, 19.4, 28.1)
+
+
 
 OUT = Path(__file__).parent / "out"
 PETG_SOLID, INFILL = 1.270, 0.60
@@ -152,6 +168,11 @@ def yoke():
     # Tie the ring back to the bearing carrier, clear of the coupler. Upper
     # only, for the same reason.
     part += _box(((-52, -45), (-6, 6), (6, 16)))
+    # Reserve the roll-to-wheel cable, in both poses.
+    from cad.wiring import tube as _tube
+    part -= _tube(CABLE_A, CABLE_B_WHEEL, r=CABLE_CH_R)
+    part -= _tube(CABLE_A, CABLE_B_FOOT, r=CABLE_CH_R)
+
     part = part.clean()
     from cad.shape import long_edges, soften
     # x-edges only. The yoke's y-edges refuse at every radius OCC will try,

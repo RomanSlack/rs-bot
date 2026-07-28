@@ -123,6 +123,31 @@ def _servo_frames(mode="wheel"):
     return out
 
 
+def _wraps(face, r, axis):
+    """How far a cylindrical face wraps around its own axis, in radians.
+
+    A fillet and a bolt hole are both cylindrical faces of similar radius, and
+    NOTHING about the radius separates them. What does is how much of the
+    cylinder is actually there: a bolt hole through material is a full 2*pi
+    barrel, an edge blend is a quarter of one.
+
+    Measured from area rather than by probing normals. The obvious test - is
+    the surface concave or convex - needs a point ON the face and the position
+    of the AXIS, and a first attempt passed the face's own centroid as both,
+    making the radial vector zero and every face look like a hole. Area and
+    length are unambiguous and cheap.
+    """
+    bb = face.bounding_box()
+    a = np.asarray(axis, float)
+    a = a / np.linalg.norm(a)
+    lo = np.array([bb.min.X, bb.min.Y, bb.min.Z])
+    hi = np.array([bb.max.X, bb.max.Y, bb.max.Z])
+    length = abs(float(np.dot(hi - lo, a)))
+    if length < 1e-6 or r < 1e-6:
+        return 0.0
+    return float(face.area) / (r * length)
+
+
 def part_hole_axes(solid, rmin=0.9, rmax=1.8):
     """Every fastener-scale cylindrical hole in a part: (radius, centre, axis).
 
@@ -143,8 +168,11 @@ def part_hole_axes(solid, rmin=0.9, rmax=1.8):
         if r is None or not (rmin < r < rmax):
             continue
         c = f.center()
-        out.append((float(r), np.array([c.X, c.Y, c.Z]),
-                    np.array([d.X, d.Y, d.Z])))
+        centre = np.array([c.X, c.Y, c.Z])
+        axis = np.array([d.X, d.Y, d.Z])
+        if _wraps(f, float(r), axis) < np.pi:
+            continue                    # an edge blend, not a hole
+        out.append((float(r), centre, axis))
     return out
 
 

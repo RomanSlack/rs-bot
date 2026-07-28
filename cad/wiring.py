@@ -76,15 +76,29 @@ def _nearest(a_pts, b_pts):
 
 
 def runs(mode="wheel"):
-    """Every cable segment, as (label, start, end, length)."""
+    """Every cable segment, as (label, start, end, length).
+
+    The RIGHT chain is the left one MIRRORED, not solved independently.
+
+    Choosing each side's port pairing by "whichever two are closest" looks
+    harmless and is not: on a mirrored assembly the nearest pair on the right
+    can be a different pair from the left, and it was. The left thigh's run sat
+    at y = -10.0 in its own frame and the right's at y = -0.4, so a channel cut
+    into the left part and mirrored onto the right did not line up with the
+    right's cable at all - the left cleared and the right stayed blocked.
+
+    The robot is symmetric and its wiring is too. One choice, mirrored.
+    """
     p = ports(mode)
     out = []
-    for chain in (CHAIN_L, CHAIN_R):
-        for a, b in zip(chain, chain[1:]):
-            if a not in p or b not in p:
-                continue
-            d, pa, pb = _nearest(p[a], p[b])
-            out.append((f"{a} -> {b}", pa, pb, d))
+    for a, b in zip(CHAIN_L, CHAIN_L[1:]):
+        if a not in p or b not in p:
+            continue
+        d, pa, pb = _nearest(p[a], p[b])
+        out.append((f"{a} -> {b}", pa, pb, d))
+    mirror = np.array([1.0, -1.0, 1.0])
+    for (label, pa, pb, d), (a, b) in zip(list(out), zip(CHAIN_R, CHAIN_R[1:])):
+        out.append((f"{a} -> {b}", pa * mirror, pb * mirror, d))
     return out
 
 

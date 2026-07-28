@@ -458,32 +458,6 @@ def test_nothing_fails_in_fatigue_in_the_material_we_would_order():
     assert not bad, f"PA6-CF fails in fatigue on {[r[0] for r in bad]}"
 
 
-def test_the_cable_runs_that_need_channels_are_known():
-    """Wiring did not exist at all. This pins what modelling it found, so the
-    situation cannot quietly get worse before the channels are cut.
-
-    The runs are STRAIGHT LINES between measured connector ports, which is the
-    shortest possible path - so a run reported blocked is blocked for every
-    real routing too. A run reported clear is not cleared; it just has not been
-    routed yet.
-    """
-    import cad.wiring as W
-
-    blocked = {}
-    for mode in ("wheel", "foot"):
-        rows = W.check(mode, verbose=False)
-        assert len(rows) == 8, f"{mode}: expected 8 runs, got {len(rows)}"
-        blocked[mode] = [r for r in rows if r["blocked"] > W.TOUCH]
-    assert len(blocked["wheel"]) <= 4, "more wheel-mode runs are obstructed"
-    assert len(blocked["foot"]) <= 6, "more foot-mode runs are obstructed"
-    # The thigh and shin are the two that must carry a channel.
-    parts = set()
-    for rs in blocked.values():
-        for r in rs:
-            parts |= set(r["by"])
-    assert {"thigh_l", "shin_l"} <= parts
-
-
 def test_the_roll_joint_needs_a_service_loop():
     """The ankle rolls 90 degrees, so the ports either side of it move relative
     to each other and the cable between them changes length. That slack has to
@@ -497,3 +471,44 @@ def test_the_roll_joint_needs_a_service_loop():
         "no run changes length across the flip, which cannot be right for a "
         "joint that turns 90 degrees - the port model is probably broken")
     assert worst < 25.0, f"a run moves {worst:.0f} mm; that needs a real route"
+
+
+def test_the_cable_channels_are_cut_and_the_cables_fit():
+    """Cutting them found a real bug and a real limit, and both are pinned.
+
+    THE BUG: the left thigh's channel cleared its cable and the right's did
+    not. runs() had been choosing each side's connector pairing independently
+    by "whichever two ports are closest", and on a mirrored assembly that
+    picked a DIFFERENT pair - y = -10.0 in the left part's frame against -0.4
+    in the right's. A channel cut into the left and mirrored onto the right
+    lined up with nothing. The right chain is now the left one mirrored.
+
+    THE LIMIT: the roll-to-wheel run crosses the ankle roll joint, so its far
+    end is on a bracket that turns 90 degrees. Its straight line passes through
+    the WHEEL in foot mode, and you cannot cut a channel in a part that spins.
+    That run needs a routed path tucked inboard with a clip, taking up the
+    6.3 mm of length change as a service loop - a design task, not a groove.
+    It is expected to remain blocked here until that route exists.
+    """
+    import cad.wiring as W
+
+    for mode in ("wheel", "foot"):
+        rows = W.check(mode, verbose=False)
+        assert len(rows) == 8, f"{mode}: expected 8 runs, got {len(rows)}"
+        blocked = {r["label"]: r for r in rows if r["blocked"] > W.TOUCH}
+        # Symmetry: whatever is true of one side must be true of the other.
+        left = {k for k in blocked if k.endswith("_l")}
+        right = {k for k in blocked if k.endswith("_r")}
+        assert len(left) == len(right), (
+            f"{mode}: {len(left)} left runs blocked but {len(right)} right - "
+            f"the two sides have stopped being mirror images")
+        for label, r in blocked.items():
+            assert "vrollsv" in label, (
+                f"{mode}: {label} is blocked by {r['by']}, and it is not the "
+                f"roll-to-wheel run - that is a channel that needs cutting")
+            # And the only thing left in its way should be the wheel it has to
+            # route around, plus a little of the bracket.
+            assert set(r["by"]) <= {"wheel_l", "wheel_r",
+                                    "rollbracket_l", "rollbracket_r"}, (
+                f"{mode}: {label} now hits {set(r['by'])}, which is more than "
+                f"the wheel envelope it was known to")

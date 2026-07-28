@@ -18,6 +18,27 @@ from pathlib import Path
 import build123d as bd
 import numpy as np
 
+# --- cable channel -------------------------------------------------------------
+#
+# The bus lead from this part's servo to the next runs straight through here.
+# cad/wiring.py found it, and the runs are modelled as the STRAIGHT LINE between
+# measured connector ports - the shortest possible path - so anything it hits is
+# hit by every real routing too.
+#
+# Cut at CABLE_CH_R, the 4.4 mm bundle plus room to lay it in without pinching.
+# A relief where the path grazes the surface, a tunnel where it does not; either
+# way it is the cable's space reserved, instead of discovered at the bench with
+# the parts already printed.
+CABLE_CH_R = 3.0
+# Two paths, not one: the run pivots slightly at the knee end between wheel
+# mode and foot mode, and the channel has to hold the cable in BOTH poses.
+# Cutting only the wheel-mode line left 4 mm3 of foot-mode interference -
+# small, but foot mode is the pose the robot stands in.
+CABLE_A = (-4.8, 0.4, -5.0)
+CABLE_A_FOOT = (-6.0, 0.4, -3.5)
+CABLE_B = (-0.6, 48.6, -52.6)
+
+
 
 OUT = Path(__file__).parent / "out"
 
@@ -172,6 +193,11 @@ def build():
     # a 20 mm spine, leaving a thin-necked keyhole, and the 0.73 mm stiffness
     # figure in docs/bom.md assumes a SOLID section. It saved about 2 g on a
     # 17 g part - not a trade worth making.
+
+    # Reserve the cable run, in both poses. See CABLE_CH_R.
+    from cad.wiring import tube as _tube
+    part -= _tube(CABLE_A, CABLE_B, r=CABLE_CH_R)
+    part -= _tube(CABLE_A_FOOT, CABLE_B, r=CABLE_CH_R)
 
     part = part.clean()
     from cad.shape import long_edges, soften

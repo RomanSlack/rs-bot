@@ -21,6 +21,13 @@
 > wired in. Doing this properly means changing how four parts meet their
 > servos, with packaging re-checked each time. Decide it BEFORE printing.
 >
+> **Cable channels are cut** in the thigh, shin and ankle yoke, for BOTH poses,
+> because the runs move between them. Wheel mode is clear on all eight; foot
+> mode has one left, and it needs a ROUTE rather than a groove: roll-to-wheel
+> passes through the WHEEL in foot mode, and you cannot channel a part that
+> spins. It wants a path tucked inboard with a clip, taking up the 6.3 mm of
+> length change as a service loop.
+>
 > **Status, 2026-07-27: items 1 to 7 are all done.** What each one found is
 > recorded in place below. The conclusion did not change: do not order all of
 > it at once. Buy one servo and one horn first, because the three things CAD

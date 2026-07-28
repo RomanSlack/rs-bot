@@ -134,14 +134,19 @@ the three reasons, in order of what they would cost to get wrong:
    its spline by an axial screw. Nothing models it, sizes it, or checks you can
    reach it, and it is the *only* screw actually fitted on the robot at a horn
    joint, because the four pattern screws are done on the bench.
-4. **Cable channels do not exist** in the thigh, shin or ankle yoke.
+4. ~~Cable channels do not exist.~~ **Cut**, in the thigh, shin and ankle yoke,
+   for both poses. One run is left and it needs a ROUTE rather than a groove:
+   roll-to-wheel passes through the wheel in foot mode, and you cannot channel
+   a part that spins. It wants a clip and a tie point, and a tie point is a
+   printed feature - so decide it before ordering.
 
 **Buy one servo and one horn first.** It settles 2 and 3, plus the printed bore
 tolerance and the 0.35 mm tyre press fit, for the price of a coffee and a week.
 
 ## Mass, for the record
 
-**1.858 kg**, every gram derived from geometry rather than assigned: 165 g of
-printed structure across five designs, 108 g of wheels, 550 g of servos, and
-600 g of ballast standing in for the arms and head that arrive at stage 4.
+**1.875 kg**, every gram derived from geometry rather than assigned: 183 g of
+printed structure across five designs (the chassis gained 17 g closing its open
+ends into a box), 108 g of wheels, 550 g of servos, and 600 g of ballast
+standing in for the arms and head that arrive at stage 4.
 `uv run python -m cad.masses` regenerates it.

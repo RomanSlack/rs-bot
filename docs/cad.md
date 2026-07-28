@@ -310,10 +310,20 @@ Chassis is 119.2 g, which happens to match the estimate exactly - the first
 part where the guess was right, because plate volume is easy to eyeball and
 brackets are not.
 
-**Known weakness, not fixed:** the chassis is open front and back, so it is
-torsionally soft. The shelves carry most of it. A rear brace would help and
-would cost a few grams; it is not in the sim, so adding it is a change to
-both.
+**Fixed.** The chassis was open front and back - a U-section, the worst shape
+there is in torsion - with the shelves carrying most of it. Both ends are now
+closed, which turns it into a box.
+
+They start at z = 45.4 rather than at the floor, and that is forced rather than
+chosen: the Pi runs x = -34.0..51.0 inside a 90 mm deep chassis, so it has
+2.5 mm at each end and a 3 mm panel down to the floor goes straight through it.
+Above 45.4 the Pi is finished and the panel clears everything.
+
+The front panel is a FRAME. The battery stands upright at y = +/-17,
+z = 62.5..167.5, and with both ends closed there is no other way to get it in
+or out; the window passes it with 2 mm to spare, checked by sliding a
+battery-sized box through it. The rear panel keeps a lightening window with a
+9 mm rim. +17 g, and the four long outside corners are filleted at r = 2.5.
 
 ## All five parts, done
 

@@ -37,6 +37,44 @@ HIP_BOLTS_Z = 17.0
 
 PI_HOLES = [(-35.0, -24.5), (-35.0, 24.5), (23.0, -24.5), (23.0, 24.5)]
 
+# --- end panels ---------------------------------------------------------------
+#
+# The chassis was open front and back: a U-section, which is the worst shape
+# there is in torsion, and docs/before-you-order.md has wanted a rear brace for
+# a while. Closing the ends turns it into a box.
+#
+# They start at z = 45.4, not z = 0, and that is not a styling choice. The Pi
+# runs x = -34.0..51.0 inside a 90 mm deep chassis, so it has 2.5 mm at each
+# end and a 3 mm panel down to the floor would go straight through it. Above
+# 45.4 the Pi is done (it tops out at 42.5) and the panel clears everything.
+#
+# The front panel is a FRAME, not a plate. The battery stands upright at
+# y = +/-17, z = 62.5..167.5, and with both ends closed there is no other way
+# to get it in or out. The window is sized to pass it with 2 mm to spare.
+PANEL_T = 3.0
+PANEL_Z0 = 45.4
+BACK_BORDER = 9.0             # solid rim round the rear lightening window
+FRONT_WIN_Y = 19.0            # battery is +/-17
+FRONT_WIN_Z = (53.4, 172.0)   # battery is 62.5..167.5
+CORNER_R = 6.0                # window corners, so it reads as designed
+
+
+def _round_rect(y0, y1, z0, z1, x0, x1, r):
+    """A rounded-corner window cutter, in the y-z plane.
+
+    Built from two crossed boxes plus corner cylinders rather than by
+    filleting afterwards: OCC refuses the fillet often enough on parts this
+    busy that a silent fallback to sharp corners is a real risk, and a sharp
+    re-entrant corner in a shear panel is exactly where it would crack.
+    """
+    cut = _plate((x0, x1), (y0 + r, y1 - r), (z0, z1))
+    cut += _plate((x0, x1), (y0, y1), (z0 + r, z1 - r))
+    for cy in (y0 + r, y1 - r):
+        for cz in (z0 + r, z1 - r):
+            cut += (bd.Pos((x0 + x1) / 2, cy, cz) * bd.Rot(0, 90, 0)
+                    * bd.Cylinder(r, x1 - x0))
+    return cut
+
 
 def _plate(x, y, z):
     (x0, x1), (y0, y1), (z0, z1) = x, y, z
@@ -75,6 +113,21 @@ def build():
         part += bd.Pos(px + 8.5, py, SHELF1_Z + 3.5) * bd.Cylinder(3.0, 4.0)
         part -= bd.Pos(px + 8.5, py, SHELF1_Z) * bd.Cylinder(M25_CLEAR, 20)
 
+    # Close the two open ends. See the note by PANEL_T for why they start at
+    # z = 45.4 and why the front one is a frame.
+    ztop = TOP_Z + 1.5
+    back = _plate((X0, X0 + PANEL_T), (-INNER_Y, INNER_Y), (PANEL_Z0, ztop))
+    back -= _round_rect(-INNER_Y + BACK_BORDER, INNER_Y - BACK_BORDER,
+                        PANEL_Z0 + BACK_BORDER, ztop - BACK_BORDER,
+                        X0 - 1, X0 + PANEL_T + 1, CORNER_R)
+    part += back
+
+    front = _plate((X1 - PANEL_T, X1), (-INNER_Y, INNER_Y), (PANEL_Z0, ztop))
+    front -= _round_rect(-FRONT_WIN_Y, FRONT_WIN_Y,
+                         FRONT_WIN_Z[0], FRONT_WIN_Z[1],
+                         X1 - PANEL_T - 1, X1 + 1, CORNER_R)
+    part += front
+
     # Slots for a hook-and-loop strap over the pack.
     for sx in (-14.0, 31.0):
         part -= _plate((sx, sx + 4), (-20.0, -14.0),
@@ -82,7 +135,19 @@ def build():
         part -= _plate((sx, sx + 4), (14.0, 20.0),
                        (SHELF2_Z - 5, SHELF2_Z + 5))
 
-    return part.clean()
+    part = part.clean()
+
+    # Soften the four long outside corners. Not only for looks: they are the
+    # full-height edges of a shear box, and cad/shape.py explains why a fillet
+    # that quietly did not happen is worse than none at all.
+    from cad.shape import long_edges, soften
+    sy = SIDE_Y + SIDE_T / 2
+    part, r = soften(part,
+                     long_edges(part, "z", 100.0,
+                                at=[(X0, sy), (X0, -sy), (X1, sy), (X1, -sy)]),
+                     what="chassis corners")
+    build.corner_r = r
+    return part
 
 
 def main(export=True):

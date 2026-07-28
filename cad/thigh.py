@@ -14,6 +14,7 @@ from pathlib import Path
 import build123d as bd
 import numpy as np
 
+
 OUT = Path(__file__).parent / "out"
 PETG_SOLID, INFILL = 1.270, 0.60
 
@@ -100,6 +101,19 @@ def build():
             part -= (bd.Pos(dx, SERVO_Y_LO - PLATE_T / 2, dz)
                      * bd.Rot(90, 0, 0) * bd.Cylinder(M2_CLEAR, 40))
 
+    # NOT FILLETED, and the honest reason is narrower than it first looked.
+    #
+    # OCC would only take r = 1.0 on this part's verticals, which on a 133 mm
+    # part is invisible. It also made the FEA worse - but it did not CAUSE the
+    # problem, which is the correction worth recording. With the fillet the
+    # reported peak was 135 MPa at a 3.0 mm mesh; with it removed, still 73.
+    # The artifact is the part's own default mesh being too coarse for the load
+    # direction the closed chassis produces, and the fillet only amplified it.
+    #
+    # So: no fillet, because a 1.0 mm one buys nothing visible and does make
+    # the meshing harder on the part carrying the highest torque in the robot
+    # (8.77 N.m at the hip). The mesh size is fixed separately, in
+    # cad/stress.py, which is where the actual fault was.
     return part.clean()
 
 

@@ -16,6 +16,7 @@ from pathlib import Path
 import build123d as bd
 import numpy as np
 
+
 OUT = Path(__file__).parent / "out"
 PETG_SOLID, INFILL = 1.270, 0.60
 M2_CLEAR = 1.1
@@ -151,7 +152,14 @@ def yoke():
     # Tie the ring back to the bearing carrier, clear of the coupler. Upper
     # only, for the same reason.
     part += _box(((-52, -45), (-6, 6), (6, 16)))
-    return part.clean()
+    part = part.clean()
+    from cad.shape import long_edges, soften
+    # x-edges only. The yoke's y-edges refuse at every radius OCC will try,
+    # and so do all four of the roll bracket's - that part already carries the
+    # one fillet it needs, on the re-entrant corner the FEA found hottest.
+    part, yoke.corner_r = soften(part, long_edges(part, "x", 30.0),
+                                 what="yoke edges")
+    return part
 
 
 def _gusset(pts_xz, y0, t):

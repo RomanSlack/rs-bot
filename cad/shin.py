@@ -18,6 +18,7 @@ from pathlib import Path
 import build123d as bd
 import numpy as np
 
+
 OUT = Path(__file__).parent / "out"
 
 PETG_SOLID = 1.270            # g/cm3
@@ -172,7 +173,11 @@ def build():
     # figure in docs/bom.md assumes a SOLID section. It saved about 2 g on a
     # 17 g part - not a trade worth making.
 
-    return part.clean()
+    part = part.clean()
+    from cad.shape import long_edges, soften
+    part, build.corner_r = soften(part, long_edges(part, "z", 40.0),
+                                  radii=(1.5, 1.0, 0.8), what="shin verticals")
+    return part
 
 
 def main(export=True):

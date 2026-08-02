@@ -37,23 +37,51 @@ the **same part flipped over**. One part number, print two.
 service FDM often defaults far lower. That is a line on the order form, not an
 assumption you get to make afterwards.
 
+**Cost: get a real quote, because this is the line nobody can estimate.**
+12 physical pieces, 183 g of PA6-CF plus 54 g of TPU. Service FDM in PA6-CF
+prices per part rather than per gram, with a setup charge that dominates on
+small parts like the 6 g roll bracket, so expect somewhere between **$180 and
+$420** and treat any single number as fiction until Unionfab or Weerg have
+quoted the actual STEP files. This is plausibly the largest line on the whole
+order, larger than the servos. Upload `cad/out/*.step` and find out before
+planning around the total below.
+
 ## 2. Bought parts
 
-| part | qty | note |
-|---|---|---|
-| Feetech STS3215 (12 V, 1:345) | 10 | 5 per leg |
-| 25T metal servo horn | 10 | pattern now measured, see `cad/servo.py` |
-| 623ZZ bearing, 3 x 10 x 4 | 4 | ankle pitch, both legs |
-| 3 mm shaft, 30 mm | 4 | ankle pitch and ankle roll |
-| GT2 pulley, 20T | 2 | ankle pitch drive, servo end |
-| GT2 pulley, 40T | 2 | ankle pitch drive, joint end |
-| GT2 belt, 94T (188 mm) x 15 mm | 2 | closed loop |
-| Raspberry Pi 5 | 1 | |
-| 3S LiPo, 2200 mAh | 1 | |
-| TTL bus adapter, FE-URT-1 class | 1 | |
-| IMU, BNO085 class | 1 | |
-| Servo bus cable, 3-pin, 100 mm | 6 | |
-| Servo bus cable, 3-pin, 150 mm | 4 | hip and roll joint, which need slack |
+Prices are USD, checked 2026-07-28. **`v` was verified against a live listing
+that day; `e` is an estimate and wants checking before you rely on the total.**
+Nobody should be surprised at the checkout page.
+
+| part | qty | unit | total | src | note |
+|---|---|---|---|---|---|
+| **Feetech STS3215-C018** (12 V, 1:345) | 10 | $16.00 | $160 | v | see the part-number warning below |
+| 25T **metal** servo horn | 10 | $2.50 | $25 | e | pattern measured, see `cad/servo.py`. Metal, not the POM horn that may ship in the box |
+| 623ZZ bearing, 3 x 10 x 4 | 4 | $1.00 | $4 | e | ankle pitch, both legs. Sold in 10-packs |
+| 3 mm shaft, 30 mm | 4 | $1.00 | $4 | e | ankle pitch and ankle roll. Or cut from stock |
+| GT2 pulley, 20T | 2 | $5.00 | $10 | e | ankle pitch drive, servo end |
+| GT2 pulley, 40T | 2 | $7.00 | $14 | e | ankle pitch drive, joint end |
+| GT2 belt, 94T (188 mm) x 15 mm | 2 | $10.00 | $20 | e | closed loop. 15 mm width is uncommon and may need a specialist |
+| Raspberry Pi 5 | 1 | $80.00 | $80 | e | 8 GB |
+| 3S LiPo, 2200 mAh | 1 | $25.00 | $25 | e | |
+| TTL bus adapter, FE-URT-1 class | 1 | $10.00 | $10 | e | needed for the validation order too, buy it early |
+| IMU, BNO085 class | 1 | $25.00 | $25 | e | breakout board |
+| Servo bus cable, 3-pin, 100 mm | 6 | $1.50 | $9 | e | |
+| Servo bus cable, 3-pin, 150 mm | 4 | $1.50 | $6 | e | hip and roll joint, which need slack |
+| | | | **$392** | | |
+
+**Order by part number, not by name.** Feetech sells at least five STS3215
+variants that look identical in photographs and are not interchangeable:
+
+| part | V | torque | ratio | |
+|---|---|---|---|---|
+| **C018** | **12** | **30 kg.cm** | **1/345** | **this robot** |
+| C001 | 7.4 | 19.5 kg.cm | 1/345 | |
+| C044 | 7.4 | 16-27 kg.cm | 1/191 | |
+| C046 | 7.4 | 14.4 kg.cm | 1/147 | |
+
+Most listings that surface first are the 7.4 V ones, because those are what
+SO-ARM100/101 uses. Searching `STS3215 C018` filters correctly in one step.
+$16 is OpenELAB's price; Amazon runs about $24.50 a unit for next-day.
 
 The belt is 15 mm and not 9 because the measured joint peak is 132 N of
 tension, and the 2:1 ratio is pinned from both sides: below it the belt is
@@ -94,11 +122,16 @@ a robot that has not been built yet.
 
 ## 4. Tools
 
-| tool | why |
-|---|---|
-| 2 mm hex key, short | four of the thigh's screws will not take a full-size driver's handle. `cad/toolaccess.py` found that, rather than the bench |
-| soldering iron with M2.5 insert tip | 48 inserts |
-| calipers | the validation order is worthless without them |
+| tool | ~cost | why |
+|---|---|---|
+| 2 mm hex key, short | $8 | four of the thigh's screws will not take a full-size driver's handle. `cad/toolaccess.py` found that, rather than the bench |
+| soldering iron with M2.5 insert tip | $15 | 16 inserts |
+| **digital calipers, 150 mm, 0.01 mm** | $40 | the validation order is worthless without them. Do not buy the $25 tier: the headline check is a Ø19.95 horn in a Ø20.00 pocket, and at 0.05 mm a cheap caliper measures itself |
+| pin gauges or drill bits | $0-25 | calipers cannot measure hole **positions**, and the case mounting pattern is exactly that. Pin the holes, measure over the pins, subtract one pin diameter |
+
+A flatbed scanner, if you own one, beats all of the above for the case pattern:
+1200 dpi is 0.021 mm per pixel and it captures the whole 2D pattern at once
+instead of pair by pair.
 
 ## 5. Cable channels: cut, with one exception
 
@@ -118,10 +151,38 @@ tie point is a printed feature.
 
 ---
 
+## 6. What the whole thing costs
+
+Added 2026-07-28. Before this, `bom.md` promised that "the quantities and prices
+live in the order sheet" and only the quantities did.
+
+| line | low | high | confidence |
+|---|---|---|---|
+| Printed parts, PA6-CF + TPU | $180 | $420 | **needs a real quote** |
+| Bought parts | $392 | $392 | servos verified, rest estimated |
+| Fasteners and inserts, incl. 25% spares | $40 | $40 | estimated |
+| **Build subtotal** | **$612** | **$852** | |
+| Tools, one-time | $63 | $88 | estimated |
+| **Total** | **$675** | **$940** | |
+
+Three things worth reading off that table:
+
+- **The printed parts may cost more than the servos.** The servo line looks
+  alarming at a glance and is under a quarter of the build. Until the STEP
+  files are quoted, the largest number here is the one nobody has priced.
+- **Buying the servos on Amazon adds about $85** to the total ($24.50 against
+  $16 a unit) for next-day delivery. Worth it for the validation order,
+  wasteful for the other eight.
+- **This is cheap for what it is.** A single Dynamixel XL430 is around $50 and
+  a DIY QDD actuator is $150+, which is why the whole LeRobot ecosystem
+  standardised on this servo. See the 2026-07-28 status report for why building
+  custom actuators was considered and rejected.
+
 ## Do not order all of this at once
 
-`road-to-order.md` argues for a **~$30 validation order first**, and these are
-the three reasons, in order of what they would cost to get wrong:
+`road-to-order.md` argues for a validation order first: **about $60 in parts,
+or $100 including the calipers you do not yet own.** These are the reasons, in
+order of what they would cost to get wrong:
 
 1. ~~The horn bolt pattern is assumed.~~ **Now measured** off three
    TheRobotStudio SO-ARM101 parts that bolt to the same horn, six patterns
@@ -140,8 +201,21 @@ the three reasons, in order of what they would cost to get wrong:
    a part that spins. It wants a clip and a tie point, and a tie point is a
    printed feature - so decide it before ordering.
 
-**Buy one servo and one horn first.** It settles 2 and 3, plus the printed bore
-tolerance and the 0.35 mm tyre press fit, for the price of a coffee and a week.
+**Buy two servos, a metal horn and a bus adapter first.** About $60, and a
+week. It settles 2 and 3, plus the printed bore tolerance and the 0.35 mm tyre
+press fit.
+
+**Two, not one, and the reason is the same one that recovered the horn.** A
+single servo gives you a *measurement* of the case mounting pattern. Two give
+you a *check*: if both agree, the pattern is real, and if they disagree, that
+disagreement is the finding, which matters a great deal when the plan is to put
+40 M2 screws into those holes. Agreement between independent parts is the
+measuring instrument here, exactly as it was for the horn.
+
+The adapter is on the list because backlash is an angle, not a length: command
+the servo to hold, twist the output by hand, read the position back. The 12-bit
+encoder resolves 0.088 deg, so it measures 2-3 deg of lash easily and no
+caliper can.
 
 ## Mass, for the record
 

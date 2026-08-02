@@ -25,6 +25,16 @@ import numpy as np
 # A relief where the path grazes the surface, a tunnel where it does not; either
 # way it is the cable's space reserved, instead of discovered at the bench with
 # the parts already printed.
+# The endpoints are NOT stored here any more. They were, and they went stale
+# three times in one day: moving the hip and wheel servos onto their own joints
+# moved their connector ports, and correcting the case height from the STEP's
+# 39.6 to the drawing's 36.5 then moved all ten of them by 1.15 mm. Eight of
+# eight runs ended up passing through solid material and nothing but
+# cad/wiring.py could see it.
+#
+# cad.wiring.channel() cuts the run where the run actually is, in both poses,
+# every build. A number that has to be retyped whenever the robot moves is a
+# number that will be wrong the next time the robot moves.
 CABLE_CH_R = 3.0
 # TWO PATHS, like the shin and the ankle already had. The thigh only ever cut
 # one, and it went stale the moment the hip servo moved: putting that servo's
@@ -35,9 +45,6 @@ CABLE_CH_R = 3.0
 # The far end is the knee servo's own port and does not move in this frame. The
 # near end is on the TORSO, across the hip joint, so it swings between the poses
 # and one channel can only ever be right for one of them.
-CABLE_A = (1.82, -10.0, -6.68)        # hip servo port, wheel mode
-CABLE_A_FOOT = (2.71, -10.0, -6.37)   # and in foot mode
-CABLE_B = (-0.55, -10.0, -116.9)      # knee servo port, fixed on this part
 
 
 
@@ -165,9 +172,8 @@ def build():
     part += _box((-CRADLE_X, CRADLE_X), cy, (cz0, SERVO_Z_LO - CRADLE_CLEAR))
 
     # Reserve the cable run. See CABLE_CH_R.
-    from cad.wiring import tube as _tube
-    part -= _tube(CABLE_A, CABLE_B, r=CABLE_CH_R)
-    part -= _tube(CABLE_A_FOOT, CABLE_B, r=CABLE_CH_R)
+    from cad.wiring import channel as _channel
+    part = _channel(part, "vhipsv1 -> vkneesv_l", "thigh_l", r=CABLE_CH_R)
 
     # NOT FILLETED, and the honest reason is narrower than it first looked.
     #

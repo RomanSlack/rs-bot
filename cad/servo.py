@@ -31,18 +31,32 @@ import build123d as bd
 
 STEP = Path(__file__).parents[1] / "vendor" / "refs" / "STS3215_03a.step"
 
-# --- measured off the STEP ---------------------------------------------------
-LENGTH = 45.40           # x
-WIDTH = 24.80            # y
-HEIGHT = 39.60           # z, ALONG the output shaft
-Z_MIN, Z_MAX = -19.40, 20.20
+# --- THE DIMENSIONS, from the manufacturer's drawing --------------------------
+#
+# These were the STEP's numbers (45.40 x 24.80 x 39.60) until 2026-08-01. The
+# STEP is TheRobotStudio's model of the 7.4 V servo and is 3.1 mm too tall; the
+# drawing further down this file is the 12 V part, which is ours. See there for
+# the full breakdown, which adds up exactly: 3.4 spline + 29 body + 4.1 boss.
+#
+# THE SAME NUMBERS WERE IN SIX PLACES AND THREE OF THEM WERE DIFFERENT.
+# cad/envelope.py, cad/assemble_check.py, cad/robot.py and cad/assembly.py all
+# carried 45.2 x 24.7 x 35.4 - the ORIGINAL product-listing guesses, superseded
+# twice over and never updated. envelope.py is the file that solved where the
+# ankle bearing is allowed to live. They all import from here now.
+from cad.servo_dims import (LENGTH, WIDTH, HEIGHT, SHAFT_X, SHAFT_R,  # noqa
+                            IDLER_R, SPLINE_PROUD, BODY, REAR_BOSS_PROUD)
+Z_MIN, Z_MAX = -HEIGHT / 2, HEIGHT / 2
 
-SHAFT_X = 12.50          # shaft axis, from the case centre
-SHAFT_INSET = LENGTH / 2 - SHAFT_X       # 10.20 mm from the near end
-SHAFT_R = 2.95           # 25T spline, 5.9 mm across
-HORN_FACE_Z = 18.70      # where the horn seats
-IDLER_Z = -18.00         # rear pivot boss
-IDLER_R = 3.00
+SHAFT_INSET = LENGTH / 2 - SHAFT_X       # 10.115 mm from the near end
+BODY_Z0 = Z_MIN + REAR_BOSS_PROUD
+BODY_Z1 = BODY_Z0 + BODY
+HORN_FACE_Z = BODY_Z1    # where the horn seats: the case's own top face
+IDLER_Z = Z_MIN          # rear pivot boss, tip
+
+# The STEP's own numbers, kept because solid() still returns it and a clearance
+# check running against a solid 3.1 mm taller than the real part is
+# conservative, which is the safe direction to be wrong in.
+STEP_LENGTH, STEP_WIDTH, STEP_HEIGHT = 45.40, 24.80, 39.60
 
 # --- the case mounting holes ---------------------------------------------------
 #
@@ -452,9 +466,9 @@ def cradle(centre, depth=CRADLE_DEPTH, wall=CRADLE_WALL, clear=CRADLE_CLEAR,
 # so, and nobody publishes where. Drawing them would mean inventing a fifth
 # pattern to sit alongside the four this project just deleted.
 
-S_BOT = -DWG_Z_SPAN / 2                       # rear boss tip
-S_BODY0 = S_BOT + DWG_REAR_BOSS_PROUD         # body starts
-S_BODY1 = S_BODY0 + DWG_BODY                  # body ends
+S_BOT = Z_MIN                                 # rear boss tip
+S_BODY0 = BODY_Z0                             # body starts
+S_BODY1 = BODY_Z1                             # body ends
 S_TIP = S_BODY1 + DWG_SPLINE_PROUD            # spline tip
 PAD_D, PAD_H = 11.0, 1.5      # the pad the horn seats on; scaled off the
                               # drawing, not dimensioned on it

@@ -28,7 +28,10 @@ import cad.wheel as wheel
 from fitcheck import pose
 from src.rsbot.model import load
 
-SERVO = (24.7, 35.4, 45.2)     # x, y, z of an STS3215 case as the sim places it
+# x, y, z of an STS3215 case as the sim places it. Was (24.7, 35.4, 45.2), the
+# superseded listing guesses; from cad/servo_dims.py now.
+from cad.servo_dims import LENGTH as _SL, WIDTH as _SW, HEIGHT as _SH
+SERVO = (_SW, _SH, _SL)
 
 
 def _loc(pos_m, mat):
@@ -215,6 +218,23 @@ def stack(mode="wheel", verbose=True):
     return rows
 
 
+# Below this, an overlap is two faces meeting rather than two parts clashing.
+# 50 microns is well under the 0.3 mm the print services quote, so nothing real
+# can hide beneath it.
+SEAM_MM = 0.05
+
+
+def _thickness(inter):
+    """The thinnest dimension of an overlap, mm. A face contact is ~0."""
+    if inter is None:
+        return 0.0
+    try:
+        s = inter.bounding_box().size
+        return min(s.X, s.Y, s.Z)
+    except Exception:
+        return float("inf")
+
+
 def main(mode="wheel"):
     items = parts(mode)
     print(f"--- {mode} mode: {len(items)} solids")
@@ -224,8 +244,16 @@ def main(mode="wheel"):
             inter = a & b
             v = inter.volume if inter else 0.0
         except Exception:
-            v = 0.0
-        if v > 1.0:
+            inter, v = None, 0.0
+        # A COINCIDENT FACE IS NOT INTERFERENCE, and telling them apart needs
+        # the shape of the overlap rather than its volume. Two parts that seat
+        # flat on each other - which is what fourteen joints in this robot do -
+        # produce a sliver a few microns thick across the whole contact patch,
+        # and on a 385 mm2 face that is about 2 mm3. The bare volume test called
+        # that interference the moment the roll arm was made to touch the wheel
+        # servo exactly instead of standing 0.035 mm off it, which is precisely
+        # backwards: the correct geometry got flagged and the faulty one passed.
+        if v > 1.0 and _thickness(inter) > SEAM_MM:
             worst.append((v, na, nb))
             continue
         # NOT interfering is not the same as fitting. This check used to stop
@@ -292,8 +320,8 @@ def sweep(steps=6, verbose=True):
                 inter = a & b
                 v = inter.volume if inter else 0.0
             except Exception:
-                v = 0.0
-            if v > 1.0:
+                inter, v = None, 0.0
+            if v > 1.0 and _thickness(inter) > SEAM_MM:
                 hits.append((frac, na, nb, v))
                 n += 1
         if verbose:

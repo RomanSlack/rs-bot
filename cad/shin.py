@@ -29,22 +29,27 @@ import numpy as np
 # A relief where the path grazes the surface, a tunnel where it does not; either
 # way it is the cable's space reserved, instead of discovered at the bench with
 # the parts already printed.
+# The endpoints are NOT stored here any more. They were, and they went stale
+# three times in one day: moving the hip and wheel servos onto their own joints
+# moved their connector ports, and correcting the case height from the STEP's
+# 39.6 to the drawing's 36.5 then moved all ten of them by 1.15 mm. Eight of
+# eight runs ended up passing through solid material and nothing but
+# cad/wiring.py could see it.
+#
+# cad.wiring.channel() cuts the run where the run actually is, in both poses,
+# every build. A number that has to be retyped whenever the robot moves is a
+# number that will be wrong the next time the robot moves.
 CABLE_CH_R = 3.0
 # Two paths, not one: the run pivots slightly at the knee end between wheel
 # mode and foot mode, and the channel has to hold the cable in BOTH poses.
 # Cutting only the wheel-mode line left 4 mm3 of foot-mode interference -
 # small, but foot mode is the pose the robot stands in.
-CABLE_A = (-4.8, 0.4, -5.0)
-CABLE_A_FOOT = (-6.0, 0.4, -3.5)
-CABLE_B = (-0.6, 48.6, -52.6)
 
 # The OUTGOING lead, ankle servo to roll servo. It leaves the port at CABLE_B
 # and drops away aft and down, and until the cradle went in it left through open
 # air. The +x wall now stands in it, by 7 mm3. Same catch as on the yoke: fitcheck
 # and assemble_check were both clean, because neither of them models a cable.
 # The far end is on the yoke, which moves between the poses, so two paths again.
-CABLE_C_WHEEL = (-76.06, 5.2, -89.96)
-CABLE_C_FOOT = (-72.64, 5.2, -79.84)
 
 
 
@@ -248,12 +253,9 @@ def build():
     # 17 g part - not a trade worth making.
 
     # Reserve the cable run, in both poses. See CABLE_CH_R.
-    from cad.wiring import tube as _tube
-    part -= _tube(CABLE_A, CABLE_B, r=CABLE_CH_R)
-    part -= _tube(CABLE_A_FOOT, CABLE_B, r=CABLE_CH_R)
-    # And the outgoing lead, through the cradle wall that now stands in it.
-    part -= _tube(CABLE_B, CABLE_C_WHEEL, r=CABLE_CH_R)
-    part -= _tube(CABLE_B, CABLE_C_FOOT, r=CABLE_CH_R)
+    from cad.wiring import channel as _channel
+    part = _channel(part, "vkneesv_l -> vanksv_l", "shin_l", r=CABLE_CH_R)
+    part = _channel(part, "vanksv_l -> vrollsv_l", "shin_l", r=CABLE_CH_R)
 
     part = part.clean()
     from cad.shape import long_edges, soften

@@ -38,7 +38,9 @@ C_SERVO = "0.13 0.13 0.15 1"
 C_WHEEL = "0.09 0.09 0.10 1"
 C_HUB = "0.55 0.56 0.60 1"
 
-SERVO_L, SERVO_W, SERVO_H = 45.2, 24.7, 35.4
+# Was 45.2, 24.7, 35.4, the superseded listing guesses. One copy now.
+from cad.servo_dims import (LENGTH as SERVO_L, WIDTH as SERVO_W,
+                            HEIGHT as SERVO_H)
 
 # body name -> (stl stem, colour). Left-hand parts; right mirrors in y.
 PARTS = {

@@ -26,14 +26,21 @@ import numpy as np
 # and reserving one of them reserves the wrong one half the time. cad/wiring.py
 # measures the length change at 6.3 mm, which is the service loop this has to
 # let it take up.
+# The endpoints are NOT stored here any more. They were, and they went stale
+# three times in one day: moving the hip and wheel servos onto their own joints
+# moved their connector ports, and correcting the case height from the STEP's
+# 39.6 to the drawing's 36.5 then moved all ten of them by 1.15 mm. Eight of
+# eight runs ended up passing through solid material and nothing but
+# cad/wiring.py could see it.
+#
+# cad.wiring.channel() cuts the run where the run actually is, in both poses,
+# every build. A number that has to be retyped whenever the robot moves is a
+# number that will be wrong the next time the robot moves.
 CABLE_CH_R = 3.0
-CABLE_A = (-78.3, 5.2, -6.9)          # roll servo port, fixed on the yoke
 # x moved -0.5 -> -13.05 when the wheel servo was put on its own axis. Its
 # case had been centred on the wheel axis, which left the output shaft 12.5 mm
 # off the joint it drives (cad/drives.py), and the connector port moved with the
 # case. The old channel then ran 38 mm3 of yoke straight through the cable.
-CABLE_B_WHEEL = (-13.05, 28.1, -19.4)
-CABLE_B_FOOT = (-13.05, 19.4, 28.1)
 
 # The ankle-servo lead, coming down the shin into the roll servo. It never
 # needed a channel before, because before there was nothing here: it crossed
@@ -49,8 +56,6 @@ CABLE_B_FOOT = (-13.05, 19.4, 28.1)
 # Two paths again, for the same reason as everything else in this file: the
 # yoke drops 28 mm in z between the modes, so the run's far end moves and a
 # channel cut for one pose is the wrong channel half the time.
-CABLE_C_WHEEL = (-19.96, 48.6, 53.82)
-CABLE_C_FOOT = (-27.06, 48.6, 50.62)
 
 
 
@@ -141,7 +146,15 @@ ROLL_SV = ((-97.6, -58.0), (-12.4, 12.4), (-10.2, 35.2))
 # both parts and the wheel would have rubbed on a good fraction of builds.
 # Moved out 0.8 mm, keeping the plate thickness, so the gap is 0.9 mm and
 # survives a worst-case stack on both sides.
-ROLL_ARM = ((-44, 0), (12.9, 24.3), (12.4, 22.9))
+# z0 is the wheel servo's own face, DERIVED. It was the literal 12.4, written
+# when the case was believed to be 24.8 across; the drawing says 24.73, so the
+# arm stood 0.035 mm off the servo it seats on. Tiny, and it is exactly the
+# fault recorded above in a bigger size - a servo on a standoff puts its
+# reaction couple into the joint in bending with no preload - and it was found
+# by assemble_check's seated-face count dropping from 16 to 14, not by anything
+# looking for it.
+from cad.servo_dims import WIDTH as _SERVO_W  # noqa: E402
+ROLL_ARM = ((-44, 0), (12.9, 24.3), (_SERVO_W / 2, 22.9))
 ROLL_TIE = ((-56, -42), (7.1, 14.5), (5, 16.0))
 # The tie, the tongue and the corner rib are all gone. They existed to crank
 # the load from an outboard arm, round the shin's post, to a bearing the part
@@ -222,12 +235,9 @@ def yoke():
     # only, for the same reason.
     part += _box(((-52, -45), (-6, 6), (6, 16)))
     # Reserve the roll-to-wheel cable, in both poses.
-    from cad.wiring import tube as _tube
-    part -= _tube(CABLE_A, CABLE_B_WHEEL, r=CABLE_CH_R)
-    part -= _tube(CABLE_A, CABLE_B_FOOT, r=CABLE_CH_R)
-    # And the ankle-servo lead, through the cradle wall that now stands in it.
-    part -= _tube(CABLE_A, CABLE_C_WHEEL, r=CABLE_CH_R)
-    part -= _tube(CABLE_A, CABLE_C_FOOT, r=CABLE_CH_R)
+    from cad.wiring import channel as _channel
+    part = _channel(part, "vrollsv_l -> vwhlsv_l", "ankle_l", r=CABLE_CH_R)
+    part = _channel(part, "vanksv_l -> vrollsv_l", "ankle_l", r=CABLE_CH_R)
 
     part = part.clean()
     from cad.shape import long_edges, soften
@@ -286,6 +296,11 @@ def roll_bracket():
     # Roll shaft bore, on the axis, through hub and coupler alike.
     part -= (bd.Pos(-48, 0, 0) * bd.Rot(0, 90, 0)
              * bd.Cylinder(ROLL_SHAFT_R, 60))
+
+    # The roll-to-wheel lead crosses this part too, and it never had a channel:
+    # cad/wiring.py put 2-3 mm3 of bracket through the cable in foot mode.
+    from cad.wiring import channel as _channel
+    part = _channel(part, "vrollsv_l -> vwhlsv_l", "rollbracket_l", r=CABLE_CH_R)
 
     # Wheel axle bore and the wheel servo's mounting bolts, through the ARM
     # this time. All four of these used to be drawn at z = 0, on the wheel spin

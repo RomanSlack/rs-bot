@@ -193,3 +193,67 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# --- channels that follow the cable, instead of being retyped -----------------
+#
+# Every part with a cable channel used to carry hardcoded endpoints, and every
+# one of them went stale the moment a servo moved. It happened three times in a
+# day: putting the hip and wheel servos on their own joints moved their ports,
+# and then correcting the case height from the STEP's 39.6 to the drawing's 36.5
+# moved ALL TEN of them by 1.15 mm. Eight of eight runs ended up passing through
+# solid material, none by more than 29 mm3, all of them invisible without
+# running this file.
+#
+# So the parts ask where the cable is rather than remembering. The sim is loaded
+# once and cached: the answer only changes when the model does.
+
+from functools import lru_cache
+
+import mujoco
+
+
+@lru_cache(maxsize=None)
+def _frames(mode):
+    from fitcheck import pose
+    from src.rsbot.model import load
+    m, d = load()
+    pose(m, d, mode)
+    mujoco.mj_forward(m, d)
+    out = {}
+    for b in range(m.nbody):
+        n = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or ""
+        out[n] = (d.xmat[b].reshape(3, 3).copy(), d.xpos[b] * 1000.0)
+    return out
+
+
+@lru_cache(maxsize=None)
+def local_run(label, body, mode="wheel"):
+    """(start, end) of one cable run, in one body's own frame, millimetres.
+
+    `label` is as cad/wiring.py names them, e.g. "vkneesv_l -> vanksv_l".
+    Returns None if that run does not exist, so a part can cut what it has.
+    """
+    R, p = _frames(mode)[body]
+    for lab, a, b, _L in runs(mode):
+        if lab != label:
+            continue
+        return (tuple(R.T @ (np.asarray(a) - p)),
+                tuple(R.T @ (np.asarray(b) - p)))
+    return None
+
+
+def channel(part, label, body, r=None):
+    """Subtract the cable's space from `part`, in BOTH poses.
+
+    Both, always. The run moves between wheel mode and foot mode wherever it
+    crosses a joint, and a channel cut for one pose is the wrong channel half
+    the time - which is how the shin ended up with 4 mm3 of foot-mode
+    interference after its wheel-mode channel was cut and checked.
+    """
+    r = BUNDLE_R + 0.8 if r is None else r
+    for mode in ("wheel", "foot"):
+        seg = local_run(label, body, mode)
+        if seg is not None:
+            part -= tube(seg[0], seg[1], r=r)
+    return part

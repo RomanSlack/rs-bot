@@ -75,7 +75,13 @@ def make_ctrl(hip, knee, apitch, aroll, wheel, wheel_r=None):
 # STS3215, MEASURED off TheRobotStudio's STEP model rather than taken from a
 # product listing. See cad/servo.py. The third figure is along the OUTPUT
 # SHAFT and was 4.2 mm short, which is exactly where the horn clearances are.
-SERVO = (0.0454, 0.0248, 0.0396)      # STS3215 body, L x W x H(shaft)
+# From cad/servo_dims.py, which is the ONLY copy. This line used to be the
+# STEP's 45.4 x 24.8 x 39.6, and the STEP is a model of the 7.4 V servo: 3.1 mm
+# too tall along the shaft, which is the axis every servo mounting face in this
+# robot is positioned from. Visible in the twin as a servo floating off the
+# plate it bolts to.
+from cad.servo_dims import LENGTH as _SL, WIDTH as _SW, HEIGHT as _SH
+SERVO = (_SL / 1000.0, _SW / 1000.0, _SH / 1000.0)
 SERVO_HORN_R = 0.0100                 # 25T output horn
 # The output shaft is NOT at the centre of the case: it sits 12.5 mm off along
 # the length (cad/servo.py, confirmed by the manufacturer's drawing). A servo

@@ -44,7 +44,10 @@ PITCH_RANGE = (-20.0, 45.0)
 
 # Bought-part envelopes, from src/rsbot/model.py. (x0,x1),(y0,y1),(z0,z1) in
 # the ANKLE frame unless noted.
-SERVO_L, SERVO_W, SERVO_H = 45.2, 24.7, 35.4
+# WAS 45.2, 24.7, 35.4 - the original product-listing guesses, superseded twice
+# and never updated here. This file is what solved which bands the ankle-pitch
+# bearing is allowed to sit in, against a servo 1.1 mm short in its shaft axis.
+from cad.servo_dims import LENGTH as SERVO_L, WIDTH as SERVO_W, HEIGHT as SERVO_H
 HL, HW, HH = SERVO_L / 2, SERVO_W / 2, SERVO_H / 2
 
 # Wheel-drive servo: outboard, bolted to the roll bracket, so it turns with

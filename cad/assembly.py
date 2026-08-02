@@ -24,7 +24,9 @@ import cad.shin as shin  # noqa: E402
 import cad.thigh as thigh  # noqa: E402
 
 OUT = Path(__file__).parent / "out"
-SERVO_L, SERVO_W, SERVO_H = 45.2, 24.7, 35.4
+# Was 45.2, 24.7, 35.4, the superseded listing guesses. One copy now.
+from cad.servo_dims import (LENGTH as SERVO_L, WIDTH as SERVO_W,
+                            HEIGHT as SERVO_H)
 HORN_R, HORN_T = 10.0, 3.0
 W, H = 640, 700
 

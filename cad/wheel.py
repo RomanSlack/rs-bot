@@ -47,7 +47,31 @@ SPOKE_W = 7.0
 SPOKE_T = 5.0
 
 # 25T horn, the bought part that gives a real spline interface.
-HORN_R = 10.0            # boss the horn sits in
+#
+# WAS 10.0, A Ø20.00 POCKET, AND IT WOULD NOT HAVE FITTED. The horn measures
+# Ø19.93 on the bench (cad/servo.py, 2026-08-01), so the pocket carried 0.035 mm
+# of clearance per side from a service quoting +/-0.3 mm. Most wheels would have
+# come back unable to accept the horn at all. It survived the clearance sweep
+# that opened every other fit in the robot to 0.1-0.9 mm only because the horn's
+# outside diameter was unknown at the time.
+#
+# THE POCKET HAS TO CLEAR TWO THINGS, NOT ONE, which is why the fix is bigger
+# than the 0.07 mm the horn alone asks for. The wheel drops over the horn AND
+# over the servo's own round seating boss, and that boss is also about Ø20. Both
+# of them, the horn and the boss, and the pocket were all the same diameter,
+# which is another way of saying nothing fitted.
+#
+#     Ø20.6 nominal    over the 19.93 horn   0.335/side, 0.185 worst case
+#                      over the ~20.0 boss   0.300/side, 0.150 worst case
+#
+# Centring moves to the four M3 screws and the spline bore, which is where it
+# belongs on this joint anyway: a printed pocket wall at +/-0.3 mm was never
+# going to locate anything.
+#
+# THE BOSS DIAMETER IS STILL ASSUMED. cad/servo.py has it at 20.00 off a STEP
+# that is probably the wrong servo variant, and it is one caliper reading away
+# from being known. It is the only thing that could push this number higher.
+HORN_R = 10.3            # Ø20.6 pocket; clears the 19.93 horn and the ~20 boss
 # Imported rather than repeated. These were a local copy of the horn pattern
 # and drifted from it: 4.95 x 5.00 with a 2.7 mm hole, against a measured
 # 4.95 x 4.95 with a 3.2 mm one. A second copy of a number is a second place
@@ -150,6 +174,14 @@ def body():
                -HALF_W + BEAD_INSET + BEAD_W, rim_o)
 
     # Horn pocket and its four screws.
+    #
+    # 4.0 mm deep over a horn plate measured at 2.51, so the pocket floor lands
+    # on the plate and the remaining 1.49 mm is counterbore reaching down past
+    # it toward the servo. That leaves the pocket rim about 0.5 mm clear of the
+    # servo's boss face, which is positive but thin, and it rests on a
+    # HORN_FACE_Z that cad/servo.py flags as unverified. Worth re-checking once
+    # the boss is measured; if that margin goes negative the wheel stands off
+    # the horn and the whole joint loads the bolts in bending.
     p -= bd.Pos(0, 0, -HALF_W) * bd.Cylinder(HORN_R, 2 * 4.0)
     p -= bd.Pos(0, 0, 0) * bd.Cylinder(SHAFT_BORE, 4 * HALF_W)
     for dx in (-HORN_BOLT_DX, HORN_BOLT_DX):

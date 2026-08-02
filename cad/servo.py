@@ -151,6 +151,99 @@ HORN_REF = "vendor/refs/Rotation_Pitch_SO101.step"
 CASE_END_SCREWS = [(6.30, -4.95), (6.30, 4.95), (16.20, -4.95), (16.20, 4.95)]
 CASE_END_Z = (-16.65, 17.45)
 
+# --- MEASURED ON THE BENCH, 2026-08-01 -----------------------------------------
+#
+# Two C018 servos arrived and everything below was taken off the physical part
+# with calipers. Up to here the file's "measured" meant measured off somebody
+# else's STEP; from here it means measured off the servo.
+#
+# THE TWO LATERAL DIMENSIONS ARE CONFIRMED, and confirmed well:
+#
+#     length   45.40 modelled   45.35 measured   0.05 mm
+#     width    24.80 modelled   24.77 measured   0.03 mm
+#
+# That level of agreement is what makes the third one worth taking seriously,
+# because it rules out both a bad caliper and a misread datum.
+#
+#     shaft tip to shaft tip   39.60 modelled   37.24 measured   2.36 mm
+#
+# THE STEP IS PROBABLY THE WRONG VARIANT. vendor/refs/STS3215_03a.step comes
+# from TheRobotStudio's SO-ARM100, and SO-ARM100/101 runs the 7.4 V servo. This
+# project bought C018, the 12 V 1:345. Feetech sells at least five visually
+# identical, non-interchangeable variants (docs/order-sheet.md), a different
+# ratio means a different gear train, and the gear train is precisely what lives
+# along the shaft axis. The two directions that agree are the two that do not
+# contain a gearbox, which is what you would expect if this is a variant
+# difference rather than a modelling error.
+#
+# WHICH END LOST THE 2.36 IS NOT YET KNOWN, and it is the whole question. If it
+# came off the rear boss it costs nothing. If it came off the output end then
+# HORN_FACE_Z moves, and HORN_FACE_Z is where every horn-mounted part in the
+# robot sits. A rough reading of the spline standing about 1.0 mm proud of the
+# boss face against a modelled 1.50 puts roughly 0.5 mm at the output end and
+# the rest at the rear, which would be the good outcome, but the operator
+# flagged that reading as shaky and it is a lead rather than a result.
+#
+# Settle it with two numbers: the diameter of the round boss the horn seats on
+# (modelled 20.00) and the spline height above that boss face (modelled 1.50).
+MEASURED_LENGTH = 45.35
+MEASURED_WIDTH = 24.77
+MEASURED_Z_SPAN = 37.24          # shaft tip to shaft tip, the full span
+Z_SPAN_UNEXPLAINED = 2.36        # modelled minus measured, end unknown
+CASE_Z_VERIFIED = False          # and this is why
+
+# THE CASE MOUNTING HOLES: the consensus argument is confirmed, and retired.
+#
+# The C018 kit ships three bracket types and every one of them attaches through
+# the HORN. Not one bolts to the case. That is the prediction above, made from
+# TheRobotStudio's cradle and now checked against the manufacturer's own
+# brackets, so CASE_MOUNT_CONSENSUS is not a guess any more.
+#
+# It also stops mattering. Consensus between mating parts was the instrument
+# only because nobody had the servo. The servo is now on the desk, so the
+# pattern gets measured directly and the question changes from "can this be
+# recovered" to "pin the holes and read them". CASE_MOUNT_VERIFIED stays False
+# until that is done, and 40 M2 screws still depend on it.
+CASE_MOUNT_NO_BRACKET_BOLTS_TO_CASE = True     # checked, C018 kit, 3 bracket types
+
+# THE HORN, and this is the one that changes a part.
+#
+# Everything in the kit is metal, the horn included, so the plan to drop from 48
+# heat-set inserts to 16 survives: the M3 thread is bought, not printed.
+#
+# The screws measure 2.93 across the thread, which is an M3 major diameter. That
+# is now the third independent agreement on M3 (six mating patterns, the
+# reseller drawing, and the physical screw), so the M2.5 to M3 rework was right.
+#
+#     outer diameter    19.93        against a Ø20.00 pocket in cad/wheel.py
+#     plate thickness    2.51
+#     overall            4.50        plate plus the hub nub
+#     nub                1.99        raised, and it faces the CROWN
+#
+# THE 4.5 / 3.6 / 2.5 SECTION ON THE RESELLER DRAWING IS NOW DECODED. 2.5 is the
+# plate and 4.5 is the overall height including the nub. The fault this project
+# was braced for was the other reading: a 4.5 mm seating flange against a 4.0 mm
+# pocket, standing the horn 0.5 mm proud so the wheel could not seat flat. That
+# fault does not exist. The nub points at the servo, the wheel lands on a flat
+# 2.51 mm plate, and the joint seats.
+#
+# THE FAULT THAT DOES EXIST IS THE DIAMETER, and it is real. cad/wheel.py cut a
+# Ø20.00 pocket for a Ø19.93 horn: 0.035 mm per side, from a print service
+# quoting +/-0.3 mm. Most wheels would not have accepted the horn at all. Fixed
+# there, not here, and the fix has to clear the servo's own Ø20 boss as well.
+HORN_OD = 19.93                  # measured
+HORN_PLATE_T = 2.51              # measured, the part that seats
+HORN_OVERALL_T = 4.50            # measured, including the nub
+HORN_NUB_T = HORN_OVERALL_T - HORN_PLATE_T
+HORN_METAL = True                # so the M3 thread is bought
+HORN_SCREW_MEASURED = 2.93       # major diameter, confirms M3
+HORN_DIMS_VERIFIED = True        # off the part, unlike the pattern below
+# Still not measured off the part: the bolt-circle spacing (modelled 4.95 x
+# 4.95) and the nub diameter. The spacing has six independent patterns behind it
+# and a drawing, so it is the best-supported number in the file; the nub
+# diameter has nothing behind it and is a placeholder used only for drawing.
+HORN_NUB_D_ASSUMED = 10.0
+
 MASS_G = 55.0            # from the BOM; the STEP has no material
 
 # The old guesses, kept so the diff is legible from the code.

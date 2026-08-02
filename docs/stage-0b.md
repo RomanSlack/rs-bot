@@ -62,6 +62,12 @@ actively drive the orientation of wheel motors from horizontal foot-contact to
 vertical wheel-contact form." So the approach here is the right one. Their
 transitions take about 1 s; ours takes 0.79 s.
 
+(Whether the roll joint needs a servo of its own at all, and whether the wheel
+motor could drive it through a clutch, is worked through in
+`docs/deleting-the-roll-servo.md`. Short version: not the clutch, because the
+wheel motor is busiest exactly when you would want to borrow it, but the joint
+is genuinely over-actuated and the latch below is most of the answer.)
+
 **But there IS a mechanical latch.** X2-N carries "a retaining clip structure
 and multiple contact interfaces to stabilize the wheel twist during
 locomotion", plus a sliding slot that guides the ankle into place. That is a

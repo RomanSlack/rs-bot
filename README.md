@@ -132,5 +132,7 @@ control-rate margins,
 changes the plan),
 [docs/stage-0.md](docs/stage-0.md) for the balancer numbers,
 [docs/stage-0b.md](docs/stage-0b.md) for the transition and the two mechanisms
-that failed first, and [docs/mass-budget.md](docs/mass-budget.md) for where the
+that failed first,
+[docs/deleting-the-roll-servo.md](docs/deleting-the-roll-servo.md)
+for why the wheel motor cannot drive the ankle roll and what to do instead, and [docs/mass-budget.md](docs/mass-budget.md) for where the
 2.05 kg goes.

@@ -244,6 +244,66 @@ HORN_DIMS_VERIFIED = True        # off the part, unlike the pattern below
 # diameter has nothing behind it and is a placeholder used only for drawing.
 HORN_NUB_D_ASSUMED = 10.0
 
+# --- THE MANUFACTURER'S DRAWING, 2026-08-01 ------------------------------------
+#
+# It exists. It was on the Amazon listing the whole time, which is the second
+# time in a week this project has proved at length that a document could not be
+# recovered and then found it on a shopping page. Look for the drawing first.
+#
+# It is the 12 V part (the servo in the same listing photo is labelled
+# STS3215-12V), so unlike vendor/refs/STS3215_03a.step it is OUR variant.
+#
+# WHAT IT DIMENSIONS, and these supersede everything above them:
+DWG_LENGTH = 45.23               # model carries 45.40, caliper read 45.35
+DWG_WIDTH = 24.73                # model carries 24.80, caliper read 24.77
+DWG_SHAFT_X = 12.50              # from the case centre. Model exact.
+DWG_SPLINE_PROUD = 3.40          # spline above the case top face
+DWG_BODY = 29.00                 # case body, top face to bottom face
+DWG_REAR_BOSS_PROUD = 4.10       # rear boss below the bottom face
+DWG_Z_SPAN = 36.50               # tip to tip, and 3.4 + 29 + 4.1 = 36.5 exactly
+DWG_IDLER_D = 6.00               # model has IDLER_R = 3.00. Exact.
+DWG_SPLINE = "25T"               # model has SHAFT_R = 2.95. Exact.
+DWG_HORN_CENTRE_SCREW = "M3x6"   # the screw that appears nowhere in the CAD
+DWG_CASE_SCREWS = 8              # "8-PA2.0". The model lists four.
+DWG_CASE_SCREW = "PA2.0"         # a 2.0 mm self-tapper, so M2 was the right call
+DWG_REAR_SCREWS = ("PA3.0x5", 2)  # a second fastener size the model does not have
+DWG_CONNECTOR = "5264 / 2.54 mm / 3P"   # check against cad/wiring.py
+#
+# THE SHAFT-AXIS SPAN IS 36.50, NOT 39.60. The model is 3.1 mm too tall, which
+# is worse than the 2.36 mm the caliper suggested, and it is now the
+# manufacturer saying so rather than one shaky reading. The 3.4 / 29 / 4.1
+# breakdown adds up exactly, so this is not a bounding box being compared
+# against a case dimension: it is the real stack.
+#
+# LENGTH, WIDTH AND HEIGHT ARE DELIBERATELY NOT CHANGED YET, and that is a
+# judgement call worth defending. They feed cad/chassis.py, cad/thigh.py, the
+# axis check in cad/fasteners.py and the port positions in cad/wiring.py, so
+# correcting them moves real geometry on four parts and wants the FEA and the
+# full suite re-run against that change ALONE. Folding it into the same commit
+# as the servo-capture work would make it impossible to tell which change broke
+# what. Separate job, and the numbers to use are right here.
+#
+# The other reason to wait: solid() returns the STEP, which is the wrong variant
+# and is OVERSIZED along z. Every clearance check that runs against it is
+# therefore conservative, which is the safe direction to be wrong in. Shrinking
+# the envelope to the drawing while the solid stays big would break that.
+DWG_SUPERSEDES_STEP = True
+CASE_Z_VERIFIED = False          # still, and now for a documented reason
+
+# AND THE POSITIONS ARE STILL NOT PUBLISHED. The drawing labels the case holes
+# "8-PA2.0" with a leader line and never dimensions where they are. Feetech's
+# own metal brackets, all three types, attach through the HORN and none of them
+# touches the case. So the manufacturer did not dimension the holes for exactly
+# the reason this file predicted: nobody mates with them, so nobody was ever
+# forced to say where they are. Three witnesses now agree - TheRobotStudio's
+# cradle, Feetech's brackets, and Feetech's own drawing declining to answer.
+#
+# WHICH IS WHY THE ROBOT STOPS USING THEM. See the four parts: chassis, thigh,
+# shin and ankle each invented a DIFFERENT pattern (17.0, 5 mm from the ends,
+# 40.0 spacing, and +/-10.2), so it was never one unverified number, it was four
+# mutually inconsistent ones drilled into the same part. Capture replaces them.
+CASE_MOUNT_ABANDONED = True
+
 MASS_G = 55.0            # from the BOM; the STEP has no material
 
 # The old guesses, kept so the diff is legible from the code.
@@ -300,6 +360,24 @@ def main():
           f"+/-{HORN_DX:.2f} x +/-{HORN_DY:.2f}  "
           f"(holes {abs(OLD['horn_r']*0.7071-HORN_DX):.2f} mm out of position)")
     print(f"  screw    r={OLD['screw_r']:.2f} -> {HORN_SCREW_R:.2f} mm")
+    print()
+    print("against the MANUFACTURER'S DRAWING (12 V part, so our variant):")
+    print(f"  length   {LENGTH:.2f} model   {DWG_LENGTH:.2f} drawing"
+          f"   {LENGTH - DWG_LENGTH:+.2f}")
+    print(f"  width    {WIDTH:.2f} model   {DWG_WIDTH:.2f} drawing"
+          f"   {WIDTH - DWG_WIDTH:+.2f}")
+    print(f"  z span   {HEIGHT:.2f} model   {DWG_Z_SPAN:.2f} drawing"
+          f"   {HEIGHT - DWG_Z_SPAN:+.2f}   <- the model is too tall")
+    print(f"    and it breaks down exactly: {DWG_SPLINE_PROUD:.1f} spline"
+          f" + {DWG_BODY:.1f} body + {DWG_REAR_BOSS_PROUD:.1f} rear boss"
+          f" = {DWG_SPLINE_PROUD + DWG_BODY + DWG_REAR_BOSS_PROUD:.1f}")
+    print()
+    print(f"  case screws   {DWG_CASE_SCREWS} x {DWG_CASE_SCREW}, positions NOT"
+          " dimensioned anywhere")
+    print(f"  horn screw    {DWG_HORN_CENTRE_SCREW}, absent from the CAD")
+    print(f"  rear screws   {DWG_REAR_SCREWS[1]} x {DWG_REAR_SCREWS[0]}")
+    print(f"  connector     {DWG_CONNECTOR}")
+    print(f"  case mounting abandoned: {CASE_MOUNT_ABANDONED}")
 
 
 if __name__ == "__main__":

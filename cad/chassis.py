@@ -16,7 +16,7 @@ import build123d as bd
 
 OUT = Path(__file__).parent / "out"
 PETG_SOLID, INFILL = 1.270, 0.60
-M2_CLEAR, M25_CLEAR = 1.1, 1.35
+M25_CLEAR = 1.35
 
 X0, X1 = -36.5, 53.5          # 90 mm deep, centred on the sim's 8.5 offset
 SIDE_Y, SIDE_T = 38.1, 3.0    # plate centre-line and thickness
@@ -32,8 +32,22 @@ HIP_NOTCH_X = SERVO_W / 2 + 0.8
 HIP_NOTCH_Z = SERVO_L + 1.0
 
 HIP_Z = 0.0                   # hip axis
-HIP_BOLTS_X = 17.0            # servo case, bolts either side of the axis
-HIP_BOLTS_Z = 17.0
+
+# Capturing the hip servo instead of bolting into its case. The four M2 that
+# used to go here were at +/-17.0, one of four different invented patterns this
+# robot drilled into the same servo; nobody publishes where those holes are, so
+# all of them are gone (cad/servo.py).
+#
+# THE CHASSIS WAS ALREADY MOST OF THE WAY THERE and nobody noticed. HIP_NOTCH_X
+# is SERVO_W/2 + 0.8, so the lower shelf's notch already runs 0.8 mm off the
+# servo's sides - it grips the case over the shelf's 3 mm thickness by accident
+# of being sized to clear it. All this adds is depth: a rim on the inside of the
+# side plate, running the length of the case.
+CRADLE_CLEAR = 0.4            # per side, and it must EXCEED the print tolerance
+CRADLE_WALL = 2.5
+CRADLE_DEPTH = 8.0            # inboard from the side plate, along the shaft
+CRADLE_Z = (-1.0, HIP_NOTCH_Z)   # the notch's own span, which is where the
+                                 # servo demonstrably is
 
 PI_HOLES = [(-35.0, -24.5), (-35.0, 24.5), (23.0, -24.5), (23.0, 24.5)]
 
@@ -87,14 +101,18 @@ def build():
     for sgn in (1, -1):
         y0, y1 = sgn * (SIDE_Y - SIDE_T / 2), sgn * (SIDE_Y + SIDE_T / 2)
         side = _plate((X0, X1), (min(y0, y1), max(y0, y1)), (0, TOP_Z + 1.5))
-        # Hip servo mounting: four M2 through the plate, around the hip axis.
-        for dx in (-HIP_BOLTS_X, HIP_BOLTS_X):
-            for dz in (HIP_Z + 5.0, HIP_Z + 5.0 + HIP_BOLTS_Z):
-                side -= (bd.Pos(dx, sgn * SIDE_Y, dz) * bd.Rot(90, 0, 0)
-                         * bd.Cylinder(M2_CLEAR, 20))
         side -= _plate((-HIP_NOTCH_X, HIP_NOTCH_X),
                        (min(y0, y1) - 1, max(y0, y1) + 1),
                        (-1, HIP_NOTCH_Z))
+        # Hip servo capture, replacing the four M2 that went through this plate.
+        # A rim inboard of the side plate, gripping the case sides along the
+        # length of the notch.
+        inner = sgn * INNER_Y
+        cy = tuple(sorted((inner, inner - sgn * CRADLE_DEPTH)))
+        xi = SERVO_W / 2 + CRADLE_CLEAR
+        xo = xi + CRADLE_WALL
+        for sx in (-1, 1):
+            side += _plate(tuple(sorted((sx * xi, sx * xo))), cy, CRADLE_Z)
         part = side if part is None else part + side
 
     for z, name in ((TOP_Z, "top"), (SHELF1_Z, "shelf1"), (SHELF2_Z, "shelf2")):

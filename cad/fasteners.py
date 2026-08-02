@@ -72,18 +72,25 @@ M25_HEAD_R = 2.25          # M2.5 socket cap
 # --- the schedule ------------------------------------------------------------
 #
 # (interface, screw, threads into, count, note)
+# THE FORTY M2 CASE SCREWS ARE GONE, and this is the line where the decision
+# shows up as money. Every "-> servo case" row went into the STS3215's own case
+# holes. Feetech's drawing labels them "8-PA2.0" and never says where they are,
+# none of their three brackets uses them, and this robot had four parts each
+# drilling a DIFFERENT invented pattern. The servos are captured now instead:
+# see the cradles in chassis.py, thigh.py, shin.py and ankle.py.
+#
+# Three of those rows were also fiction on their own terms. The shin's lower
+# ankle bolt missed the case end by 3.5 mm, two of the yoke's four fell below
+# the ring, and both of the roll bracket's ran parallel to the face they were
+# meant to clamp. They were ordered, counted and priced; they never existed.
 SCHEDULE = [
     ("thigh -> hip servo horn", "M3 x 8", "the horn, tapped", 4, ""),
-    ("thigh -> knee servo case", "M2 x 10", "servo pilot", 4, ""),
     ("shin -> knee servo horn", "M3 x 8", "the horn, tapped", 4, ""),
-    ("shin -> ankle servo case", "M2 x 10", "servo pilot", 4, ""),
     ("ankle yoke -> ankle pitch shaft", "M2.5 x 8", "insert in yoke", 2, ""),
-    ("ankle yoke -> roll servo case", "M2 x 10", "servo pilot", 4, ""),
     ("roll bracket -> roll servo horn", "M3 x 8", "the horn, tapped", 4, ""),
-    ("roll bracket -> wheel servo case", "M2 x 10", "servo pilot", 4, ""),
     ("wheel body -> wheel servo horn", "M3 x 8", "the horn, tapped", 4, ""),
-    ("chassis -> hip servo case", "M2 x 10", "servo pilot", 8,
-     "both hips, 4 each"),
+    ("horn -> servo shaft", "M3 x 6", "the servo, tapped", 5,
+     "the centre screw, from the manufacturer's drawing. Never drawn before."),
     ("chassis side plates -> top", "M2.5 x 10", "insert in chassis", 8, ""),
     ("Pi 5 -> chassis shelf", "M2.5 x 6", "insert in chassis", 4, ""),
 ]

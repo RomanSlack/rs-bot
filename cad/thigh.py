@@ -39,7 +39,6 @@ SPY_OUT = 10.0                # half-thickness, 20 mm total
 KNEE_Z = -110.0
 
 HUB_R, HORN_BORE = 13.0, 4.0
-M2_CLEAR = 1.1
 
 # From cad/servo.py, measured off a real STEP model. These were 45.2/24.7/35.4
 # and 10.0, invented from a product listing; the height was 4.2 mm short and it
@@ -61,6 +60,36 @@ PLATE_T = 9.0                 # inboard mounting plate thickness
 # everywhere: bending stiffness goes as depth cubed.
 RIB_T = 4.0
 RIB_RUN = 26.0                # how far the rib reaches down the plate
+
+# --- capturing the knee servo instead of bolting into its case -----------------
+#
+# The four M2 that used to go here are gone. Not because they were badly placed
+# but because NOBODY KNOWS WHERE THEY GO. Feetech's drawing labels the case holes
+# "8-PA2.0" and never dimensions them, none of their three brackets touches the
+# case, and the reference design cradles the servo instead. This robot had four
+# parts each drilling a DIFFERENT invented pattern into the same case: 17.0 at
+# the chassis, 5 mm from the ends here, 40.0 spacing on the shin, +/-10.2 at the
+# ankle. At most one of those could have been right. See cad/servo.py.
+#
+# A rim round the case takes the servo's reaction couple in BEARING across the
+# full 45.4 x 39.6 side faces, rather than as a force couple through four
+# self-tappers in a 55 g plastic housing.
+#
+# WHY IT ATTACHES HERE AND NOT ON THE SHIN. cad/servo.cradle() fails on the shin
+# because that mount is a bare bar with no material round the case perimeter, so
+# a rim fuses as a floating solid. The thigh already has the inboard plate and
+# the cross-member, so there is something to grow from. The plate does have to
+# get wider: it was +/-10 against a servo that is 24.8 across, so it did not even
+# reach the case sides it now has to grip.
+CRADLE_CLEAR = 0.4            # per side, and it must EXCEED the print tolerance
+CRADLE_WALL = 2.5
+CRADLE_DEPTH = 10.0           # how far the rim reaches along the shaft
+CRADLE_X = SERVO_W / 2 + CRADLE_CLEAR + CRADLE_WALL      # 15.3
+#
+# AXIAL RETENTION IS FREE HERE and that is worth writing down, because it is not
+# free everywhere. The knee servo's horn drives the shin, so the servo cannot
+# slide out along its own shaft without taking the shin with it. It is trapped
+# between the cradle and its own output. No lid, no strap, no screws.
 
 
 def _box(x, y, z):
@@ -101,8 +130,12 @@ def build():
     # Cross-member over the top of the servo, then down the inboard side.
     part += _box((-10, 10), (SERVO_Y_LO - PLATE_T, SPINE_Y + SPY_OUT),
                  (SERVO_Z_HI, SERVO_Z_HI + 12))
-    part += _box((-10, 10), (SERVO_Y_LO - PLATE_T, SERVO_Y_LO),
-                 (SERVO_Z_LO, SERVO_Z_HI + 12))
+    # The inboard plate. Widened from +/-10 to CRADLE_X so the rim below has
+    # something to grow from, and extended past the servo's lower end for the
+    # same reason.
+    cz0 = SERVO_Z_LO - CRADLE_CLEAR - CRADLE_WALL
+    part += _box((-CRADLE_X, CRADLE_X), (SERVO_Y_LO - PLATE_T, SERVO_Y_LO),
+                 (cz0, SERVO_Z_HI + 12))
 
     # Ribs from the cross-member down the plate, one at each edge in x.
     for x0 in (-10.0, 10.0):
@@ -111,11 +144,15 @@ def build():
                (x0 - sgn * RIB_RUN, SERVO_Z_HI + 12))
         part += _gusset(pts, SERVO_Y_LO - PLATE_T, RIB_T)
 
-    # Servo mounting bolts: all four corners, through the inboard plate.
-    for dx in (-8.5, 8.5):
-        for dz in (SERVO_Z_LO + 5.0, SERVO_Z_HI - 5.0):
-            part -= (bd.Pos(dx, SERVO_Y_LO - PLATE_T / 2, dz)
-                     * bd.Rot(90, 0, 0) * bd.Cylinder(M2_CLEAR, 40))
+    # The cradle: two side walls and a lower end wall, standing off the plate
+    # along the shaft. The upper end needs nothing, because the cross-member
+    # already spans the full depth of the servo there.
+    xi = SERVO_W / 2 + CRADLE_CLEAR
+    cy = (SERVO_Y_LO, SERVO_Y_LO + CRADLE_DEPTH)
+    for sgn in (-1, 1):
+        part += _box(tuple(sorted((sgn * xi, sgn * CRADLE_X))), cy,
+                     (cz0, SERVO_Z_HI + CRADLE_CLEAR))
+    part += _box((-CRADLE_X, CRADLE_X), cy, (cz0, SERVO_Z_LO - CRADLE_CLEAR))
 
     # Reserve the cable run. See CABLE_CH_R.
     from cad.wiring import tube as _tube

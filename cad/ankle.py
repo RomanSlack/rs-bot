@@ -31,11 +31,27 @@ CABLE_A = (-78.3, 5.2, -6.9)          # roll servo port, fixed on the yoke
 CABLE_B_WHEEL = (-0.5, 28.1, -19.4)
 CABLE_B_FOOT = (-0.6, 19.4, 28.1)
 
+# The ankle-servo lead, coming down the shin into the roll servo. It never
+# needed a channel before, because before there was nothing here: it crossed
+# open air where the cradle's +y wall now stands, and cutting that wall put
+# 62 mm3 of yoke through the middle of it.
+#
+# Worth noting how it was caught. Not by fitcheck, not by assemble_check, both
+# of which were clean - a cable is not a solid and neither of them models one.
+# It was the wiring test, which asserts that the ONLY blocked run left in this
+# robot is the roll-to-wheel one, by exactly the wheel envelope and nothing
+# else. A test written to pin a known limit is what noticed a new one.
+#
+# Two paths again, for the same reason as everything else in this file: the
+# yoke drops 28 mm in z between the modes, so the run's far end moves and a
+# channel cut for one pose is the wrong channel half the time.
+CABLE_C_WHEEL = (-19.96, 48.6, 53.82)
+CABLE_C_FOOT = (-27.06, 48.6, 50.62)
+
 
 
 OUT = Path(__file__).parent / "out"
 PETG_SOLID, INFILL = 1.270, 0.60
-M2_CLEAR = 1.1
 
 # From the sim, millimetres, relative to the axle.
 # The roll drive, drawn for the first time. Layout along the roll axis:
@@ -54,10 +70,17 @@ M2_CLEAR = 1.1
 POST = ((-51, -45), (-6, 6), (-6, 6))          # bearing carrier, on the roll axis
 COUPLER_X = (-56.5, -52.0)
 COUPLER_R = 9.0
-ROLL_SHAFT_X = (-56.5, -41.0)
-SERVO_CASE_DY = 10.2          # the STS3215's own case screws
-                                               # between servo (ends -58) and
-                                               # the flat wheel (needs |x|>40)
+ROLL_SHAFT_X = (-56.5, -41.0)   # between servo (ends -58) and the flat wheel,
+                                # which needs |x| > 40
+
+# Capturing the roll servo instead of bolting into its case. See build().
+CRADLE_CLEAR = 0.4            # per side, and it must EXCEED the print tolerance
+CRADLE_WALL = 2.5
+CRADLE_DEPTH = 10.0           # how far the rim reaches along the shaft
+# How far up the walls run. They are carried by the ring, which stops at z = 17,
+# so going much past that is a cantilever holding nothing. The grip only has to
+# react a couple, and 15 mm of contact each side at a 25.5 mm arm does that.
+CRADLE_Z_TOP = 19.0
 
 # The ankle-pitch joint, which was previously not drawn at all: the shin had a
 # bore 52.8 mm off the axis and the yoke had no matching feature, so assembled
@@ -79,7 +102,16 @@ PITCH_SHAFT_R = 2.0           # 3 mm shaft, clearance
 YOKE_CROSS = ((-51, -45), (-6, 59), (-8, 8))
 YOKE_FWD = ((-56, 0), (56, 66), (-8, 8))
 YOKE_BOSS_Y = (56.0, 66.0)
-ROLL_SV = ((-93.4, -58.0), (-12.35, 12.35), (-6.6, 38.6))
+# THIS BOX WAS WRONG, AND NOTHING HAD EVER CHECKED IT. It read
+# ((-93.4, -58.0), (-12.35, 12.35), (-6.6, 38.6)): the old 35.4 x 24.7 x 45.2
+# guesses, and 3.4 mm out of position in z. The sim's own vrollsv_l geom is
+# 39.6 x 24.8 x 45.4 at (-77.8, 0, 12.5) in this frame, which is the box below.
+#
+# It only surfaced because the cradle is the first feature ever positioned FROM
+# this constant rather than merely near it. assemble_check put 491 mm3 of new
+# wall inside the servo, which is the check earning its keep: a box that is
+# 3.4 mm off but never used for anything is invisible.
+ROLL_SV = ((-97.6, -58.0), (-12.4, 12.4), (-10.2, 35.2))
 # The arm reaches 4 mm further aft and the tie is deeper and wider, so the two
 # actually LAP instead of grazing. They used to overlap in a box 2.00 x 0.50 x
 # 2.65 mm - 2.65 mm3 - and the entire wheel load went through it. FEA put the
@@ -161,10 +193,27 @@ def yoke():
     part += (_box(((-58, -51), (-17, 17), (2, 17)))
              - bd.Pos(-56, 0, 0) * bd.Rot(0, 90, 0)
              * bd.Cylinder(COUPLER_R + 1.0, 20))
-    for dy in (-SERVO_CASE_DY, SERVO_CASE_DY):
-        for dz in (-10.2, 10.2):
-            part -= (bd.Pos(-56, dy, dz) * bd.Rot(0, 90, 0)
-                     * bd.Cylinder(M2_CLEAR, 20))
+    # CAPTURE, NOT BOLTS. The four holes that were here cut two: dz = -10.2 fell
+    # below the ring, which only starts at z = 2, so it removed nothing. Same
+    # shape of fault as the shin's missing ankle bolt. All of them are gone now
+    # because the case hole positions are not published by anyone - see
+    # cad/servo.py - so a rim grips the case instead.
+    #
+    # TWO WALLS, AND THE BOTTOM STAYS OPEN. The first attempt closed it into a
+    # channel, which is the better section, and the floor killed it: with the
+    # servo's real z range the bottom wall lands at -13.1, and in foot mode the
+    # floor is 12 mm below the axle. It would have printed 1.1 mm underground.
+    # Same constraint that made the ring upper-half only, one step further out.
+    #
+    # Two opposed walls are enough on their own. The servo's reaction is a
+    # couple about its own shaft, which lies along x here, so it is reacted by
+    # forces in the y-z plane, and 25.5 mm of separation in y provides them.
+    (sv_x, sv_y, sv_z) = ROLL_SV
+    yi, yo = sv_y[1] + CRADLE_CLEAR, sv_y[1] + CRADLE_CLEAR + CRADLE_WALL
+    cx = (sv_x[1] - CRADLE_DEPTH, sv_x[1])
+    for sgn in (-1, 1):
+        part += _box((cx, tuple(sorted((sgn * yi, sgn * yo))),
+                      (sv_z[0] - CRADLE_CLEAR, CRADLE_Z_TOP)))
     # Tie the ring back to the bearing carrier, clear of the coupler. Upper
     # only, for the same reason.
     part += _box(((-52, -45), (-6, 6), (6, 16)))
@@ -172,6 +221,9 @@ def yoke():
     from cad.wiring import tube as _tube
     part -= _tube(CABLE_A, CABLE_B_WHEEL, r=CABLE_CH_R)
     part -= _tube(CABLE_A, CABLE_B_FOOT, r=CABLE_CH_R)
+    # And the ankle-servo lead, through the cradle wall that now stands in it.
+    part -= _tube(CABLE_A, CABLE_C_WHEEL, r=CABLE_CH_R)
+    part -= _tube(CABLE_A, CABLE_C_FOOT, r=CABLE_CH_R)
 
     part = part.clean()
     from cad.shape import long_edges, soften
@@ -238,9 +290,23 @@ def roll_bracket():
     az = (ROLL_ARM[2][0] + ROLL_ARM[2][1]) / 2
     part -= (bd.Pos(0, 18, az) * bd.Rot(90, 0, 0)
              * bd.Cylinder(WHEEL_SHAFT_R, 40))
-    for dx in (-34.0, -10.0):
-        part -= (bd.Pos(dx, 18, az) * bd.Rot(90, 0, 0)
-                 * bd.Cylinder(M2_CLEAR, 30))
+    # THE WHEEL SERVO'S TWO MOUNTING BOLTS ARE GONE, and removing them changes
+    # nothing, which is the finding. They ran along Y at z = 17.65. The arm
+    # seats on the servo's face at z = 12.40 and the case runs DOWN from there,
+    # so those holes were parallel to the joint they were meant to clamp and
+    # never entered the servo at all. They drilled the arm and stopped.
+    #
+    # That is the third mount in this robot with case screws that cut nothing:
+    # the shin's lower ankle bolt missed the case end by 3.5 mm, two of the
+    # yoke's four fell below the ring. cad/fasteners.py did not catch any of
+    # them because it checks that a hole is PARALLEL to its servo's shaft, not
+    # that it arrives at the servo.
+    #
+    # NOT REPLACED WITH A CRADLE YET, deliberately. The other four mounts had an
+    # unambiguous servo box to grip - ROLL_SV here, the notch on the chassis,
+    # the belt centre distance on the shin. This one does not: the arm's frame
+    # and envelope.WHEEL_SERVO's frame disagree about where the case sits, and
+    # guessing would just be a fifth invented pattern. Pin the box first.
     return part.clean()
 
 

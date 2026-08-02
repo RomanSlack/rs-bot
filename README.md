@@ -91,7 +91,7 @@ See [docs/cad.md](docs/cad.md) for the route to real CAD, and
 [docs/porting-a-link.md](docs/porting-a-link.md) for the method used to port
 each part.
 
-Latest status report: [status/2026-07-27-status.md](status/2026-07-27-status.md).
+Latest status report: [status/2026-08-01-status.md](status/2026-08-01-status.md).
 
 See [docs/bom.md](docs/bom.md) for the real parts, costs and what modelling
 them at full size revealed,

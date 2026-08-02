@@ -38,6 +38,14 @@ CABLE_A = (-4.8, 0.4, -5.0)
 CABLE_A_FOOT = (-6.0, 0.4, -3.5)
 CABLE_B = (-0.6, 48.6, -52.6)
 
+# The OUTGOING lead, ankle servo to roll servo. It leaves the port at CABLE_B
+# and drops away aft and down, and until the cradle went in it left through open
+# air. The +x wall now stands in it, by 7 mm3. Same catch as on the yoke: fitcheck
+# and assemble_check were both clean, because neither of them models a cable.
+# The far end is on the yoke, which moves between the poses, so two paths again.
+CABLE_C_WHEEL = (-76.06, 5.2, -89.96)
+CABLE_C_FOOT = (-72.64, 5.2, -79.84)
+
 
 
 OUT = Path(__file__).parent / "out"
@@ -92,12 +100,42 @@ FPOST = ((37, 47), (SPINE_Y - SPY, SPINE_Y + SPY), (-70, -48))
 CROSS = ((37, 47), (SPINE_Y - SPY, PITCH_Y + PITCH_HALF), (-70, -61))
 DROP = ((37, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -61))
 BACK = ((0, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -102))
-# Runs the length of the ankle servo's case so its mounting bolts can be far
-# apart: 1.63 N.m through bolts 12 mm apart is 136 N each, at 40 mm it is 41.
-STANDOFF = ((-8, 8), (SPINE_Y + SPY, SPINE_Y + SPY + 7), (-56, -12))
+# --- the ankle-pitch servo mount ----------------------------------------------
+#
+# THE OLD COMMENT HERE WAS WRONG, AND IT MATTERED. It read "runs the length of
+# the ankle servo's case so its mounting bolts can be far apart: 1.63 N.m
+# through bolts 12 mm apart is 136 N each, at 40 mm it is 41." The bolts were at
+# z = -60 and -20. The servo case runs -56.5..-11.1 (its shaft is at -46.32,
+# from cad/belt.py, inset 10.2). So the z = -60 bolt was 3.5 mm off the END of
+# the servo, and it missed the standoff too, which only started at -56.
+#
+# It cut nothing. The shin has had ONE ankle-servo bolt, not two, and the whole
+# 41 N argument above was computed for a pair that does not exist.
+#
+# Both are gone now anyway: the case holes are abandoned robot-wide because
+# nobody knows where they are (cad/servo.py). What replaces them is a rim.
+from cad.servo import WIDTH as SERVO_W  # noqa: E402
+CRADLE_CLEAR = 0.4            # per side, and it must EXCEED the print tolerance
+CRADLE_WALL = 2.5
+CRADLE_DEPTH = 10.0           # how far the rim reaches along the shaft
+CRADLE_X = SERVO_W / 2 + CRADLE_CLEAR + CRADLE_WALL      # 15.3
+# The ankle servo's case, from the sim's vanksv_l geom: z = -33.2 +/- 22.7.
+SERVO_Z = (-55.9, -10.5)
+
+# SIDE WALLS ONLY, NO LOWER END WALL, and that is forced rather than lazy.
+# The wheel-drive servo sweeps an annulus 14..50.9 mm about the roll axis at
+# z = -110 for |x| < 22.6. The servo's own lower end sits at z = -56.5, which is
+# 53.5 mm from that axis and clear. An end wall 2.9 mm below it would sit at
+# 50.6 mm, INSIDE the swept annulus, and would be clipped during the flip.
+#
+# Two opposed walls still do the job. The servo's reaction is a couple about its
+# own shaft, which lies along y here, so it is reacted by forces in x - which is
+# exactly what a pair of walls 25.6 mm apart provides. The end walls were never
+# the ones carrying it.
+STANDOFF = ((-CRADLE_X, CRADLE_X), (SPINE_Y + SPY, SPINE_Y + SPY + 7),
+            (-56, -12))
 
 # --- fasteners ---------------------------------------------------------------
-M2_CLEAR = 1.1                # radius, clearance for M2
 HUB_R = 13.0                  # hub outer radius
 HORN_BORE = 4.0               # radius, clearance over the servo output boss
 # The real horn pattern, from cad/servo.py: a 9.9 x 10.0 mm rectangle. It was
@@ -106,8 +144,6 @@ from cad.servo import HORN_DX, HORN_DY, HORN_SCREW_R
 BEARING_OD = 5.0              # radius, 623ZZ outer race (10 mm dia)
 BEARING_W = 4.0               # 623ZZ width
 SHAFT_R = 2.0                 # radius, clearance for the 3 mm shaft
-SERVO_BOLTS = 40.0            # mounting bolt spacing along the servo case
-SHAFT_INSET = 10.0            # servo output shaft, from the near end of the case
 
 
 # Ribs at the two inside corners, in the x-z plane and across the full 12 mm
@@ -182,12 +218,29 @@ def build():
     part -= (bd.Pos(0, PITCH_Y - PITCH_HALF + BEARING_W / 2, ANKLE_Z)
              * bd.Rot(90, 0, 0) * bd.Cylinder(BEARING_OD, BEARING_W))
 
-    # Ankle-servo mounting. Spacing matters: the servo's 1.63 N.m reaction is
-    # a force couple through these bolts, so 12 mm apart meant 136 N each.
-    # At 40 mm it is 41 N.
-    for z in (-40 - SERVO_BOLTS / 2, -40 + SERVO_BOLTS / 2):
-        part -= (bd.Pos(0, SPINE_Y + SPY + 3.5, z) * bd.Rot(90, 0, 0)
-                 * bd.Cylinder(M2_CLEAR, 20))
+    # Ankle-servo capture. Two walls gripping the case sides, standing off the
+    # standoff face, positioned from the SERVO rather than from a guess: its
+    # shaft is on the belt centre distance and the case hangs off that.
+    # Positioned from the SIM's box, not from the belt centre distance. Working
+    # it out as SERVO_SHAFT_Z - SHAFT_INSET gives -56.52..-11.12; the sim's
+    # vanksv_l geom is at z = -33.2 +/- 22.7, so -55.9..-10.5. The 0.62 mm
+    # between those two is not academic: it put the upper end wall 0.22 mm
+    # inside the servo, which assemble_check caught as 57.5 mm3. The sim is what
+    # the interference checks measure against, so the sim is what the part is
+    # built from.
+    sz0, sz1 = SERVO_Z
+    face_y = SPINE_Y + SPY + 7.0
+    xi = SERVO_W / 2 + CRADLE_CLEAR
+    for sgn in (-1, 1):
+        part += _box(((min(sgn * xi, sgn * CRADLE_X),
+                       max(sgn * xi, sgn * CRADLE_X)),
+                      (face_y, face_y + CRADLE_DEPTH),
+                      (sz0 - CRADLE_CLEAR, sz1 + CRADLE_CLEAR + CRADLE_WALL)))
+    # Upper end wall. This end is 98 mm from the roll axis, so unlike the lower
+    # one it is nowhere near the wheel-drive servo's swept annulus.
+    part += _box(((-CRADLE_X, CRADLE_X),
+                  (face_y, face_y + CRADLE_DEPTH),
+                  (sz1 + CRADLE_CLEAR, sz1 + CRADLE_CLEAR + CRADLE_WALL)))
 
     # No lightening pocket. The first attempt cut a 10 mm slot clean through
     # a 20 mm spine, leaving a thin-necked keyhole, and the 0.73 mm stiffness
@@ -198,11 +251,33 @@ def build():
     from cad.wiring import tube as _tube
     part -= _tube(CABLE_A, CABLE_B, r=CABLE_CH_R)
     part -= _tube(CABLE_A_FOOT, CABLE_B, r=CABLE_CH_R)
+    # And the outgoing lead, through the cradle wall that now stands in it.
+    part -= _tube(CABLE_B, CABLE_C_WHEEL, r=CABLE_CH_R)
+    part -= _tube(CABLE_B, CABLE_C_FOOT, r=CABLE_CH_R)
 
     part = part.clean()
     from cad.shape import long_edges, soften
     part, build.corner_r = soften(part, long_edges(part, "z", 40.0),
                                   radii=(1.5, 1.0, 0.8), what="shin verticals")
+
+    # RELIEF, CUT AFTER THE FILLET, and it has to be after or it does nothing.
+    #
+    # Widening the standoff gave soften() new long z-edges to work on, and the
+    # r = 1.0 blend where a cradle wall rises off the seating face is CONCAVE:
+    # it adds material, 0.2 mm of it, straight into the space the servo has to
+    # sit in. assemble_check found 3.4 mm3. Nobody would have seen it on a
+    # drawing, and the result at the bench is a servo rocking on a fillet
+    # instead of seating on a face - the same fault as the 0.5 mm standoff this
+    # design has already been bitten by once, minus the bolts that used to
+    # tighten it out.
+    #
+    # So the pocket is defined by the SERVO rather than by whatever the fillet
+    # leaves behind: subtract the case, grown by the clearance in x and z, and
+    # open-ended in +y so the seating face itself survives.
+    sz0, sz1 = SERVO_Z
+    part -= _box(((-SERVO_W / 2 - CRADLE_CLEAR, SERVO_W / 2 + CRADLE_CLEAR),
+                  (SPINE_Y + SPY + 7.0, SPINE_Y + SPY + 7.0 + 2 * CRADLE_DEPTH),
+                  (sz0 - CRADLE_CLEAR, sz1 + CRADLE_CLEAR)))
     return part
 
 

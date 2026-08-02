@@ -24,14 +24,35 @@ INNER_Y = SIDE_Y - SIDE_T / 2
 TOP_Z, SHELF1_Z, SHELF2_Z = 178.5, 20.0, 61.0
 PLATE_T = 3.0
 
-# The hip servo lives INSIDE the chassis and its output boss passes out
-# through the side plate to reach the thigh hub, so the plate needs a notch.
-# Without it the servo interferes with its own mounting plate by 3467 mm3.
-from cad.servo import LENGTH as SERVO_L, WIDTH as SERVO_W
-HIP_NOTCH_X = SERVO_W / 2 + 0.8
-HIP_NOTCH_Z = SERVO_L + 1.0
+# THE HIP SERVO DOES NOT LIVE INSIDE THE CHASSIS, whatever this comment used to
+# say. Measured off the sim: the case runs y = 35.4..75.0 and the side plate is
+# at 36.6..39.6, so it passes THROUGH the plate's notch and 35 mm of it - most
+# of the servo - sits outboard. Its output face is at y = 75.0, which is exactly
+# where cad/thigh.py puts the inner face of the hip hub, so the drive itself was
+# always right; only the description was wrong.
+#
+# That matters because the capture rim was built inboard on the strength of this
+# sentence, and it gripped 1.2 mm of case. The rim belongs OUTBOARD.
+from cad.servo import LENGTH as SERVO_L, WIDTH as SERVO_W, SHAFT_INSET
 
 HIP_Z = 0.0                   # hip axis
+
+# WHERE THE HIP SERVO ACTUALLY IS, which is not where this file used to assume.
+#
+# The servo's output shaft sits SHAFT_INSET from the near end of its case, so a
+# servo whose horn is ON the hip axis runs from -10.2 to +35.2, not from 0 to
+# 45.4. The sim had it at 0..45.4 - positioned by its case rather than by its
+# output - which put the shaft 10.2 mm above the joint it drives. cad/drives.py
+# now checks exactly that and the sim is fixed; this follows it.
+#
+# THE CONSEQUENCE IS REAL AND IS NOT RESOLVED HERE: 10.2 mm of servo now hangs
+# below z = 0, and the side plates start at z = 0. Either the chassis grows
+# downward to enclose it or the servo is exposed under the robot. That is a
+# proportions decision, not bookkeeping, so it is flagged rather than taken.
+HIP_SERVO_Z = (HIP_Z - SHAFT_INSET, HIP_Z - SHAFT_INSET + SERVO_L)
+
+HIP_NOTCH_X = SERVO_W / 2 + 0.8
+HIP_NOTCH_Z = (HIP_SERVO_Z[0] - 1.0, HIP_SERVO_Z[1] + 1.0)
 
 # Capturing the hip servo instead of bolting into its case. The four M2 that
 # used to go here were at +/-17.0, one of four different invented patterns this
@@ -46,8 +67,22 @@ HIP_Z = 0.0                   # hip axis
 CRADLE_CLEAR = 0.4            # per side, and it must EXCEED the print tolerance
 CRADLE_WALL = 2.5
 CRADLE_DEPTH = 8.0            # inboard from the side plate, along the shaft
-CRADLE_Z = (-1.0, HIP_NOTCH_Z)   # the notch's own span, which is where the
-                                 # servo demonstrably is
+# The SERVO's span, not the NOTCH's. The notch runs -1.0..SERVO_L + 1.0 because
+# a cutter has to overshoot to cut cleanly; a wall must not. Borrowing those
+# limits hung the cradle 1 mm below the chassis floor at z = 0, as an
+# unsupported sliver that was also partly floating in the notch's own opening.
+# It exported an STL with inconsistent face orientation, which MuJoCo refuses to
+# load: visible as broken geometry along the bottom of the chassis.
+#
+# A cut and a wall want different bounds. This is the wall's.
+CRADLE_Z = HIP_SERVO_Z        # the full case, now that the plate reaches it
+
+# The side plates start BELOW the hip axis, not at it. A servo whose horn is on
+# the axis runs down to -10.2, and a rim has to have something to grow from, so
+# the plate drops far enough to back the whole case. This is the proportions
+# question resolved the cheap way: 12.7 mm of extra plate, about 1 g, rather
+# than moving the hip axis and re-tuning a balancer against a new ride height.
+SIDE_Z0 = HIP_SERVO_Z[0] - CRADLE_WALL
 
 PI_HOLES = [(-35.0, -24.5), (-35.0, 24.5), (23.0, -24.5), (23.0, 24.5)]
 
@@ -100,15 +135,15 @@ def build():
     part = None
     for sgn in (1, -1):
         y0, y1 = sgn * (SIDE_Y - SIDE_T / 2), sgn * (SIDE_Y + SIDE_T / 2)
-        side = _plate((X0, X1), (min(y0, y1), max(y0, y1)), (0, TOP_Z + 1.5))
+        side = _plate((X0, X1), (min(y0, y1), max(y0, y1)),
+                      (SIDE_Z0, TOP_Z + 1.5))
         side -= _plate((-HIP_NOTCH_X, HIP_NOTCH_X),
                        (min(y0, y1) - 1, max(y0, y1) + 1),
-                       (-1, HIP_NOTCH_Z))
+                       HIP_NOTCH_Z)
         # Hip servo capture, replacing the four M2 that went through this plate.
-        # A rim inboard of the side plate, gripping the case sides along the
-        # length of the notch.
-        inner = sgn * INNER_Y
-        cy = tuple(sorted((inner, inner - sgn * CRADLE_DEPTH)))
+        # OUTBOARD of the plate, because that is where the servo is.
+        outer = sgn * (SIDE_Y + SIDE_T / 2)
+        cy = tuple(sorted((outer, outer + sgn * CRADLE_DEPTH)))
         xi = SERVO_W / 2 + CRADLE_CLEAR
         xo = xi + CRADLE_WALL
         for sx in (-1, 1):

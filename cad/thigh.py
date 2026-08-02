@@ -26,8 +26,18 @@ import numpy as np
 # way it is the cable's space reserved, instead of discovered at the bench with
 # the parts already printed.
 CABLE_CH_R = 3.0
-CABLE_A = (-1.6, -10.0, 2.9)
-CABLE_B = (-0.6, -10.0, -116.9)
+# TWO PATHS, like the shin and the ankle already had. The thigh only ever cut
+# one, and it went stale the moment the hip servo moved: putting that servo's
+# shaft on the hip axis (cad/drives.py) dropped its connector port 9.6 mm, and
+# the old channel missed the new line by enough to put 27 mm3 of thigh through
+# the cable in wheel mode and 47 mm3 in foot mode.
+#
+# The far end is the knee servo's own port and does not move in this frame. The
+# near end is on the TORSO, across the hip joint, so it swings between the poses
+# and one channel can only ever be right for one of them.
+CABLE_A = (1.82, -10.0, -6.68)        # hip servo port, wheel mode
+CABLE_A_FOOT = (2.71, -10.0, -6.37)   # and in foot mode
+CABLE_B = (-0.55, -10.0, -116.9)      # knee servo port, fixed on this part
 
 
 
@@ -157,6 +167,7 @@ def build():
     # Reserve the cable run. See CABLE_CH_R.
     from cad.wiring import tube as _tube
     part -= _tube(CABLE_A, CABLE_B, r=CABLE_CH_R)
+    part -= _tube(CABLE_A_FOOT, CABLE_B, r=CABLE_CH_R)
 
     # NOT FILLETED, and the honest reason is narrower than it first looked.
     #

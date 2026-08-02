@@ -434,3 +434,110 @@ def cradle(centre, depth=CRADLE_DEPTH, wall=CRADLE_WALL, clear=CRADLE_CLEAR,
     inner = bd.Pos(cx, ymid, cz) * bd.Box(WIDTH + 2 * clear, depth + 2.0,
                                           LENGTH + 2 * clear)
     return outer - inner
+
+
+# --- the servo as a solid, drawn from the DRAWING ------------------------------
+#
+# solid() returns vendor/refs/STS3215_03a.step, which is somebody else's model
+# of the 7.4 V part and is 3.1 mm too tall. This is ours, built from the
+# dimensions the manufacturer publishes, and it is what the live sim shows.
+#
+# Visual only, deliberately. The sim's servo boxes stay exactly as they are:
+# fitcheck measures interference from the oriented bounding boxes of the group-0
+# geoms, and a mesh has no meaningful geom_size, so swapping the collision shape
+# would silently start auditing something else. This changes what you see and
+# nothing about what the robot does.
+#
+# WHAT IS NOT ON IT: the eight PA2.0 case holes. They are real, the drawing says
+# so, and nobody publishes where. Drawing them would mean inventing a fifth
+# pattern to sit alongside the four this project just deleted.
+
+S_BOT = -DWG_Z_SPAN / 2                       # rear boss tip
+S_BODY0 = S_BOT + DWG_REAR_BOSS_PROUD         # body starts
+S_BODY1 = S_BODY0 + DWG_BODY                  # body ends
+S_TIP = S_BODY1 + DWG_SPLINE_PROUD            # spline tip
+PAD_D, PAD_H = 11.0, 1.5      # the pad the horn seats on; scaled off the
+                              # drawing, not dimensioned on it
+CONN_L, CONN_W, CONN_H = 8.0, 4.0, 2.2        # the two 5264 3P housings
+
+_AXIS = {"L": 0, "W": 1, "S": 2}
+
+
+def _place(order, v):
+    """Reorder a canonical (length, width, shaft) triple onto the target axes."""
+    p = [_AXIS[c] for c in order]
+    return (v[p[0]], v[p[1]], v[p[2]])
+
+
+def drawing_solid(order=("L", "W", "S")):
+    """The STS3215 C018, with its dimensions on the requested axes.
+
+    `order` names which canonical dimension lands on x, y and z: "L" length,
+    "W" width, "S" the output shaft. The sim writes each servo's box in
+    whatever order puts the case where it goes, so the mesh has to be built to
+    match rather than rotated afterwards and hoped for. Baking the orientation
+    in here means no euler in the MJCF and nothing to get backwards.
+    """
+    def box(size, pos):
+        return bd.Pos(*_place(order, pos)) * bd.Box(*_place(order, size))
+
+    def cyl(r, s0, s1, at_l=DWG_SHAFT_X):
+        h = s1 - s0
+        axis = order.index("S")
+        rot = {0: bd.Rot(0, 90, 0), 1: bd.Rot(-90, 0, 0), 2: bd.Rot(0, 0, 0)}[axis]
+        return bd.Pos(*_place(order, (at_l, 0.0, (s0 + s1) / 2))) * rot \
+            * bd.Cylinder(r, h)
+
+    p = box((DWG_LENGTH, DWG_WIDTH, DWG_BODY),
+            (0.0, 0.0, (S_BODY0 + S_BODY1) / 2))
+    p += cyl(PAD_D / 2, S_BODY1, S_BODY1 + PAD_H)      # horn seating pad
+    p += cyl(SHAFT_R, S_BODY1, S_TIP)                  # 25T spline
+    p += cyl(DWG_IDLER_D / 2, S_BOT, S_BODY0)          # rear pivot boss
+    for w in (-5.2, 5.2):                              # the two bus connectors
+        p += box((CONN_L, CONN_W, CONN_H),
+                 (-0.55, w, S_BODY0 - CONN_H / 2))
+    return p.clean()
+
+
+# --- getting it into the sim, and the trap that cost an hour -------------------
+#
+# THE OBVIOUS APPROACH DOES NOT WORK. The sim writes each servo's box in
+# whatever order puts the case where it goes - (W, S, L) for the hip, knee and
+# ankle, (S, W, L) for the roll, (L, S, W) for the wheel - so the tempting fix
+# is to export three STLs, one per order, and use no euler at all. Orientation
+# baked into the geometry, nothing to get backwards.
+#
+# MuJoCo throws it away. The compiler canonicalises every mesh: vertices are
+# translated to the centre of mass and rotated onto the principal axes of
+# inertia, with the authored frame recovered afterwards through mesh_quat. Three
+# STLs of the SAME SOLID therefore canonicalise identically, and all three
+# geoms come out in one orientation. The check said so: all three reported
+# extents of 24.73 x 36.52 x 45.35, whichever file they pointed at.
+#
+# So there is one mesh and the orientation lives in the MJCF, as euler.
+#
+# AND CHECKING IT HAS ITS OWN TRAP. geom_aabb is expressed in the GEOM's own
+# frame, and euler rotates the geom relative to its BODY, so geom_aabb does not
+# move when you change euler. A search over all 64 axis-aligned eulers found
+# nothing, because every candidate reported identical numbers. Compare in the
+# body frame - abs(geom_xmat) @ half - and the answers fall straight out.
+# RADIANS, not degrees, and that is the third trap in ten lines. MuJoCo's MJCF
+# defaults to degrees; this project's model does not - src/rsbot/model.py writes
+# euler="1.5708 0 0" for the wheel cylinders, so it is running in radians. A
+# search done under the default found "90 0 90", which fed to the real model is
+# ninety RADIANS and lands the servo at an arbitrary angle. It does not error, it
+# does not warn, it just quietly puts a bounding box 62 mm across where a 45 mm
+# one belongs.
+MESH_EULER = {"wsl": "1.5708 0 1.5708",   # hip, knee, ankle
+              "swl": "0 1.5708 0",        # roll
+              "lsw": "1.5708 0 0"}        # wheel
+
+
+def export_mesh(out=None):
+    """One STL, in this file's own frame: x length, y width, z shaft."""
+    out = Path(out) if out else Path(__file__).parent / "out"
+    out.mkdir(parents=True, exist_ok=True)
+    f = out / "servo.stl"
+    bd.export_stl(drawing_solid(("L", "W", "S")), str(f),
+                  tolerance=0.02, angular_tolerance=0.1)
+    return f

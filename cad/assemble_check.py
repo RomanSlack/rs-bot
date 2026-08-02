@@ -47,10 +47,19 @@ def _euler(mat):
     return np.array([np.arctan2(-m[1, 2], m[1, 1]), np.arctan2(-m[2, 0], sy), 0.0])
 
 
-def parts(mode):
+_BUILT = {}
+
+
+def parts(mode, frac=None):
+    """The real solids, posed. `frac` walks the flip instead of picking an end.
+
+    The solids are built ONCE and cached. Placing them is cheap; building them
+    is not, and a 26-pose sweep that rebuilt every part each step would take
+    long enough that nobody would run it.
+    """
     m, d = load()
-    pose(m, d, mode)
-    built = {"torso": chassis.build(), "thigh": thigh.build(),
+    pose(m, d, mode, frac)
+    built = _BUILT or {"torso": chassis.build(), "thigh": thigh.build(),
              "shin": shin.build(), "ankle": ankle.yoke(),
              "rollbracket": ankle.roll_bracket(),
              # The wheel was not in this check at all, which is a hole in it:
@@ -62,6 +71,7 @@ def parts(mode):
              # mapped into the sim's wheel body frame (spin about y, sole
              # inboard); the right side then mirrors in y with everything else.
              "wheel": bd.Rot(90, 0, 0) * (wheel.body() + wheel.tyre())}
+    _BUILT.update(built)
 
     out = []
     for stem, solid in built.items():
@@ -249,3 +259,53 @@ if __name__ == "__main__":
     total = sum(len(main(mo)) for mo in modes)
     print()
     print("clean" if total == 0 else f"{total} pairs to fix")
+
+
+# --- the flip, on the REAL solids ----------------------------------------------
+#
+# fitcheck.py already sweeps the flip, and it sweeps the sim's BOXES. That was
+# fine while the boxes were the whole design. It stopped being fine the moment
+# parts grew features the boxes do not carry: the servo capture rims added on
+# 2026-08-01 are 2.5 mm walls standing 8-10 mm off four different faces, in the
+# tightest region of the robot, and NOTHING had ever asked whether they hit
+# anything. They exist only in cad/, so every interference check in the project
+# was blind to them.
+#
+# cad/twin.py checks that no sim box lacks CAD material behind it. This is the
+# other direction, and the reason that direction was left unchecked - "the CAD
+# has fillets and channels the boxes never had" - does not cover a structural
+# wall. A fillet is not a rim.
+#
+# Coarser than fitcheck on purpose. Solid booleans across 21 parts cost real
+# time, so this runs a smaller number of poses and is meant to be run when
+# geometry MOVES rather than on every edit.
+
+def sweep(steps=6, verbose=True):
+    """[(frac, a, b, mm3)] for every pair of SOLIDS that overlap mid-flip."""
+    hits = []
+    for i in range(steps + 1):
+        frac = i / steps
+        ps = parts(None, frac)
+        n = 0
+        for (na, a), (nb, b) in itertools.combinations(ps, 2):
+            try:
+                inter = a & b
+                v = inter.volume if inter else 0.0
+            except Exception:
+                v = 0.0
+            if v > 1.0:
+                hits.append((frac, na, nb, v))
+                n += 1
+        if verbose:
+            print(f"   flip {frac*100:3.0f}%   {n} pair(s)")
+    if verbose:
+        worst = {}
+        for frac, na, nb, v in hits:
+            k = tuple(sorted((na, nb)))
+            if k not in worst or v > worst[k][1]:
+                worst[k] = (frac, v)
+        for (na, nb), (frac, v) in sorted(worst.items(), key=lambda kv: -kv[1][1]):
+            print(f"   {na:14s} x {nb:14s} {v:8.1f} mm3 at {frac*100:3.0f}%")
+        print(f"   {len(worst)} pair(s) collide at some point"
+              if worst else "   nothing collides through the flip")
+    return hits

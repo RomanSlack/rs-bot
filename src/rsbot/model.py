@@ -1,6 +1,7 @@
 """Model loading and shared geometry."""
 
 import math
+import re
 from pathlib import Path
 
 import mujoco
@@ -76,6 +77,12 @@ def make_ctrl(hip, knee, apitch, aroll, wheel, wheel_r=None):
 # SHAFT and was 4.2 mm short, which is exactly where the horn clearances are.
 SERVO = (0.0454, 0.0248, 0.0396)      # STS3215 body, L x W x H(shaft)
 SERVO_HORN_R = 0.0100                 # 25T output horn
+# The output shaft is NOT at the centre of the case: it sits 12.5 mm off along
+# the length (cad/servo.py, confirmed by the manufacturer's drawing). A servo
+# positioned by its case is therefore a servo whose shaft is 12.5 mm from where
+# you think it is, which is how the hip and the wheel drive both ended up off
+# their own joints. Position servos by SHAFT, not by box. cad/drives.py checks.
+SERVO_SHAFT_X = 0.0125
 PI5 = (0.085, 0.056, 0.017)
 BATT_3S = (0.105, 0.034, 0.024)       # 2200 mAh 3S pack
 DRIVER = (0.050, 0.030, 0.010)        # TTL bus adapter
@@ -178,9 +185,33 @@ ANK_Y = 0.032        # ankle structure runs outboard of the shin's, so the
 # switched on these come out and the real part goes in; the servo, wheel and
 # electronics boxes stay, because those are bought parts and a box is all they
 # ever were.
-PRINTED_VIS = ("vthigh", "vshin", "vankstand", "vshinarm", "vshinpost",
-               "vankpost", "vankface", "vrollarm", "vrolltie",
-               "vside1", "vside-1", "vtop", "vshelf1", "vshelf2", "vpistand")
+# Which visual geoms are stand-ins for PRINTED structure, and so have to come
+# out when the real mesh goes in.
+#
+# THIS WAS A LIST OF EXACT NAMES AND IT HAD GONE STALE THREE SEPARATE WAYS.
+#
+#   1. Suffixes. The side plates and lower shelf come out of the build split by
+#      the hip notch, as "vside1f-0.036" and "vshelf10.012", so an exact match
+#      on "vside1" never fired at all.
+#   2. Additions. Every redesign of the shin, ankle and roll bracket added
+#      members - vshinfarm, vshinfpost, vshincross, vshindrop, vshinback,
+#      vankring, vanktie, vyokecross, vyokefwd, vyokeboss, vrollweb, vrollhub,
+#      vrollcoup, vrollshaft - and not one was added here.
+#   3. Deletions. vshinpost, vankface and vrolltie are still listed and no
+#      longer exist, which is harmless and is also why nobody looked: the list
+#      LOOKED maintained.
+#
+# The result was 17 boxes drawn INSIDE the real meshes, in the same group, which
+# is exactly the duplicate geometry you see in the twin. It is also invisible
+# from the code: nothing errors when a name in this list matches nothing.
+#
+# So it is a pattern now, with the alternatives spelled out rather than left as
+# a loose prefix, because "vroll" and "vank" would otherwise swallow vrollsv and
+# vanksv - the SERVOS, which are bought parts and must stay. _check_no_standins()
+# below turns the whole thing into a check that can fail.
+PRINTED_VIS_RE = re.compile(
+    r"^v(thigh|shin\w*|ank(ring|tie|stand|post|face)|yoke\w*"
+    r"|roll(web|hub|coup|shaft|arm|tie)|side[-\d]|top|shelf\d|pistand)")
 MESH_STEM = {"thigh": "thigh", "shin": "shin", "ankle": "ankle_yoke",
              "rollbracket": "roll_bracket", "torso": "chassis"}
 
@@ -191,6 +222,18 @@ MESH_STEM = {"thigh": "thigh", "shin": "shin", "ankle": "ankle_yoke",
 # It is kept separate from MESH_STEM because that machinery assumes one mesh
 # per link, no rotation, and mirrored by a negative y scale. None of those hold
 # here, and forcing it would have shown the wheel in the wrong mode.
+# The servo, drawn from the manufacturer's drawing rather than left as a grey
+# box. Which STL a servo gets is decided by the order its box writes its own
+# dimensions in, because the sim stores each one in whatever order puts the case
+# where it goes. cad/servo.py builds one mesh per order, so the orientation is
+# baked into the geometry and there is no euler here to get backwards.
+#
+# The euler comes from cad/servo.py, which explains at length why there is one
+# mesh and not three: MuJoCo canonicalises mesh vertices onto principal axes, so
+# an orientation baked into the STL does not survive the compiler.
+SERVO_MESH = {"vhipsv": "wsl", "vkneesv": "wsl", "vanksv": "wsl",
+              "vrollsv": "swl", "vwhlsv": "lsw"}
+
 MESH_MULTI = {"wheel": [("wheel_body", C_HUB), ("wheel_tyre", C_TIRE)]}
 MESH_EULER = {"wheel": {"l": "1.5708 0 0", "r": "-1.5708 0 0"}}
 
@@ -214,6 +257,28 @@ def _inertial(link, sgn):
 
 
 
+def _servo_meshes(geoms):
+    """Grey servo boxes out, the real STS3215 in. Position is left untouched.
+
+    cad.servo is imported HERE rather than at the top of the file on purpose.
+    It pulls in build123d, which is a dev-group dependency, and the sim has to
+    stay loadable without a CAD kernel installed. This path only runs when
+    meshes=True, which only serve.py asks for.
+    """
+    import cad.servo as _servo
+    out = []
+    for g in geoms:
+        m = re.search(r'name="(v[a-z]+sv)[_-]?\w*"', g)
+        key = SERVO_MESH.get(m.group(1)) if m else None
+        if key is None:
+            out.append(g)
+            continue
+        out.append(re.sub(r'type="box" size="[^"]*"',
+                          f'type="mesh" mesh="cad_servo" '
+                          f'euler="{_servo.MESH_EULER[key]}"', g))
+    return out
+
+
 def _swap_meshes(vis, link, side, sgn):
     """Printed stand-in boxes out, the real part in."""
     if link in MESH_MULTI:
@@ -227,10 +292,13 @@ def _swap_meshes(vis, link, side, sgn):
             f'mesh="cad_{stem}_{side}" euler="{e}" rgba="{rgba}" '
             f'contype="0" conaffinity="0" mass="0" group="0"/>'
             for stem, rgba in MESH_MULTI[link]]
-    kept = [g for g in vis
-            if not any(f'name="{p}_{side}"' in g or f'name="{p}"' in g
-                       for p in PRINTED_VIS)]
+    kept = [g for g in vis if not _is_standin(g)]
     return kept + [_mesh_geom(link, side, sgn)]
+
+
+def _is_standin(geom_xml):
+    m = re.search(r'name="([^"]+)"', geom_xml)
+    return bool(m) and bool(PRINTED_VIS_RE.match(m.group(1)))
 
 
 def _mesh_geom(link, side, sgn):
@@ -294,17 +362,26 @@ def _link_geoms(link, side, sgn, meshes=False):
         # Stood off 7 mm further outboard than the spine face. At the flush
         # position its inner corner sits 49 mm from the roll axis, just inside
         # the wheel-servo sweep, and clips it at mid-flip by 2.4 mm.
-        vis.append(_v(f"vankstand_{side}", "box", f"0.008 0.0035 0.022",
-                      f"0 {sgn*(SPINE_Y+SPY+0.0035):.5f} {-0.110+0.0768:.5f}",
-                      C_PRINT))
+        # SYNCED TO cad/shin.py's STANDOFF, which is x +/-15.3 and z -56..-12.
+        # The sim had it +/-8 and centred 0.8 mm high - narrower than the part
+        # it stands for, which is the dangerous direction: the swept-clearance
+        # check was routing the wheel servo past a member 7 mm thinner than the
+        # one that gets printed. cad/twin.py measures the box against the solid
+        # but only catches sim-BIGGER-than-CAD; this was the other way.
+        vis.append(_v(f"vankstand_{side}", "box", "0.0153 0.0035 0.022",
+                      f"0 {sgn*(SPINE_Y+SPY+0.0035):.5f} -0.034", C_PRINT))
         vis.append(_v(f"vanksv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
                       f"0 {outb+sgn*0.007:.5f} {-0.110+0.0768:.5f}", C_SERVO))
-        # The SHIN carries the ankle bearing, so the member reaching down to
-        # the ankle axis belongs here. It steps aft high up, where the radius
-        # from the roll axis already clears the servo sweep, then drops at
-        # |x| > 32 mm, which also clears the flat wheel.
-        vis.append(_v(f"vshinarm_{side}", "box", f"0.016 {SPY} 0.007",
-                      f"-0.026 {y:.5f} -0.048", C_PRINT))
+        # NO AFT MEMBER. There used to be a "vshinarm" here, stepping aft to
+        # reach the ankle bearing, and cad/shin.py ABANDONED that route: "it
+        # cannot go AFT either, which is what the first two attempts did. In
+        # foot mode the axle is 12 mm off the floor and the shin stands at 27.5
+        # deg, so structure hanging aft at axle height swings down: the aft
+        # version ended up 13 mm THROUGH the floor."
+        #
+        # The CAD went forward. The sim did not follow, and carried the dead
+        # member until cad/twin.py measured it at 0% backed by CAD material.
+        # The forward route is the vshinfarm/fpost/cross/drop/back chain below.
         # The route to the ankle-pitch bearing at (0, +/-68, -110) goes
         # FORWARD, and both halves of that are forced. It cannot go down the
         # middle, because the wheel-drive servo turns with the roll bracket and
@@ -366,8 +443,12 @@ def _link_geoms(link, side, sgn, meshes=False):
         # Wheel-drive servo and bearing block, OUTBOARD. The 90 deg roll maps
         # +y onto +z, so outboard becomes directly above the flat wheel, which
         # is the only place a support for a vertical shaft can live.
+        # x = -SERVO_SHAFT_X, not 0. Centring the CASE on the wheel axis put
+        # the SHAFT 12.5 mm off it, and the wheel bolts straight to the horn.
+        # Negative, so the case sits back under the arm at x = -44..0 rather
+        # than reaching forward past it.
         vis.append(_v(f"vwhlsv_{side}", "box", f"{HL:.5f} {HH:.5f} {HW:.5f}",
-                      f"0 {sgn*(0.0135+HH):.5f} 0", C_SERVO))
+                      f"{-SERVO_SHAFT_X:.5f} {sgn*(0.0135+HH):.5f} 0", C_SERVO))
         # The printed arm the wheel servo bolts to. It was dropped when the
         # tie and tongue were replaced by the web, which left the bracket as
         # two loose pieces in the sim - caught by the one-rigid-piece test.
@@ -397,6 +478,8 @@ def _link_geoms(link, side, sgn, meshes=False):
                    euler="1.5708 0 0")]
     if meshes and (link in MESH_STEM or link in MESH_MULTI):
         vis = _swap_meshes(vis, link, side, sgn)
+    if meshes:
+        vis = _servo_meshes(vis)
     return col + vis
 
 
@@ -457,8 +540,12 @@ def _hip_servos():
     g = []
     for sgn in (1, -1):
         # Flush inboard of the thigh spine, and reaching back to the chassis.
+        # z = SERVO_SHAFT_X, not HL. It was HL, which put the BOTTOM of the
+        # case on the hip axis and the shaft 10.2 mm - one SHAFT_INSET - above
+        # it. The servo was not driving the joint it is bolted to.
         g.append(_v(f"vhipsv{sgn}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                    f"0 {sgn*(0.060+SPINE_Y-SPY-HH):.5f} {HL:.5f}", C_SERVO))
+                    f"0 {sgn*(0.060+SPINE_Y-SPY-HH):.5f} {SERVO_SHAFT_X:.5f}",
+                    C_SERVO))
     return g
 
 
@@ -519,6 +606,8 @@ def _torso_visual(meshes=False):
     if meshes:
         g = _swap_meshes(g, "torso", "l", 1)
     g += _hip_servos()
+    if meshes:
+        g = _servo_meshes(g)
     return "\n      ".join(g)
 
 
@@ -570,6 +659,12 @@ def _mesh_assets(meshes):
                     f"export the STLs before loading the model with meshes=True")
             out.append(f'<mesh name="cad_{stem}_{side}" file="{f}" '
                        f'scale="0.001 {0.001 * sgn} 0.001"/>')
+    f = CAD_OUT / "servo.stl"
+    if not f.exists():
+        raise FileNotFoundError(
+            f"{f} is missing - run `uv run python -m cad.robot` once to "
+            f"export the STLs before loading the model with meshes=True")
+    out.append(f'<mesh name="cad_servo" file="{f}" scale="0.001 0.001 0.001"/>')
     for link, parts in MESH_MULTI.items():
         for stem, _rgba in parts:
             f = CAD_OUT / f"{stem}.stl"

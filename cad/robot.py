@@ -23,6 +23,7 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 import cad.ankle as ankle  # noqa: E402
 import cad.chassis as chassis  # noqa: E402
+import cad.servo as servo  # noqa: E402
 import cad.shin as shin  # noqa: E402
 import cad.thigh as thigh  # noqa: E402
 import cad.wheel as wheel  # noqa: E402
@@ -64,6 +65,10 @@ def export_all():
     shin.main(export=True)
     ankle.main(export=True)
     wheel.main(export=True)
+    # The servo is a BOUGHT part, so it has no main() and no mass to report -
+    # but the sim shows it, so its mesh has to be exported here too or
+    # load(meshes=True) fails on a missing file.
+    servo.export_mesh()
 
 
 def _quat(mat):

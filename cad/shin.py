@@ -274,6 +274,21 @@ def build():
     # So the pocket is defined by the SERVO rather than by whatever the fillet
     # leaves behind: subtract the case, grown by the clearance in x and z, and
     # open-ended in +y so the seating face itself survives.
+    # THE WHEEL SERVO SWEEPS THROUGH THIS CORNER, and only the solid sweep sees
+    # it. cad/assemble_check.sweep() puts 17.3 mm3 of wheel servo inside the
+    # shin's aft-bottom corner at half flip. fitcheck missed the shape of it
+    # because it sweeps the sim's BOXES, and a box cannot carry a chamfer.
+    #
+    # The cut is diagonal, not a square corner, because the overlap is: the
+    # servo comes in from below and aft and rises toward +x as the ankle rolls,
+    # so the boundary runs from (-17, -54.5) up to (-1, -40.0). A square relief
+    # deep enough to clear it would take the standoff's whole aft end, which is
+    # the face the ankle servo mounts against.
+    part -= bd.extrude(
+        bd.Plane.XZ * bd.Polygon((-17, -58), (-17, -54.5), (-1, -40.0),
+                                 (-1, -58)),
+        amount=26.0).moved(bd.Location((0, 10.0, 0)))
+
     sz0, sz1 = SERVO_Z
     part -= _box(((-SERVO_W / 2 - CRADLE_CLEAR, SERVO_W / 2 + CRADLE_CLEAR),
                   (SPINE_Y + SPY + 7.0, SPINE_Y + SPY + 7.0 + 2 * CRADLE_DEPTH),

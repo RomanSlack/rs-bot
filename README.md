@@ -13,6 +13,37 @@ extra parts.
 
 Nothing here is bought yet. Everything runs in MuJoCo.
 
+## The point: one shot
+
+**The digital twin is the deliverable, not a preview of it.** The goal is a
+model so exactly 1:1 with reality that the physical build happens once: parts
+ordered once, printed once, assembled once, working. No revision rounds.
+
+That is a real constraint rather than an ambition. The operator has no printer,
+so every part comes from a service at real money and one to two weeks per
+attempt, and a part that has already been built around is worse than that. The
+cheapest place to find a mistake is in the model, and the only mistake that
+costs nothing is the one caught before the order.
+
+So the rule the whole repo is organised around:
+
+> **Anything the model asserts about the real robot has to be traceable to
+> something measured.** A number that came from a product listing, a
+> screenshot, or somebody's guess is a bug that has not surfaced yet.
+
+This is why the verification layer in `cad/` is bigger than the parts it checks:
+interference and clearance through both poses, fastener specification, driver
+access, tolerance stack-up, cable routing, FEA in five materials, printability.
+It is also why the status reports read as lists of things that turned out to be
+wrong. Finding those is the work.
+
+Two examples of the failure mode, both real and both from 2026-08-01. The wheel
+carried a Ø20.00 pocket for a horn that measures Ø19.93, which would have made
+most wheels unable to accept the part they bolt to. And forty M2 screws went
+into servo case holes whose positions no drawing publishes, with four different
+parts each guessing a different pattern. Neither was visible until somebody put
+calipers on the real servo.
+
 ## Status
 
 **Stages 0 and 0b (sim) - done.** Balances, drives, rejects shoves, and flips

@@ -28,8 +28,12 @@ import numpy as np
 # let it take up.
 CABLE_CH_R = 3.0
 CABLE_A = (-78.3, 5.2, -6.9)          # roll servo port, fixed on the yoke
-CABLE_B_WHEEL = (-0.5, 28.1, -19.4)
-CABLE_B_FOOT = (-0.6, 19.4, 28.1)
+# x moved -0.5 -> -13.05 when the wheel servo was put on its own axis. Its
+# case had been centred on the wheel axis, which left the output shaft 12.5 mm
+# off the joint it drives (cad/drives.py), and the connector port moved with the
+# case. The old channel then ran 38 mm3 of yoke straight through the cable.
+CABLE_B_WHEEL = (-13.05, 28.1, -19.4)
+CABLE_B_FOOT = (-13.05, 19.4, 28.1)
 
 # The ankle-servo lead, coming down the shin into the roll servo. It never
 # needed a channel before, because before there was nothing here: it crossed

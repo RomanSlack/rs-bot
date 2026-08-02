@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -Rs '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:.}}' \"${CLAUDE_PROJECT_DIR:-.}/.claude/commands/goal.md\" 2>/dev/null || true",
+            "statusMessage": "Loading the one-shot goal"
+          }
+        ]
+      }
+    ]
+  }
+}

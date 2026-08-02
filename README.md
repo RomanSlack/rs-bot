@@ -118,21 +118,47 @@ uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```
 
-See [docs/cad.md](docs/cad.md) for the route to real CAD, and
-[docs/porting-a-link.md](docs/porting-a-link.md) for the method used to port
-each part.
-
 Latest status report: [status/2026-08-01-status.md](status/2026-08-01-status.md).
+Each one leads with what turned out to be wrong that day, which is the fastest
+way back into the project.
 
-See [docs/bom.md](docs/bom.md) for the real parts, costs and what modelling
-them at full size revealed,
-[docs/hardware-readiness.md](docs/hardware-readiness.md) for the actuator and
-control-rate margins,
-[docs/backlash.md](docs/backlash.md) for the gear-lash results (the one that
-changes the plan),
-[docs/stage-0.md](docs/stage-0.md) for the balancer numbers,
-[docs/stage-0b.md](docs/stage-0b.md) for the transition and the two mechanisms
-that failed first,
-[docs/deleting-the-roll-servo.md](docs/deleting-the-roll-servo.md)
-for why the wheel motor cannot drive the ankle roll and what to do instead, and [docs/mass-budget.md](docs/mass-budget.md) for where the
-2.05 kg goes.
+## Documents
+
+**What the sim proved**
+
+- [stage-0.md](docs/stage-0.md) - the balancer numbers
+- [stage-0b.md](docs/stage-0b.md) - the foot transition, and the two mechanisms
+  that failed before it
+- [backlash.md](docs/backlash.md) - the gear-lash results, and the finding that
+  most changed the plan
+- [hardware-readiness.md](docs/hardware-readiness.md) - actuator and
+  control-rate margins. Are STS3215s enough, and how fast must the loop run
+
+**The parts**
+
+- [cad.md](docs/cad.md) - why build123d, and the route from sketch to real CAD
+- [porting-a-link.md](docs/porting-a-link.md) - the method used to port each
+  part, and the clearance rules every part is checked against
+- [real-parts-in-sim.md](docs/real-parts-in-sim.md) - putting the CAD solids
+  back into the physics model
+- [materials.md](docs/materials.md) - what to print in, and why
+- [mass-budget.md](docs/mass-budget.md) - where the 2.05 kg goes
+- [stress.md](docs/stress.md) - FEA, per part, in five materials
+- [assembled-strength.md](docs/assembled-strength.md) - the leg solved as one
+  solid rather than part by part
+
+**Buying it**
+
+- [order-sheet.md](docs/order-sheet.md) - **the file that has to be correct on
+  the day money is spent.** Quantities, part numbers, prices
+- [bom.md](docs/bom.md) - the real parts, and what modelling them at full size
+  revealed
+- [road-to-order.md](docs/road-to-order.md) - what still blocks an order
+- [before-you-order.md](docs/before-you-order.md) - what has been verified, and
+  against what
+
+**Questions settled, so they stay settled**
+
+- [deleting-the-roll-servo.md](docs/deleting-the-roll-servo.md) - could the
+  wheel motor drive the ankle roll through a clutch? No, and the reason is not
+  the one you would guess

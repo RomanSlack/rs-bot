@@ -108,6 +108,38 @@ def in_box(nodes, lo, hi):
 # The roll bracket goes from 202% to 78% for nothing but turning it on the bed.
 # Get this wrong and a part that passes fails, with no other change.
 
+def _wheel_servo_seat(n):
+    """Nodes on the three faces the wheel servo actually bears against.
+
+    Derived from cad/ankle.py's own cradle constants, not typed here, because a
+    hardcoded load patch is the same class of bug as a hardcoded servo box and
+    this file already had one: it loaded the roll bracket through bolt holes
+    that were deleted a day earlier.
+
+    A band `reach` thick is taken off each face rather than the exact plane,
+    because the mesh puts nodes where it likes and a zero-thickness selection
+    catches whatever happens to land on it.
+    """
+    import cad.ankle as _a
+
+    (wx0, wx1), (wy0, wy1), (wz0, wz1) = _a.WHEEL_SV
+    reach = 2.0
+    y0, y1 = max(wy0, _a.ROLL_ARM[1][0]), _a.ROLL_ARM[1][1]
+    # THE SEAT ONLY, and the reason is worth keeping. Selecting all three faces
+    # - seat, bottom wall and web - does not converge: residual 34x the applied
+    # load. Distributing one wrench over two OPPOSED faces lets the solver put
+    # equal and opposite tractions on them, which is a self-equilibrating load
+    # the constrained hub barely sees, and that is a mechanism rather than a
+    # load case.
+    #
+    # The seat is also the physically right choice. The cradle's walls are a
+    # RETAINER: they stop the case lifting and take the couple in bearing once
+    # it does, but the wheel's steady load presses the case INTO the seat. A
+    # face that only bears when the joint is already moving is not where the
+    # working load goes.
+    return in_box(n, (wx0, y0, wz1), (0.0, y1, wz1 + reach))
+
+
 def _parts():
     return {
         "thigh": dict(
@@ -167,19 +199,25 @@ def _parts():
         # not drift when the mesh does.
         "roll_bracket": dict(
             step="roll_bracket.step", layer=(0, 0, 1),
-            # Selected on solid material, not on holes: this part has none.
-            # All four of its drawn features cut air (see docs/stress.md), so
-            # the interfaces are taken where they physically have to be - the
-            # tie end that meets the yoke, and the two patches of arm the
-            # wheel servo must bolt through.
-            # Held at the roll hub, which is now a real feature on the real
-            # axis, and loaded where the wheel servo bolts through the arm.
+            # Held at the roll hub, which is a real feature on the real axis.
+            #
+            # LOADED THROUGH THE CRADLE, and it used to be loaded through two
+            # bolts that do not exist. The selection was a pair of hardcoded
+            # patches of arm "where the wheel servo must bolt through" - those
+            # bolts were deleted on 2026-08-01 for running parallel to the face
+            # they were meant to clamp, and the servo has been held by a C
+            # cradle since 2026-08-02. The FEA was putting the entire wheel load
+            # into two patches of a joint that was never built.
+            #
+            # It is now derived from the cradle itself rather than typed, so it
+            # follows the part instead of drifting away from it: the seat the
+            # case sits on, the wall under the case, and the web that ties them.
+            # Those three faces ARE the joint, which is the point of a cradle -
+            # the load goes in over area, in bearing, not through fasteners.
             fix=lambda n: near_axis(n, (-43, 0, 0), (1, 0, 0), 8.5, half_len=3.0),
-            load=lambda n: np.concatenate([
-                in_box(n, (-36.5, 11, 11), (-31.5, 24.5, 23.5)),
-                in_box(n, (-12.5, 11, 11), (-7.5, 24.5, 23.5))]),
+            load=_wheel_servo_seat,
             at=(0, 18, 0), key="rollbracket", size=2.5,
-            note="held at the roll hub, loaded through the servo bolts"),
+            note="held at the roll hub, loaded through the cradle faces"),
 
         # The part the whole robot stands on in foot mode, and it was not in
         # this set at all until now.
@@ -584,6 +622,40 @@ FATIGUE_RATIO = {           # at ~1e4 cycles
     "Al 6061-T6": 0.50,
 }
 SF_FATIGUE = 1.0            # the flip load itself, unfactored, once per cycle
+
+
+def statics(only=None, verbose=True):
+    """[(part, material, in-plane util, interlayer util)] on the DESIGN load.
+
+    The same shape as fatigue(), for the question fatigue() does not ask: does
+    every part survive its worst single event in the material we would order.
+
+    THIS DID NOT EXIST, and it is the most important structural fact in the
+    project. `cad/stress.py` printed the table, `docs/stress.md` quoted it, and
+    nothing asserted it - so the suite was green on 2026-08-02 while the roll
+    bracket sat at 99% of PA6-CF. There was a convergence test and a fatigue
+    test, both downstream of a number nobody was checking.
+    """
+    design = loads.design_loads()
+    rows = []
+    for name, spec in _parts().items():
+        if only and name != only:
+            continue
+        if spec["key"] is None:
+            f, t = spec["wrench"]                    # the chassis' own payload
+        else:
+            f, t = design[spec["key"]][:2]
+        if spec.get("frame"):
+            f, t = spec["frame"](f), spec["frame"](t)
+        for mat, r in analyse(name, spec, (f, t), verbose=False).items():
+            rows.append((name, mat, r["util"], r["util_il"]))
+    if verbose:
+        print(f"   {'part':<14}{'material':<12}{'in-plane':>10}"
+              f"{'interlayer':>12}")
+        for n, mat, u, ui in rows:
+            flag = "  <-- OVER" if max(u, ui) >= 1.0 else ""
+            print(f"   {n:<14}{mat:<12}{u*100:>9.0f}%{ui*100:>11.0f}%{flag}")
+    return rows
 
 
 def fatigue(only=None, cycles=10000, verbose=True):

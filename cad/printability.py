@@ -45,6 +45,30 @@ def _stl(path):
     return f[:, 0], f[:, 1:]                 # normals, triangle vertices
 
 
+def open_edges(tris, places=4):
+    """How many edges are not shared by exactly two triangles.
+
+    A closed surface has every edge used twice, so a watertight mesh satisfies
+    edges == 1.5 * triangles exactly. Anything else is a hole, a crack or a
+    duplicated facet, and it is the first thing a print service's own checker
+    rejects - which costs a fortnight here, since we do not have the printer.
+
+    Nothing checked this. It came up on 2026-08-02 because a chunk of geometry
+    looked like an artifact and there was no way to answer "is that a real hole"
+    except by eye. Rounding the coordinates is what makes the comparison work:
+    STL stores float32 per triangle with no shared-vertex table, so the same
+    corner arrives with slightly different bits from each face that meets there.
+    """
+    d = {}
+    for t in np.round(tris, places):
+        p = [tuple(v) for v in t]
+        for i in range(3):
+            a, b = p[i], p[(i + 1) % 3]
+            k = (a, b) if a < b else (b, a)
+            d[k] = d.get(k, 0) + 1
+    return sum(1 for c in d.values() if c != 2)
+
+
 def _rotate_to(layer):
     """Rotation taking the part's `layer` normal onto +z, i.e. into the
     orientation it is actually printed in."""
@@ -120,21 +144,28 @@ def main():
     print(f"nozzle {NOZZLE} mm, {PERIMETERS} perimeters -> {MIN_WALL:.1f} mm "
           f"minimum wall; overhang limit {OVERHANG_DEG:.0f} deg\n")
     print(f"{'part':<14}{'footprint mm':>22}{'fits bed':>10}"
-          f"{'overhang':>10}{'thin features':>16}")
+          f"{'overhang':>10}{'open edges':>12}{'thin features':>16}")
+    leaks = 0
     for name, (stl, boxnames) in PARTS.items():
         R = _rotate_to(specs[name]["layer"] if name in specs else LAYER[name])
         normals, tris = _stl(OUT / stl)
         over, total = overhang(normals, tris, R)
         fp = footprint(tris, R)
         fits = all(fp[i] < BED[i] for i in range(3))
+        holes = open_edges(tris)
+        leaks += holes
         thin = []
         if name in MODULES:
             mod = importlib.import_module(MODULES[name])
             thin = thin_features(boxes_of(mod, boxnames))
         print(f"{name:<14}{fp[0]:>7.0f}{fp[1]:>7.0f}{fp[2]:>7.0f}"
               f"{'yes' if fits else 'NO':>10}{over/total*100:>9.0f}%"
+              f"{holes if holes else 'closed':>12}"
               f"{(', '.join(f'{n} {d:.1f}mm' for n, d in thin) or 'none'):>16}")
+    if leaks:
+        print(f"\n  {leaks} open edge(s): a print service will reject this")
+    return 1 if leaks else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

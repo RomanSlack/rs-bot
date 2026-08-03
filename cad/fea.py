@@ -302,8 +302,33 @@ def mesh_step(path, size=3.0, order=2, curvature=0):
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
-        # gmsh threads its mesher too; cap it with everything else.
-        gmsh.option.setNumber("General.NumThreads", THREADS)
+        # Do not let gmsh kill the process. Its high-order optimiser throws a
+        # C++ exception when it cannot reach its quality target ("Failed to
+        # reach critical value in pass 1 for measure(s): ScaledJac"), and the
+        # default is to std::terminate - which is not a Python exception, cannot
+        # be caught, and takes any buffered output with it. That is how a
+        # convergence study died leaving a two-line file and no indication of
+        # which part or which mesh size had failed.
+        #
+        # With this off, the mesher gives up on the optimisation and returns
+        # what it has. That is the right behaviour here because the check below
+        # is what decides whether the mesh is usable, and it can say so in
+        # words.
+        gmsh.option.setNumber("General.AbortOnError", 0)
+        # ONE thread, deliberately, and not for politeness - gmsh's parallel
+        # 3D mesher is NON-DETERMINISTIC. The same STEP with the same settings
+        # gave 49217, 49278 and 49370 nodes on three consecutive runs, and at
+        # one thread it gives 49274 every time.
+        #
+        # That is fatal for a check. The leg assembly's solve sits close enough
+        # to the edge of what the direct solver can factor that the mesh decides
+        # the outcome: it converged, then did not, then did, on unchanged
+        # geometry. A stress number that depends on which threads finished first
+        # is not a measurement, and this project cannot build from one.
+        #
+        # It costs meshing time and nothing else. THREADS still caps the solve,
+        # which is where the time actually goes. See cad/__init__.py.
+        gmsh.option.setNumber("General.NumThreads", 1)
         gmsh.model.occ.importShapes(str(path))
         gmsh.model.occ.synchronize()
         gmsh.option.setNumber("Mesh.MeshSizeMax", size)
@@ -313,11 +338,49 @@ def mesh_step(path, size=3.0, order=2, curvature=0):
             gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", curvature)
         gmsh.option.setNumber("Mesh.ElementOrder", order)
         gmsh.option.setNumber("Mesh.Optimize", 1)
+        # AND THE HIGH-ORDER ONES, which is not the same thing and was missing.
+        #
+        # `Mesh.Optimize` fixes the straight tets. Second-order tets then get
+        # mid-edge nodes PROJECTED ONTO THE CAD SURFACE, and on a tight feature
+        # that projection can push a mid-edge node past the far face and turn
+        # the element inside out. check_ordering()'s own docstring notes an edge
+        # across a small bore bowing by nearly half its length; this is what
+        # happens when it bows further than that.
+        #
+        # Every part in this robot was meshed with inverted elements. Measured
+        # 2026-08-02, worst element quality, where negative means inverted:
+        #
+        #     thigh -0.163   shin -0.495   ankle_yoke -0.562
+        #     roll_bracket -0.443   chassis -0.261   leg_assembly -0.622
+        #
+        # An inverted element has a negative Jacobian, so it contributes
+        # negative stiffness and the assembled matrix stops being positive
+        # definite. The solves mostly converged anyway, which is the dangerous
+        # part: they returned numbers that looked like results. The leg assembly
+        # is where it finally showed, as a residual 16x the applied load.
+        #
+        # Value 1, not 2/3/4. Measured on the shin: 1 and 2 both clear it, 3
+        # leaves 7 inverted and 4 leaves all 23. Netgen optimisation makes it
+        # worse, not better (208 bad elements against 100).
+        gmsh.option.setNumber("Mesh.HighOrderOptimize", 1)
         gmsh.model.mesh.generate(3)
         tags, coords, _ = gmsh.model.mesh.getNodes()
-        etypes, _, enodes = gmsh.model.mesh.getElements(3)
+        etypes, etags, enodes = gmsh.model.mesh.getElements(3)
         assert 11 in etypes, "expected 10-node tets"
-        conn = enodes[list(etypes).index(11)]
+        _i = list(etypes).index(11)
+        conn = enodes[_i]
+        # Refuse to hand back a mesh that cannot give a valid answer. An
+        # inverted element makes the stiffness matrix indefinite, and the solver
+        # does not necessarily complain - it returns numbers. This is the guard
+        # that would have caught six parts silently meshing broken for weeks.
+        _q = np.asarray(gmsh.model.mesh.getElementQualities(etags[_i].tolist()))
+        if _q.min() <= 0.0:
+            raise RuntimeError(
+                f"{int((_q <= 0).sum())} of {len(_q)} elements are INVERTED "
+                f"(worst quality {_q.min():.5f}). The stiffness matrix will not "
+                f"be positive definite and any stress it returns is not a "
+                f"result. Raise Mesh.HighOrderOptimize or coarsen the feature "
+                f"that is forcing the mid-edge projection.")
     finally:
         gmsh.finalize()
 
@@ -365,8 +428,33 @@ def verify(size=3.0, verbose=True):
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
-        # gmsh threads its mesher too; cap it with everything else.
-        gmsh.option.setNumber("General.NumThreads", THREADS)
+        # Do not let gmsh kill the process. Its high-order optimiser throws a
+        # C++ exception when it cannot reach its quality target ("Failed to
+        # reach critical value in pass 1 for measure(s): ScaledJac"), and the
+        # default is to std::terminate - which is not a Python exception, cannot
+        # be caught, and takes any buffered output with it. That is how a
+        # convergence study died leaving a two-line file and no indication of
+        # which part or which mesh size had failed.
+        #
+        # With this off, the mesher gives up on the optimisation and returns
+        # what it has. That is the right behaviour here because the check below
+        # is what decides whether the mesh is usable, and it can say so in
+        # words.
+        gmsh.option.setNumber("General.AbortOnError", 0)
+        # ONE thread, deliberately, and not for politeness - gmsh's parallel
+        # 3D mesher is NON-DETERMINISTIC. The same STEP with the same settings
+        # gave 49217, 49278 and 49370 nodes on three consecutive runs, and at
+        # one thread it gives 49274 every time.
+        #
+        # That is fatal for a check. The leg assembly's solve sits close enough
+        # to the edge of what the direct solver can factor that the mesh decides
+        # the outcome: it converged, then did not, then did, on unchanged
+        # geometry. A stress number that depends on which threads finished first
+        # is not a measurement, and this project cannot build from one.
+        #
+        # It costs meshing time and nothing else. THREADS still caps the solve,
+        # which is where the time actually goes. See cad/__init__.py.
+        gmsh.option.setNumber("General.NumThreads", 1)
         gmsh.model.occ.addBox(0, -b / 2, -h / 2, L, b, h)
         gmsh.model.occ.synchronize()
         gmsh.option.setNumber("Mesh.MeshSizeMax", size)

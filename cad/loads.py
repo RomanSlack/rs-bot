@@ -97,6 +97,13 @@ class Peak:
 
     def __init__(self):
         self.best = {c: (np.zeros(3), np.zeros(3), -1.0) for c in CHILD.values()}
+        # And the pitch torque on its own, which the severity ranking above
+        # cannot give you. A part is sized by the worst wrench; an ACTUATOR, or
+        # the linkage standing in for one, is sized by the worst torque about
+        # its own axis, and the instant those two peak at is not the same
+        # instant. cad/belt.py has carried a literal 1.68 N.m for the ankle
+        # since before this class existed.
+        self.ty = {c: 0.0 for c in CHILD.values()}
 
     def record(self, m, d):
         mujoco.mj_rnePostConstraint(m, d)
@@ -106,9 +113,13 @@ class Peak:
                 sev = np.linalg.norm(f) + 40.0 * np.linalg.norm(t)
                 if sev > self.best[child][2]:
                     self.best[child] = (f, t, sev)
+                self.ty[child] = max(self.ty[child], abs(t[1]))
 
     def wrenches(self):
         return {k: (f, t) for k, (f, t, _) in self.best.items()}
+
+    def pitch_torques(self):
+        return dict(self.ty)
 
 
 def _run(case, seconds):
@@ -141,13 +152,41 @@ def _run(case, seconds):
         # and the settling transient is not a load case.
         if t > 0.5:
             peak.record(m, d)
-    return peak.wrenches()
+    return peak
+
+
+# The four cases and how long each has to run, in one place, because two
+# surveys reading the same runs must not disagree about what a case IS.
+CASES = (("quiet", 2.5), ("flip", 7.0), ("shove", 5.0), ("tipover", 5.0))
+
+# The factor each case is carried at. Was written out longhand inside
+# design_loads(); the pitch survey needs the same mapping and a second copy is
+# a second place to be wrong.
+FACTOR = {"quiet": SF, "flip": SF, "shove": SF_LIMIT, "tipover": SF_FALL}
 
 
 def survey():
     """{case: {child: (force, torque)}}, unfactored."""
-    return {"quiet": _run("quiet", 2.5), "flip": _run("flip", 7.0),
-            "shove": _run("shove", 5.0), "tipover": _run("tipover", 5.0)}
+    return {c: _run(c, s).wrenches() for c, s in CASES}
+
+
+def pitch_survey():
+    """{case: {child: peak |torque about that joint's own axis|}}, unfactored.
+
+    Separate from survey() because they answer different questions and peak at
+    different instants. survey() ranks a whole wrench, which is what sizes a
+    PART. This is the torque the joint itself has to hold, which is what sizes
+    an actuator, a belt, or the linkage that replaces one.
+    """
+    return {c: _run(c, s).pitch_torques() for c, s in CASES}
+
+
+def design_pitch_torque(child="ankle"):
+    """(N.m, governing case) at one joint, factored. The number to size a
+    drive from."""
+    got = {c: v[child] * FACTOR[c] for c, v in pitch_survey().items()}
+    case = max(got, key=got.get)
+    return got[case], case
 
 
 def design_loads(cases=None):
@@ -157,9 +196,9 @@ def design_loads(cases=None):
     cases = cases or survey()
 
     def worst(child):
-        options = [("flip x3", *[v * SF for v in cases["flip"][child]]),
-                   ("shove x1.5", *[v * SF_LIMIT for v in cases["shove"][child]]),
-                   ("tipover x1", *cases["tipover"][child])]
+        options = [(f"{c} x{FACTOR[c]:g}",
+                    *[v * FACTOR[c] for v in cases[c][child]])
+                   for c in ("flip", "shove", "tipover")]
         return max(options,
                    key=lambda o: np.linalg.norm(o[1]) + 40 * np.linalg.norm(o[2]))
 

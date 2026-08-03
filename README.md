@@ -105,6 +105,7 @@ fitcheck.py                 do the real parts actually fit? (oriented-box audit)
 tune.py                     coordinate-descent gain search
 view.py                     native viewer (needs a working GLX display)
 cad/shin.py                 build123d proof of concept: STEP + MuJoCo mesh
+cad/linkage.py              the passive ankle parallelogram, drawn and swept
 cad/fitview.py              the assembled robot in the browser, every gap
                             measured: toggle parts, explode, both poses
 cad/servo_view.py           the servo model against the part on the desk
@@ -171,7 +172,9 @@ way back into the project.
 
 - [deleting-the-ankle-pitch-servo.md](docs/deleting-the-ankle-pitch-servo.md) -
   could a passive four-bar replace the ankle-pitch servo? Yes, and it stands
-  10/10 in foot mode where the servo now manages 2/10
+  10/10 in foot mode where the servo now manages 2/10. Drawn as a mechanism
+  too: it fits, it beats the gear lash it replaces, and it needs one
+  length-adjustable rod that nobody had thought of
 - [deleting-the-roll-servo.md](docs/deleting-the-roll-servo.md) - could the
   wheel motor drive the ankle roll through a clutch? No, and the reason is not
   the one you would guess

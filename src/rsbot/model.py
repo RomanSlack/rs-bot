@@ -932,6 +932,22 @@ def load(trim=None, backlash=0.0, meshes=False, parallel=False):
                                                    / probe.body_mass[t])
 
     m = mujoco.MjModel.from_xml_string(build(trim, meshes))
+    if parallel:
+        # NO ANKLE ACTUATOR. A parallelogram is not a servo with a constraint
+        # bolted on, it is the absence of a servo, and leaving the actuator in
+        # is not conservative - it is worse than either. The tendon holds
+        # hip + knee + ankle = 0 while the STAND loop pushes the ankle to a
+        # different angle, and the two fight: foot mode goes from 10/10 to
+        # 0/10, which is below the servo it was supposed to beat.
+        #
+        # That trap cost an afternoon. `rollout_deploy(parallel=True)` LOOKED
+        # like the way to reproduce docs/deleting-the-ankle-pitch-servo.md and
+        # it reproduced the opposite, because the measurement that produced
+        # that table also turned the ankle loop off and nothing recorded that
+        # it had to. Now the flag means what it says on its own.
+        for name in ("apit_l", "apit_r"):
+            i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+            m.actuator_gear[i, 0] = 0.0
     _write_stance(m)
     d = mujoco.MjData(m)
     mujoco.mj_resetDataKeyframe(m, d, 0)

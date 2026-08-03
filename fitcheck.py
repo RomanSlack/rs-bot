@@ -60,9 +60,15 @@ def penetration(a, b):
     return best
 
 
-def pose(m, d, mode, frac=None):
+def pose(m, d, mode, frac=None, height=None):
     """Pose the robot. `mode` picks an end state; `frac` in [0,1] instead walks
     the flip, which is where parts actually sweep past each other.
+
+    `height` overrides the leg length, which the flip and the two rest poses
+    otherwise pin to 0.195 or 0.207. cad/linkage.py needs it: the parallelogram
+    hangs off the hip and knee, so its clearances move with SQUAT DEPTH and not
+    only with the flip, and 0.195..0.207 is the band the robot uses rather than
+    the band it can reach.
     """
     if frac is not None:
         h = 0.207 + (0.195 - 0.207) * frac
@@ -72,6 +78,9 @@ def pose(m, d, mode, frac=None):
         h, roll, z = 0.195, ROLL_FOOT, 0.195 + WHEEL_HALF_W
     else:
         h, roll, z = 0.207, ROLL_WHEEL, 0.207 + WHEEL_R
+    if height is not None:
+        z += height - h
+        h = height
     hip, knee = leg_ik(h)
     want = {"hip": hip, "knee": knee,
             "ankle_pitch": ankle_pitch_level(hip, knee), "ankle_roll": roll}

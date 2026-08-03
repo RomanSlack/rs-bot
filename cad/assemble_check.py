@@ -53,15 +53,21 @@ def _euler(mat):
 _BUILT = {}
 
 
-def parts(mode, frac=None):
+def parts(mode, frac=None, height=None, md=None):
     """The real solids, posed. `frac` walks the flip instead of picking an end.
 
     The solids are built ONCE and cached. Placing them is cheap; building them
     is not, and a 26-pose sweep that rebuilt every part each step would take
     long enough that nobody would run it.
+
+    `md` hands in a model to pose, instead of loading a fresh one, so a caller
+    that also places parts of its own onto the same skeleton is placing them
+    against THIS pose rather than against its own copy of the same call.
+    cad/linkage.py needs that: two models posed "identically" is the setup for
+    exactly the kind of divergence this directory exists to catch.
     """
-    m, d = load()
-    pose(m, d, mode, frac)
+    m, d = md or load()
+    pose(m, d, mode, frac, height)
     built = _BUILT or {"torso": chassis.build(), "thigh": thigh.build(),
              "shin": shin.build(), "ankle": ankle.yoke(),
              "rollbracket": ankle.roll_bracket(),

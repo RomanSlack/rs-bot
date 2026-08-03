@@ -127,18 +127,31 @@ PARTS = {
     # ordered no matter how good the geometry is.
     "wheel_body": ("wheel_body.stl", []),
     "wheel_tyre": ("wheel_tyre.stl", []),
+    # The parallelogram, cad/linkage.py. Two rods, an idler bar, and the two
+    # mount features that will be fused into the chassis and the yoke. Small
+    # parts, but the eyes are the thinnest sections in the robot and a rod eye
+    # printed on its side needs support through the bore it turns on.
+    "lk_rod1": ("lk_rod1.stl", []),
+    "lk_rod2": ("lk_rod2.stl", []),
+    "lk_idler": ("lk_idler.stl", []),
+    "lk_arm": ("lk_arm.stl", []),
+    "lk_fin": ("lk_fin.stl", []),
 }
 MODULES = {"shin": "cad.shin", "ankle_yoke": "cad.ankle",
            "roll_bracket": "cad.ankle"}
 # Print orientation for parts that have no FEA entry to take it from. The tyre
 # lies flat on its sole: that face is the one that must come out clean.
 LAYER = {"wheel_tyre": (0, 0, 1)}
+LAYER.update(__import__("cad.linkage", fromlist=["LAYER"]).LAYER)
 
 
 def main():
     import importlib
+
+    import cad.linkage
     import cad.robot
     cad.robot.export_all()
+    cad.linkage.export_stls()
 
     specs = stress._parts()
     print(f"nozzle {NOZZLE} mm, {PERIMETERS} perimeters -> {MIN_WALL:.1f} mm "

@@ -282,11 +282,34 @@ def main(mode="wheel"):
     return worst + tight
 
 
-if __name__ == "__main__":
-    modes = sys.argv[1:] or ["wheel", "foot"]
-    total = sum(len(main(mo)) for mo in modes)
+def run_all(modes=("wheel", "foot")):
+    """Everything this module knows how to ask, in one command.
+
+    `stack`, `sweep` and `sweep_stack` all existed and NONE of them ran here:
+    the entry point called `main()` on the two rest poses and stopped. So the
+    flip sweep on real solids - written on 2026-08-01, and the first thing ever
+    to sweep this robot on its actual geometry - only ever ran when somebody
+    imported it by hand and remembered to.
+
+    A check nobody runs is not a weaker check, it is an absent one, and it is
+    worse than absent because the repo's own documents list it as a check that
+    passes. Same family as a check that cannot fail. Found 2026-08-02.
+    """
+    bad = 0
+    for mo in modes:
+        bad += len(main(mo))
+        print()
+        bad += sum(1 for r in stack(mo) if r[0] <= 0)
+        print()
+    bad += len(sweep())
     print()
-    print("clean" if total == 0 else f"{total} pairs to fix")
+    bad += sum(1 for r in sweep_stack() if r[0] <= 0)
+    return bad
+
+
+# The entry point is at the END of this file, not here. It used to be here, and
+# `sweep` and `sweep_stack` are defined below, so calling them from here raised
+# NameError - the module body had not reached them yet when __main__ ran.
 
 
 # --- the flip, on the REAL solids ----------------------------------------------
@@ -307,6 +330,54 @@ if __name__ == "__main__":
 # Coarser than fitcheck on purpose. Solid booleans across 21 parts cost real
 # time, so this runs a smaller number of poses and is meant to be run when
 # geometry MOVES rather than on every edit.
+
+def sweep_stack(steps=6, verbose=True):
+    """The worst-case tolerance stack THROUGH the flip, not just at the ends.
+
+    `stack()` answers "does anything rub once you allow for the print service"
+    at the two poses the robot rests in. `sweep()` answers "does anything hit"
+    everywhere in between, at nominal. Neither asks the question that actually
+    decides whether the built robot works: does anything rub MID-FLIP once you
+    allow for the service. docs/road-to-order.md item 5 has wanted this since
+    2026-07-27 and called it "a sampling, not a proof ... with no tolerance
+    applied at all".
+
+    Analytic, for the reason `stack()` gives: perturbing these solids by 0.3 mm
+    fails outright in OCC, and assuming every error lines up the wrong way is
+    what worst case means anyway. So it is the same chain-depth arithmetic
+    applied at every step of the manoeuvre instead of only at the ends.
+
+    The tightest moment of the flip is not usually either end, which is the
+    whole reason this is worth computing rather than inferring.
+    """
+    rows = []
+    for i in range(steps + 1):
+        frac = i / steps
+        ps = parts(None, frac)
+        for (na, a), (nb, b) in itertools.combinations(ps, 2):
+            if not running_pair(na, nb):
+                continue
+            try:
+                g = gap(a, b)
+            except Exception:
+                continue
+            d = _chain_depth(na, nb)
+            rows.append((g - d * TOL, g, d, frac, na, nb))
+    rows.sort()
+
+    if verbose:
+        print(f"--- through the flip: worst-case stack at +/-{TOL} mm "
+              f"per interface")
+        for worst, g, d, frac, na, nb in rows[:8]:
+            flag = "  <-- CLOSES" if worst <= 0 else ""
+            print(f"   {na:14s} x {nb:14s} nominal {g:6.2f} "
+                  f"- {d} x {TOL} = {worst:6.2f} mm at {frac*100:3.0f}%{flag}")
+        bad = [r for r in rows if r[0] <= 0]
+        print(f"   {len(bad)} pair(s) close under the stack mid-flip"
+              if bad else "   nothing closes under the stack, at any point "
+                          "in the flip")
+    return rows
+
 
 def sweep(steps=6, verbose=True):
     """[(frac, a, b, mm3)] for every pair of SOLIDS that overlap mid-flip."""
@@ -337,3 +408,11 @@ def sweep(steps=6, verbose=True):
         print(f"   {len(worst)} pair(s) collide at some point"
               if worst else "   nothing collides through the flip")
     return hits
+
+
+if __name__ == "__main__":
+    modes = sys.argv[1:] or ["wheel", "foot"]
+    total = run_all(modes)
+    print()
+    print("clean" if total == 0 else f"{total} thing(s) to fix")
+    sys.exit(1 if total else 0)

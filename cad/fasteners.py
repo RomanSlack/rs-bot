@@ -106,8 +106,10 @@ def _servo_frames(mode="wheel"):
     cad/servo.py uses - makes every screw in the robot look perpendicular to
     its servo, which is a very convincing wrong answer.
 
-    L, W and H are 45.4, 24.8 and 39.6, all distinct, so matching the extent
-    against HEIGHT identifies the shaft with no ambiguity.
+    L, W and H are 45.23, 24.73 and 36.50, all distinct, so matching the extent
+    against HEIGHT identifies the shaft with no ambiguity. The argument holds
+    whatever the numbers are, which is why it survived them changing twice; the
+    numbers are quoted anyway, so it is obvious when it stops holding.
     """
     from fitcheck import pose
     from src.rsbot.model import load

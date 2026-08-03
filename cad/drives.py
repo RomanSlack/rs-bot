@@ -36,7 +36,6 @@ import mujoco
 import numpy as np
 
 import cad.servo as servo
-from cad.fasteners import _servo_frames
 
 # servo geom -> the joint it turns, and how it turns it.
 #   "direct"  the horn bolts to the driven link, so the shaft IS the axis
@@ -80,19 +79,58 @@ def _shaft_line(m, d, gid):
     return [(p + R[:, ell] * (s * servo.SHAFT_X), R[:, k]) for s in (1, -1)]
 
 
-def check(mode="wheel", verbose=True):
-    """[(servo, joint, kind, offset mm, ok)] for every driven joint."""
+def _perp(p, anchor, axis):
+    """Distance from a point to the line through `anchor` along `axis`, mm."""
+    v = np.asarray(p, float) - np.asarray(anchor, float)
+    return float(np.linalg.norm(v - np.dot(v, axis) * axis))
+
+
+def _posed(mode):
+    """The model at `mode`, plus every joint's world anchor and axis."""
     from fitcheck import pose
     from src.rsbot.model import load
 
     m, d = load()
     pose(m, d, mode)
     mujoco.mj_forward(m, d)
-
     anchors = {}
     for j in range(m.njnt):
         n = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j)
         anchors[n] = (d.xanchor[j] * 1000.0, d.xaxis[j])
+    return m, d, anchors
+
+
+def shaft_lines(mode="wheel", posed=None):
+    """{servo geom: (a point on its output shaft, the shaft direction)}, world mm.
+
+    Exported because this is the only correct answer in the repo to "where is
+    this servo's output", and it is worth having exactly one. cad/toolaccess.py
+    had its own, taken from the servo's CASE centre, which is SHAFT_X = 12.5 mm
+    away from the shaft - far enough to throw half of a four-screw horn pattern
+    outside its own horn. Import this instead of measuring from a case again.
+
+    `_shaft_line` offers two candidates, because which way SHAFT_X points along
+    the case is recorded nowhere in the sim. The JOINT settles it: a servo's
+    shaft lies on the axis it turns, or a belt's centre distance from it, and
+    the two candidates are 25 mm apart, so the nearer one wins outright.
+    """
+    m, d, anchors = posed or _posed(mode)
+    out = {}
+    for i in range(m.ngeom):
+        n = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i) or ""
+        if n not in DRIVES or DRIVES[n][0] not in anchors:
+            continue
+        anchor, axis = anchors[DRIVES[n][0]]
+        out[n] = min(_shaft_line(m, d, i),
+                     key=lambda ca: _perp(ca[0], anchor, axis))
+    return out
+
+
+def check(mode="wheel", verbose=True):
+    """[(servo, joint, kind, offset mm, ok)] for every driven joint."""
+    posed = _posed(mode)
+    m, d, anchors = posed
+    lines = shaft_lines(mode, posed)
 
     rows = []
     for i in range(m.ngeom):
@@ -104,9 +142,7 @@ def check(mode="wheel", verbose=True):
             rows.append((n, joint, kind, float("nan"), False))
             continue
         anchor, axis = anchors[joint]
-        best = min(float(np.linalg.norm((c - anchor)
-                                        - np.dot(c - anchor, axis) * axis))
-                   for c, _ in _shaft_line(m, d, i))
+        best = _perp(lines[n][0], anchor, axis)
         if kind == "direct":
             ok = best < TOL
         else:

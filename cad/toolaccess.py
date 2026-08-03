@@ -23,7 +23,8 @@ import sys
 import build123d as bd
 import numpy as np
 
-import cad.fasteners as fasteners
+import cad.servo as servo
+from cad.drives import shaft_lines
 
 # A precision driver for M2/M2.5 socket caps. Generous rather than optimistic:
 # if it does not fit, a stubby might, and that is worth knowing separately.
@@ -106,12 +107,23 @@ def holes(mode="wheel"):
                 continue
             if r is None or not (0.9 < r < 1.8):
                 continue
+            # The AXIS, not the face centroid. A hole's barrel gets trimmed by
+            # every fillet, channel and boolean that touches it, and the
+            # centroid of what is left is not on the hole's axis: the roll
+            # bracket's four horn holes came back 1.60 mm low that way, which
+            # is a quarter of the pattern's own radius. The axis cannot be
+            # trimmed. `_ends` measures along it from wherever this point sits,
+            # so projecting the centroid onto it keeps the report readable
+            # while making the position exact.
+            a = np.array([d.X, d.Y, d.Z])
+            axis = a / np.linalg.norm(a)
+            p = f.axis_of_rotation.position
+            org = np.array([p.X, p.Y, p.Z])
             c = f.center()
-            centre = np.array([c.X, c.Y, c.Z])
-            axis = np.array([d.X, d.Y, d.Z])
+            centre = org + np.dot(np.array([c.X, c.Y, c.Z]) - org, axis) * axis
             t0, t1 = _ends(f.bounding_box(), centre, axis)
             out.append(dict(part=pname, r=float(r), centre=centre,
-                            axis=axis / np.linalg.norm(axis), t0=t0, t1=t1))
+                            axis=axis, t0=t0, t1=t1))
     return out
 
 
@@ -134,7 +146,15 @@ def _stage(name):
     return len(BUILD_ORDER)
 
 
-def is_horn_screw(h, frames, near=12.0):
+# A screw is on the horn if it lands within the horn's own measured radius of
+# the shaft. Ø19.93 is off the part (status/2026-08-01), and the pattern itself
+# sits at hypot(4.95, 4.95) = 7.00, so this leaves 3 mm of headroom without
+# ever reaching a case face 12.4 mm out. The 12.0 mm this used to be was a
+# round number with nothing behind it, and it was wider than the horn.
+HORN_NEAR = servo.HORN_OD / 2
+
+
+def is_horn_screw(h, lines, near=HORN_NEAR):
     """A screw on a servo's horn pattern rather than on its case.
 
     Horn joints are sub-assembled: you bolt the part to the horn on the bench,
@@ -147,8 +167,17 @@ def is_horn_screw(h, frames, near=12.0):
     Which moves the question rather than answering it: the CENTRAL screw is
     then the one that has to be reachable, and it does not exist anywhere in
     this CAD. See docs/road-to-order.md.
+
+    MEASURED FROM THE SHAFT, which is the whole point and is what this got
+    wrong. It used to measure from the servo's CASE centre, and the shaft is
+    SHAFT_X = 12.5 mm from there, so a screw's distance to "its servo" was off
+    by up to a full case-half. On the roll bracket that split one four-screw
+    horn pattern down the middle: the two screws nearest the case centre came
+    out at 9.0 mm and passed, the two furthest at 18.1 mm and failed, and the
+    check reported four unreachable screws on a joint that is bolted up on the
+    bench before the bracket ever goes near the robot.
     """
-    for org, R, shaft in frames.values():
+    for org, shaft in lines.values():
         d = h["centre"] - org
         along = float(np.dot(d, shaft))
         perp = float(np.linalg.norm(d - along * shaft))
@@ -168,7 +197,7 @@ def check(mode="wheel", stubby=False, assembled=False, verbose=True):
     kw = (dict(shaft_r=STUBBY_SHAFT_R, shaft_l=STUBBY_SHAFT_L, handle_r=0.0,
                handle_l=0.0) if stubby else {})
 
-    frames = fasteners._servo_frames(mode)
+    lines = shaft_lines(mode)
     rows = []
     for h in holes(mode):
         limit = len(BUILD_ORDER) if assembled else _stage(h["part"])
@@ -189,7 +218,7 @@ def check(mode="wheel", stubby=False, assembled=False, verbose=True):
             if best is None or hit < best:
                 best, best_by = hit, by
         rows.append(dict(**h, blocked=best, by=best_by,
-                         horn=is_horn_screw(h, frames)))
+                         horn=is_horn_screw(h, lines)))
 
     if verbose:
         _report(rows, stubby, assembled)
@@ -233,8 +262,12 @@ def main():
           if not stubby else
           f"stubby: {2*STUBBY_SHAFT_R:.1f} mm key x {STUBBY_SHAFT_L:.0f}")
     print()
-    check(stubby=stubby, assembled="--assembled" in sys.argv)
+    rows = check(stubby=stubby, assembled="--assembled" in sys.argv)
+    # Exit non-zero on an unreachable screw, like cad.drives. It returned 0
+    # whatever it found, so the one check in this repo that was RED still
+    # reported success to anything that asked a program instead of a person.
+    return 1 if any(r["blocked"] > TOUCH and not r["horn"] for r in rows) else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

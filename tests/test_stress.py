@@ -345,9 +345,12 @@ def test_every_screw_can_be_reached_when_it_is_fitted():
     the shin and the ankle servo that bury the thigh's knee bolts are not on
     the robot yet.
 
-    A full-size driver still cannot reach four of the thigh's, and a 2 mm hex
-    key reaches all of them - a handle-clearance problem, not a design fault,
-    so it is recorded as a tool requirement rather than a geometry change.
+    Every screw now clears, with the full-size driver as well as the hex key.
+    The four that used to be reported unreachable on each roll bracket were
+    never a geometry fault: they are the roll servo's HORN screws, fitted on
+    the bench before the bracket goes near the robot, and cad/toolaccess.py was
+    failing to recognise them because it measured a screw's distance to its
+    servo from the CASE centre, 12.5 mm off the shaft. See status/2026-08-02.
     """
     import cad.toolaccess as T
 
@@ -355,9 +358,10 @@ def test_every_screw_can_be_reached_when_it_is_fitted():
     assert rows, "no screws found at all - the check is blind"
     blocked = [r for r in rows
                if r["blocked"] > T.TOUCH and not r["horn"]]
-    # Four per side on the roll bracket sit under the ankle yoke. They are
-    # tight rather than impossible; if this grows, something moved.
-    assert len(blocked) <= 4, (
+    # Zero, not "at most four". The old bound was written around the false
+    # alarm above, and a bound set at the number you already have is a bound
+    # that cannot fail.
+    assert not blocked, (
         f"{len(blocked)} screws unreachable even with a hex key: "
         f"{sorted(set(r['part'] for r in blocked))}")
 
@@ -439,6 +443,35 @@ def test_the_reported_peak_is_a_number_and_not_a_mesh_artifact(part, sizes):
         f"({coarse:.1f} -> {fine:.1f} MPa) at {util:.0%} of allowable, over the "
         f"{limit:.0%} allowed at that margin. Whichever way it moved, the "
         f"utilisation quoted for this part is not a number")
+
+
+def test_no_part_exceeds_its_allowable_in_the_material_we_would_order():
+    """The most important structural fact in the project, and until 2026-08-02
+    NOTHING asserted it.
+
+    There was a convergence test and a fatigue test, both downstream of a static
+    utilisation that no test ever read. `cad/stress.py` printed it and
+    `docs/stress.md` quoted it, so it looked thoroughly checked. The suite was
+    green while the roll bracket sat at 99% of PA6-CF.
+
+    The bound here is 100%, which is the physical one: past it the part breaks
+    under a load it is designed to see. It is deliberately the weakest bound
+    anyone could argue for, because what margin this project should REQUIRE is a
+    decision rather than a fact, and it is open as item 8 in
+    docs/road-to-order.md. The roll bracket passes this test at 99% and is not
+    acceptable at 99%: the allowables are literature values, so a 10% shortfall
+    in the real material is a broken part. Tighten this bound when that is
+    settled.
+    """
+    from cad import stress
+
+    rows = stress.statics(verbose=False)
+    assert rows, "the static pass produced nothing"
+    over = [(r[0], max(r[2], r[3])) for r in rows
+            if r[1] == "PA6-CF" and max(r[2], r[3]) >= 1.0]
+    assert not over, (
+        "PA6-CF is over allowable on "
+        + ", ".join(f"{n} at {u:.0%}" for n, u in over))
 
 
 def test_nothing_fails_in_fatigue_in_the_material_we_would_order():

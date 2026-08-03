@@ -266,12 +266,17 @@ def test_visual_parts_carry_no_mass_or_collision():
                 and not name.startswith("h_"):   # visual build
             assert m.geom_contype[i] == 0 and m.geom_conaffinity[i] == 0, name
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    # 1.875 kg, regenerated rather than trailing the geometry. It has moved
+    # 1.907 kg, regenerated rather than trailing the geometry. It has moved
     # for real reasons every time: tread cut into the wheel, the press fit and
     # retaining bead that stop the tyre spinning on the rim, every horn hole
-    # growing 0.7 mm when the pattern turned out to be M3, and now +17 g of
-    # chassis end panels that close an open U-section into a box.
-    assert m.body_subtreemass[t] == pytest.approx(1.875, abs=3e-3)
+    # growing 0.7 mm when the pattern turned out to be M3, +17 g of chassis end
+    # panels that close an open U-section into a box, and five servo cradles.
+    #
+    # It sat at 1.875 for a fortnight while the CAD said 1.907, because
+    # SEG_INERTIA is pasted from `cad.inertia --emit` and nobody re-ran it after
+    # the cradles landed. This assertion was RIGHT to be tight - it is the one
+    # that would have caught it, if the value had been regenerated alongside.
+    assert m.body_subtreemass[t] == pytest.approx(1.907, abs=3e-3)
 
 
 def test_no_real_part_hits_the_floor_in_either_mode():

@@ -608,7 +608,7 @@ def torso_boss(leg_y):
 # on the y axis and a bore printed on its side needs support through it. The fin
 # stands on the face that bolts to the plate.
 LAYER = {"lk_rod1": (0, 1, 0), "lk_rod2": (0, 1, 0), "lk_idler": (0, 1, 0),
-         "lk_arm": (0, 1, 0), "lk_fin": (1, 0, 0)}
+         "lk_arm": (0, 1, 0), "lk_fin": (1, 0, 0), "lk_stub": (0, 1, 0)}
 
 OUT = __import__("pathlib").Path(__file__).parent / "out"
 
@@ -624,10 +624,8 @@ def export_stls(out_dir=None):
     """
     d = out_dir or OUT
     d.mkdir(parents=True, exist_ok=True)
-    for name, solid in (("lk_rod1", rod1()), ("lk_rod2", rod2()),
-                        ("lk_idler", idler()), ("lk_arm", yoke_arm()),
-                        ("lk_fin", torso_boss(60.0))):
-        bd.export_stl(bd.Part() + solid, str(d / f"{name}.stl"))
+    for name, make in SOLIDS.items():
+        bd.export_stl(bd.Part() + make(), str(d / f"{name}.stl"))
     return d
 
 
@@ -642,63 +640,88 @@ def mass_g(leg_y=60.0, density=1.19, infill=1.0):
 
 # --- does it fit? --------------------------------------------------------------
 
+def placements(m, d, side="l"):
+    """[(name, stl stem, mirror sign, position mm, rotation 3x3)] per part.
+
+    The frames are the whole content of this function and they are not
+    interchangeable:
+
+        the fin and the idler     sit at a joint's POSITION carrying the
+                                  TORSO's ROTATION, because a stage's offset is
+                                  constant in the torso frame and in no other.
+                                  That is what a parallelogram IS.
+        the rods                  sit at their upper pin carrying their own
+                                  LINK's rotation, because a rod is parallel to
+                                  the link it shadows.
+        the stub                  belongs to the shin and turns with it.
+        the yoke arm              belongs to the ankle body, which is level
+                                  with the torso whenever the linkage is doing
+                                  its job. If the sim ever stops holding
+                                  hip + knee + ankle = 0 this part visibly
+                                  stops pointing at its pin.
+
+    Split out of placed() so cad/robot.py can hang the same parts off the same
+    poses without either of them owning a second copy of that table.
+    """
+    sgn = 1 if side == "l" else -1
+
+    def body(n):
+        i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, n)
+        return (np.array(d.xpos[i]) * 1000.0,
+                np.array(d.xmat[i]).reshape(3, 3))
+
+    (torso_p, torso_R) = body("torso")
+    (thigh_p, thigh_R) = body(f"thigh_{side}")
+    (shin_p, shin_R) = body(f"shin_{side}")
+    (ankle_p, ankle_R) = body(f"ankle_{side}")
+
+    def pin(origin, u, plane):
+        return origin + torso_R @ np.array([u[0], plane * sgn, u[1]])
+
+    return [
+        (f"lk_boss_{side}", "lk_fin", sgn, thigh_p, torso_R),
+        (f"lk_stub_{side}", "lk_stub", sgn, shin_p, shin_R),
+        (f"lk_rod1_{side}", "lk_rod1", sgn,
+         pin(thigh_p, U1, Y_ROD1), thigh_R),
+        (f"lk_idler_{side}", "lk_idler", sgn,
+         shin_p + torso_R @ np.array([0.0, Y_IDLER * sgn, 0.0]), torso_R),
+        (f"lk_rod2_{side}", "lk_rod2", sgn,
+         pin(shin_p, U2, Y_ROD2), shin_R),
+        (f"lk_arm_{side}", "lk_arm", sgn, ankle_p, ankle_R),
+    ]
+
+
+SOLIDS = {"lk_fin": lambda: torso_boss(60.0), "lk_stub": knee_stub,
+          "lk_rod1": rod1, "lk_idler": idler, "lk_rod2": rod2,
+          "lk_arm": yoke_arm}
+
+
 def placed(m, d, side="l"):
     """[(name, solid)] the linkage in WORLD coordinates, read off the sim.
 
     Every part hangs off a body the simulator has already placed, the same way
     cad/assemble_check.py hangs the printed parts, so this cannot drift from
     the kinematics it is supposed to enforce.
-
-    The frames are the whole content of this function and they are not
-    interchangeable:
-
-        the boss and the idler   are placed at a joint's POSITION with the
-                                 TORSO's ROTATION, because a stage's offset is
-                                 constant in the torso frame and in no other.
-                                 That is what a parallelogram IS.
-        the rods                 are placed at their upper pin with their own
-                                 LINK's rotation, because a rod is parallel to
-                                 the link it shadows.
-        the yoke arm             is placed with the ankle body, which is level
-                                 with the torso whenever the linkage is doing
-                                 its job. If the sim ever stops holding
-                                 hip + knee + ankle = 0 this part visibly
-                                 stops pointing at its pin.
     """
     from cad.assemble_check import _loc
-    sgn = 1 if side == "l" else -1
 
-    def body(n):
-        i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, n)
-        return _loc(d.xpos[i], d.xmat[i])
+    out = []
+    leg_y = None
+    for name, stem, sgn, pos, R in placements(m, d, side):
+        solid = (torso_boss(_leg_y(m, d, side)) if stem == "lk_fin"
+                 else SOLIDS[stem]())
+        if sgn < 0:
+            solid = bd.mirror(solid, bd.Plane.XZ)
+        out.append((name, _loc(pos / 1000.0, R.flatten()) * solid))
+    return out
 
-    torso, thigh = body("torso"), body(f"thigh_{side}")
-    shin, ankle = body(f"shin_{side}"), body(f"ankle_{side}")
-    leg_y = abs((torso.inverse() * thigh).position.Y)
 
-    def mirror(s):
-        return s if sgn > 0 else bd.mirror(s, bd.Plane.XZ)
-
-    def level(at):
-        """`at`'s position, carrying the torso's attitude."""
-        return bd.Location(at.position, torso.orientation)
-
-    def pin(at, u, plane):
-        return level(at) * bd.Pos(float(u[0]), plane * sgn, float(u[1]))
-
-    return [
-        (f"lk_boss_{side}", level(thigh) * mirror(torso_boss(leg_y))),
-        (f"lk_stub_{side}", shin * mirror(knee_stub())),
-        (f"lk_rod1_{side}",
-         bd.Location(pin(thigh, U1, Y_ROD1).position, thigh.orientation)
-         * mirror(rod1())),
-        (f"lk_idler_{side}",
-         level(shin) * bd.Pos(0, Y_IDLER * sgn, 0) * mirror(idler())),
-        (f"lk_rod2_{side}",
-         bd.Location(pin(shin, U2, Y_ROD2).position, shin.orientation)
-         * mirror(rod2())),
-        (f"lk_arm_{side}", ankle * mirror(yoke_arm())),
-    ]
+def _leg_y(m, d, side):
+    """How far the hip axis is from the centreline, off the sim rather than
+    written down again."""
+    t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
+    h = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f"thigh_{side}")
+    return abs(float(d.xpos[h][1] - d.xpos[t][1])) * 1000.0
 
 
 def pivots(m, d, side="l"):

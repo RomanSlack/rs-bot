@@ -22,6 +22,7 @@ import numpy as np  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 import cad.ankle as ankle  # noqa: E402
+import cad.linkage as linkage  # noqa: E402
 import cad.chassis as chassis  # noqa: E402
 import cad.servo as servo  # noqa: E402
 import cad.shin as shin  # noqa: E402
@@ -37,6 +38,10 @@ C_PRINT = "0.88 0.45 0.13 1"
 C_SERVO = "0.13 0.13 0.15 1"
 C_WHEEL = "0.09 0.09 0.10 1"
 C_HUB = "0.55 0.56 0.60 1"
+# The parallelogram, in its own colour. It is the newest thing on the robot
+# and the one a picture is most useful for, so it does not get to hide among
+# the orange.
+C_LINK = "0.20 0.55 0.85 1"
 
 # Was 45.2, 24.7, 35.4, the superseded listing guesses. One copy now.
 from cad.servo_dims import (LENGTH as SERVO_L, WIDTH as SERVO_W,
@@ -62,6 +67,7 @@ WHEEL_PARTS = [("wheel_body", C_HUB), ("wheel_tyre", C_WHEEL)]
 
 def export_all():
     OUT.mkdir(exist_ok=True)
+    linkage.export_stls(OUT)
     chassis.main(export=True)
     thigh.main(export=True)
     shin.main(export=True)
@@ -122,6 +128,26 @@ def build_scene(mode="wheel"):
                       f'rgba="{rgba}"/>')
         bodies.append(f'<body pos="{p[0]} {p[1]} {p[2]}" '
                       f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">{geoms}</body>')
+
+    # The parallelogram. Poses come from cad/linkage.py, which reads them off
+    # the same posed model, so this picture cannot show a linkage in a place
+    # the checks did not test. That is not a hypothetical worry here: three of
+    # the faults in docs/how-checks-fail.md are a viewer drawing a different
+    # robot from the one being measured.
+    for side in ("l", "r"):
+        for name, stem, sgn, pos_mm, R in linkage.placements(m, d, side):
+            key = f"{stem}_{side}"
+            if key not in seen:
+                seen[key] = True
+                assets.append(
+                    f'<mesh name="{key}" file="{OUT / (stem + ".stl")}" '
+                    f'scale="0.001 {0.001 * sgn} 0.001"/>')
+            p = pos_mm / 1000.0
+            q = _quat(R)
+            bodies.append(
+                f'<body pos="{p[0]} {p[1]} {p[2]}" '
+                f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">'
+                f'<geom type="mesh" mesh="{key}" rgba="{C_LINK}"/></body>')
 
     # Servo blocks and electronics, straight from the sim's own visual geoms.
     # vtire/vhub are NOT in this list any more: the real wheel is drawn above,
@@ -213,14 +239,19 @@ def main(mode="wheel"):
     mujoco.mj_forward(m, d)
     r = mujoco.Renderer(m, H, W)
     cam = mujoco.MjvCamera()
-    cam.lookat[:] = (0.0, 0.0, 0.215)
 
     font = ImageFont.truetype(
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
-    views = [("side", 90, -6, 0.80), ("three-quarter", 138, -16, 0.80),
-             ("front", 180, -6, 0.80)]
+    # 1.05, not 0.80: at 0.80 the top of the chassis is outside the frame, so
+    # the one artefact whose job is to show the whole robot showed most of it.
+    # The fourth view is close on the left leg, because the parallelogram is
+    # five thin parts and at whole-robot scale they read as scratches.
+    views = [("side", 90, -6, 1.05), ("three-quarter", 138, -16, 1.05),
+             ("front", 180, -6, 1.05), ("linkage", 108, -8, 0.52)]
     tiles = []
     for name, az, el, dist in views:
+        cam.lookat[:] = ((0.0, 0.06, 0.16) if name == "linkage"
+                         else (0.0, 0.0, 0.215))
         cam.azimuth, cam.elevation, cam.distance = az, el, dist
         r.update_scene(d, camera=cam)
         im = Image.fromarray(r.render())

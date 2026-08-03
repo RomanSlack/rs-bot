@@ -22,6 +22,7 @@ import numpy as np  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 import cad.ankle as ankle  # noqa: E402
+import cad.hardware as hardware  # noqa: E402
 import cad.linkage as linkage  # noqa: E402
 import cad.chassis as chassis  # noqa: E402
 import cad.servo as servo  # noqa: E402
@@ -42,6 +43,18 @@ C_HUB = "0.55 0.56 0.60 1"
 # and the one a picture is most useful for, so it does not get to hide among
 # the orange.
 C_LINK = "0.20 0.55 0.85 1"
+
+# The bought hardware, from cad/hardware.py's own frames. It was not in this
+# picture at all, which made the belt drive - the biggest single thing the
+# parallelogram deletes - invisible in the one artefact anyone looks at.
+HW_RGBA = {"steel": "0.62 0.64 0.68 1", "alu": "0.74 0.75 0.78 1",
+           "belt": "0.11 0.11 0.12 1"}
+
+# The three pieces that exist ONLY to drive ankle pitch through a belt. The
+# shafts and bearings are not in here: the pitch joint still exists, it just
+# stops being driven. Named rather than inferred, so the exclusion can be
+# argued with.
+BELT_DRIVE = {"hw_belt", "hw_pulley40", "hw_pulley20"}
 
 # Was 45.2, 24.7, 35.4, the superseded listing guesses. One copy now.
 from cad.servo_dims import (LENGTH as SERVO_L, WIDTH as SERVO_W,
@@ -68,6 +81,7 @@ WHEEL_PARTS = [("wheel_body", C_HUB), ("wheel_tyre", C_WHEEL)]
 def export_all():
     OUT.mkdir(exist_ok=True)
     linkage.export_stls(OUT)
+    hardware.export_local(OUT)
     chassis.main(export=True)
     thigh.main(export=True)
     shin.main(export=True)
@@ -137,6 +151,33 @@ def scene_items(m, d, linkage_on=True):
                       f'rgba="{rgba}"/>')
         bodies.append((f"wh_{side}", geoms, p.copy(), q))
 
+    # The bought hardware: shafts, bearings, and the belt drive if it is still
+    # fitted. `beltdrive` is not a body in the plain model - it only exists in
+    # the sim's mesh build - so its pulley is placed in the shin's frame from
+    # the same offset the sim uses.
+    for stem, (solid, host, colour) in hardware.local_parts().items():
+        if linkage_on and stem in BELT_DRIVE:
+            continue
+        for side, sgn in (("l", 1), ("r", -1)):
+            key = f"{stem}_{side}"
+            if key not in seen:
+                seen[key] = True
+                assets.append(
+                    f'<mesh name="{key}" file="{OUT / (stem + ".stl")}" '
+                    f'scale="0.001 {0.001 * sgn} 0.001"/>')
+            base = "shin" if host == "beltdrive" else host
+            bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY,
+                                    f"{base}_{side}")
+            R = np.array(d.xmat[bid]).reshape(3, 3)
+            off = np.zeros(3)
+            if host == "beltdrive":
+                off = np.array(hardware.drive_pulley_pos()) * (1, sgn, 1)
+            p = np.array(d.xpos[bid]) + R @ off
+            bodies.append(
+                (key,
+                 f'<geom type="mesh" mesh="{key}" '
+                 f'rgba="{HW_RGBA[colour]}"/>', p, _quat(R)))
+
     # The parallelogram. Poses come from cad/linkage.py, which reads them off
     # the same posed model, so this picture cannot show a linkage in a place
     # the checks did not test. That is not a hypothetical worry here: three of
@@ -165,6 +206,11 @@ def scene_items(m, d, linkage_on=True):
             continue
         if not n.startswith(("vhipsv", "vkneesv", "vanksv",
                              "vrollsv", "vwhlsv", "vpi", "vbatt", "vdriver")):
+            continue
+        # The servo the parallelogram replaces. cad/linkage.py owns that list,
+        # because a second copy of "what this change deletes" is a second place
+        # to be wrong about it.
+        if linkage_on and n in linkage.REPLACED:
             continue
         p, q = d.geom_xpos[i], _quat(d.geom_xmat[i].reshape(3, 3))
         s = m.geom_size[i]
@@ -292,5 +338,74 @@ def main(mode="wheel"):
     return out
 
 
+def compare(mode="wheel", out=None):
+    """Before and after, side by side.  uv run python -m cad.robot compare
+
+    Left is the robot as it is drawn today: an ankle-pitch servo on each shin
+    driving through a 2:1 GT2 belt, because the wheel already owns the ankle
+    axle. Right is the same robot with that servo gone and the parallelogram
+    fitted in its place.
+
+    Both columns are built from the same solids by the same code. The only
+    difference is the two flags, so this cannot show a saving that the CAD does
+    not actually make.
+    """
+    export_all()
+    tiles = []
+    for label, linkage_on in (("as drawn today", False),
+                              ("with the parallelogram", True)):
+        m, d = load()
+        pose(m, d, mode)
+        xml = build_scene(mode, md=(m, d), linkage_on=linkage_on)
+        sm = mujoco.MjModel.from_xml_string(xml)
+        sd = mujoco.MjData(sm)
+        mujoco.mj_forward(sm, sd)
+        r = mujoco.Renderer(sm, H, W)
+        cam = mujoco.MjvCamera()
+        font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 21)
+        small = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+        col = []
+        # The second view looks straight in from OUTBOARD, low and close. That
+        # is where the difference lives: the belt drive is the most outboard
+        # thing on the robot, y = 137..152, and from anywhere else the leg
+        # itself hides it.
+        for az, el, dist, look in ((138, -14, 1.05, (0.0, 0.0, 0.215)),
+                                   (90, -4, 0.55, (-0.01, 0.06, 0.105))):
+            cam.lookat[:] = look
+            cam.azimuth, cam.elevation, cam.distance = az, el, dist
+            r.update_scene(sd, camera=cam)
+            col.append(Image.fromarray(r.render()))
+        tile = Image.new("RGB", (W, H * 2))
+        tile.paste(col[0], (0, 0))
+        tile.paste(col[1], (0, H))
+        dr = ImageDraw.Draw(tile, "RGBA")
+        dr.rectangle([0, 0, W, 66], fill=(0, 0, 0, 170))
+        dr.text((16, 8), f"{label}  -  {mode} mode", font=font,
+                fill=(150, 210, 255, 255) if linkage_on
+                else (255, 190, 150, 255))
+        dr.text((16, 38),
+                "5 servos a leg, ankle pitch on a 2:1 GT2 belt" if not linkage_on
+                else "4 servos a leg, ankle pitch held by the linkage",
+                font=small, fill=(205, 211, 221, 255))
+        tiles.append(tile)
+        del r
+
+    sheet = Image.new("RGB", (W * 2, H * 2))
+    sheet.paste(tiles[0], (0, 0))
+    sheet.paste(tiles[1], (W, 0))
+    ImageDraw.Draw(sheet).line([(W, 0), (W, H * 2)], fill=(90, 96, 104), width=2)
+    out = out or f"renders/servos-before-after-{mode}.png"
+    Path(out).parent.mkdir(exist_ok=True)
+    sheet.save(out)
+    print(f"wrote {out}")
+    return out
+
+
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "wheel")
+    arg = sys.argv[1] if len(sys.argv) > 1 else "wheel"
+    if arg == "compare":
+        compare(sys.argv[2] if len(sys.argv) > 2 else "wheel")
+    else:
+        main(arg)

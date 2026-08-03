@@ -10,8 +10,14 @@ import numpy as np
 XML = Path(__file__).parent / "model" / "rsbot.xml"
 CAD_OUT = Path(__file__).parents[2] / "cad" / "out"
 
-WHEEL_R = 0.040
-WHEEL_HALF_W = 0.012
+# From cad/wheel_dims.py, which is the ONLY copy, for the same reason the servo
+# dimensions come from cad/servo_dims.py: a bought-or-printed part's size is a
+# measurement, not a modelling choice, and a second copy is a second place to be
+# wrong. Both files carried 40.0 and 12.0 and agreed; the third number did not.
+from cad.wheel_dims import R as _WR, HALF_W as _WHW, TYRE_T as _WTT
+
+WHEEL_R = _WR / 1000.0
+WHEEL_HALF_W = _WHW / 1000.0
 THIGH_L = 0.110
 SHIN_L = 0.110
 
@@ -92,7 +98,11 @@ SERVO_SHAFT_X = 0.0125
 PI5 = (0.085, 0.056, 0.017)
 BATT_3S = (0.105, 0.034, 0.024)       # 2200 mAh 3S pack
 DRIVER = (0.050, 0.030, 0.010)        # TTL bus adapter
-WHEEL_TIRE_T = 0.008                  # tyre wall thickness
+# WAS 0.008, and the CAD builds 3.0 mm. Nothing read it, which is why a 5 mm
+# error sat in the file that describes this robot to the physics: a constant
+# with no uses is a wrong answer waiting for whoever trusts it next, and it
+# reads as verified because it sits beside numbers that are. See cad/wheel_dims.
+WHEEL_TIRE_T = _WTT / 1000.0          # tread thickness
 
 C_SERVO = "0.13 0.13 0.15 1"
 C_HORN = "0.72 0.73 0.76 1"
@@ -102,8 +112,31 @@ C_HUB = "0.55 0.56 0.60 1"
 C_PCB = "0.05 0.33 0.17 1"
 C_BATT = "0.16 0.16 0.38 1"
 C_PLATE = "0.62 0.64 0.68 0.30"   # translucent, so the internals show
+# The bought hardware, coloured as the material rather than by role: chrome
+# steel shafts and races, anodised pulleys, a black rubber belt.
+C_STEEL = "0.84 0.86 0.88 1"
+C_ALU = "0.62 0.65 0.68 1"
+C_BELT = "0.07 0.07 0.09 1"
 
 
+# SIX decimal places, not five, and it is not cosmetic. These strings are
+# METRES, so `:.5f` quantises the whole sim to 0.01 mm, and cad/ is not
+# quantised at all. A CAD face derived exactly from a servo dimension then
+# lands INSIDE the sim's box for that servo.
+#
+# It cost a red test for a week. The roll arm seats on the wheel servo at
+# WIDTH/2 = 12.365 mm, exact; the sim rounded the servo's half-width to
+# 0.01237 m and put its face at 12.370. That 0.005 mm, spread over the
+# 379 mm2 the arm covers, is 1.9 mm3 of "the bracket is eating a bought part",
+# which is exactly what a seating check should scream about, and it was right
+# to. The part was never wrong.
+#
+# The other direction is the one that matters more, and nothing had noticed it:
+# LENGTH rounds DOWN, 45.23 to 45.22, so every clearance in this robot that
+# involves the side of a servo case has been checked against a case 0.01 mm
+# thinner than the real one. Small, but it is the dangerous sign - a sim box
+# smaller than the part it stands for is a gap that exists in the model and not
+# on the bench. At 1e-6 m both come out exact.
 def _v(name, gtype, size, pos, rgba, euler=None):
     """A visual-only geom: no mass, no collision, hidden group for the solids."""
     e = f' euler="{euler}"' if euler else ""
@@ -154,18 +187,18 @@ SEG_MASS = {"thigh": 0.0894, "shin": 0.0889, "ankle": 0.0693,
 # LEFT side and torso; the right side mirrors in y.
 # Regenerate with: uv run python -m cad.inertia --emit
 SEG_INERTIA = {
-    "thigh": (0.089988, (+0.000000, -0.000839, -0.080485),
-              (1.118899e-04, 8.905724e-05, 3.094439e-05, 2.036364e-15, -8.768793e-16, -2.749192e-05)),
-    "shin": (0.124948, (+0.005657, +0.056799, -0.051450),
-              (1.860515e-04, 1.466523e-04, 9.099749e-05, 9.059016e-06, 9.876527e-06, 5.583358e-05)),
-    "ankle": (0.068911, (-0.069696, +0.007938, +0.010377),
-              (4.071000e-05, 4.056217e-05, 5.888077e-05, -2.145414e-05, 5.117007e-06, 5.676410e-06)),
-    "rollbracket": (0.060927, (-0.003015, +0.031423, +0.001213),
-              (1.365496e-05, 2.010675e-05, 2.566022e-05, -3.677414e-06, 1.556252e-06, 9.712630e-07)),
-    "torso": (1.077229, (+0.007883, +0.000000, +0.085473),
-              (3.715372e-03, 3.531174e-03, 1.329703e-03, -3.637979e-21, -5.866958e-05, -2.910383e-20)),
-    "wheel": (0.054006, (+0.000000, -0.000840, -0.000000),
-              (3.235416e-05, 5.846766e-05, 3.235416e-05, -5.620615e-17, 1.773256e-16, 3.057134e-15)),
+    "thigh": (0.096285, (-0.000001, -0.001149, -0.081951),
+              (1.166366e-04, 9.445128e-05, 3.243692e-05, -9.083951e-10, 1.698262e-09, -2.868406e-05)),
+    "shin": (0.128934, (+0.005559, +0.055544, -0.050691),
+              (1.898835e-04, 1.505453e-04, 9.264018e-05, 8.391850e-06, 1.041695e-05, 5.926789e-05)),
+    "ankle": (0.069774, (-0.068413, +0.007788, +0.010296),
+              (4.102891e-05, 3.816959e-05, 5.671995e-05, -2.071352e-05, 4.959693e-06, 5.617753e-06)),
+    "rollbracket": (0.062009, (-0.014474, +0.029830, +0.001100),
+              (1.255286e-05, 1.715978e-05, 2.131752e-05, -2.345015e-06, 7.335724e-07, 7.915240e-07)),
+    "torso": (1.085122, (+0.007866, +0.000000, +0.083875),
+              (3.944708e-03, 3.734991e-03, 1.363432e-03, -7.115279e-21, -6.830449e-05, 5.976059e-20)),
+    "wheel": (0.053953, (+0.000000, -0.000851, -0.000000),
+              (3.234820e-05, 5.846831e-05, 3.234820e-05, -5.622078e-17, 1.773255e-16, 3.057370e-15)),
 }
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
@@ -347,11 +380,11 @@ def _link_geoms(link, side, sgn, meshes=False):
         # carries the whole lateral moment at the hip (9.5 N.m at the design
         # load), and at 12 mm that is only a 2.0x margin. See cad/thigh.py.
         vis.append(_v(f"vthigh_{side}", "box", f"0.010 0.008 0.049",
-                      f"0 {sgn*0.023:.5f} -0.053", C_PRINT))
+                      f"0 {sgn*0.023:.6f} -0.053", C_PRINT))
         # INBOARD. The thigh wraps over and down the inboard side to reach it,
         # because the outboard band is where the shin's hub has to be.
-        vis.append(_v(f"vkneesv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                      f"0 {-sgn*(HH - SPINE_Y + SPY):.5f} {-0.110+off:.5f}",
+        vis.append(_v(f"vkneesv_{side}", "box", f"{HW:.6f} {HH:.6f} {HL:.6f}",
+                      f"0 {-sgn*(HH - SPINE_Y + SPY):.6f} {-0.110+off:.6f}",
                       C_SERVO))
     elif link == "shin":
         col.append(f'<geom class="leg" name="shin_{side}" fromto="0 0 0  0 0 -0.094" '
@@ -361,7 +394,7 @@ def _link_geoms(link, side, sgn, meshes=False):
         # the roll bracket and carves an annulus 14-50 mm from the roll axis,
         # for |x| < 23 mm. Clearing the two end poses is not enough.
         vis.append(_v(f"vshin_{side}", "box", f"0.010 {SPY} 0.0245",
-                      f"0 {y:.5f} -0.0245", C_PRINT))
+                      f"0 {y:.6f} -0.0245", C_PRINT))
         # Ankle-pitch servo. It cannot be coaxial with its own joint, because
         # the wheel already owns that axle, so it sits high on the shin and
         # drives down through a belt that is not drawn.
@@ -375,9 +408,9 @@ def _link_geoms(link, side, sgn, meshes=False):
         # one that gets printed. cad/twin.py measures the box against the solid
         # but only catches sim-BIGGER-than-CAD; this was the other way.
         vis.append(_v(f"vankstand_{side}", "box", "0.0153 0.0035 0.022",
-                      f"0 {sgn*(SPINE_Y+SPY+0.0035):.5f} -0.034", C_PRINT))
-        vis.append(_v(f"vanksv_{side}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                      f"0 {outb+sgn*0.007:.5f} {-0.110+0.0768:.5f}", C_SERVO))
+                      f"0 {sgn*(SPINE_Y+SPY+0.0035):.6f} -0.034", C_PRINT))
+        vis.append(_v(f"vanksv_{side}", "box", f"{HW:.6f} {HH:.6f} {HL:.6f}",
+                      f"0 {outb+sgn*0.007:.6f} {-0.110+0.0768:.6f}", C_SERVO))
         # NO AFT MEMBER. There used to be a "vshinarm" here, stepping aft to
         # reach the ankle bearing, and cad/shin.py ABANDONED that route: "it
         # cannot go AFT either, which is what the first two attempts did. In
@@ -398,18 +431,18 @@ def _link_geoms(link, side, sgn, meshes=False):
         # it. See cad/envelope.py, which solves for the bearing's two legal
         # bands: y = -80..-47 and y = +57..+80.
         vis.append(_v(f"vshinfarm_{side}", "box", f"0.0185 {SPY} 0.007",
-                      f"0.0285 {y:.5f} -0.042", C_PRINT))
+                      f"0.0285 {y:.6f} -0.042", C_PRINT))
         vis.append(_v(f"vshinfpost_{side}", "box", f"0.005 {SPY} 0.011",
-                      f"0.042 {y:.5f} -0.059", C_PRINT))
+                      f"0.042 {y:.6f} -0.059", C_PRINT))
         vis.append(_v(f"vshincross_{side}", "box", "0.005 0.0315 0.0045",
-                      f"0.042 {sgn*0.0465:.5f} -0.0655", C_PRINT))
+                      f"0.042 {sgn*0.0465:.6f} -0.0655", C_PRINT))
         vis.append(_v(f"vshindrop_{side}", "box", "0.005 0.005 0.0265",
-                      f"0.042 {sgn*0.071:.5f} -0.0875", C_PRINT))
+                      f"0.042 {sgn*0.071:.6f} -0.0875", C_PRINT))
         vis.append(_v(f"vshinback_{side}", "box", "0.0215 0.005 0.006",
-                      f"0.0215 {sgn*0.071:.5f} -0.108", C_PRINT))
+                      f"0.0215 {sgn*0.071:.6f} -0.108", C_PRINT))
     elif link == "ankle":
         col.append(f'<geom class="ankle" name="ankle_{side}" '
-                   f'size="{HW:.5f} {HH:.5f} {HL:.5f}" pos="0 0 {HL:.5f}" '
+                   f'size="{HW:.6f} {HH:.6f} {HL:.6f}" pos="0 0 {HL:.6f}" '
                    f'group="4"/>')
         # Yoke reaching AFT along the roll axis to a bearing clear of the
         # wheel disc, then up to meet the shin.
@@ -419,13 +452,19 @@ def _link_geoms(link, side, sgn, meshes=False):
         # the upright and the flat wheel.
         # Between the roll servo and the wheel, not inside either: the servo
         # case ends at x = -58, and |x| > 40 keeps it clear of the flat wheel.
-        vis.append(_v(f"vankpost_{side}", "box", "0.003 0.006 0.006",
-                      "-0.048 0 0", C_PRINT))
+        # -51..-46.5, shortened with cad/ankle.py's POST to free 1.5 mm for the
+        # roll bracket's web. It read -51..-45 here after the CAD moved, and
+        # cad.twin caught it at 37.9% backed: a sim box bigger than the part it
+        # stands for is the dangerous direction, because clearance then gets
+        # checked against material that will not be printed.
+        vis.append(_v(f"vankpost_{side}", "box", "0.00225 0.006 0.006",
+                      "-0.04875 0 0", C_PRINT))
         # Ring the roll servo bolts to, with the coupler turning inside it.
         vis.append(_v(f"vankring_{side}", "box", "0.0035 0.017 0.002",
                       "-0.0545 0 0.015", C_PRINT))
-        vis.append(_v(f"vanktie_{side}", "box", "0.0035 0.006 0.005",
-                      "-0.0485 0 0.011", C_PRINT))
+        # -52..-46.5, moved with the post for the same reason.
+        vis.append(_v(f"vanktie_{side}", "box", "0.00275 0.006 0.005",
+                      "-0.04925 0 0.011", C_PRINT))
         # Mounting face the roll servo bolts to, bridging it to the carrier.
         # Kept within 8.5 mm of the roll axis: the roll bracket's tie sweeps
         # an annulus 8.7-19.6 mm out, so anything reaching into that band gets
@@ -435,16 +474,16 @@ def _link_geoms(link, side, sgn, meshes=False):
         # shin had a bore 52.8 mm off the axis and the yoke had no matching
         # feature, so the two parts came no closer than 10.3 mm.
         vis.append(_v(f"vyokecross_{side}", "box", "0.003 0.0325 0.008",
-                      f"-0.048 {sgn*0.0265:.5f} 0", C_PRINT))
+                      f"-0.048 {sgn*0.0265:.6f} 0", C_PRINT))
         vis.append(_v(f"vyokefwd_{side}", "box", "0.028 0.005 0.008",
-                      f"-0.028 {sgn*0.061:.5f} 0", C_PRINT))
+                      f"-0.028 {sgn*0.061:.6f} 0", C_PRINT))
         vis.append(_v(f"vyokeboss_{side}", "cylinder", "0.007 0.005",
-                      f"0 {sgn*0.061:.5f} 0", C_PRINT, euler="1.5708 0 0"))
-        vis.append(_v(f"vrollsv_{side}", "box", f"{HH:.5f} {HW:.5f} {HL:.5f}",
+                      f"0 {sgn*0.061:.6f} 0", C_PRINT, euler="1.5708 0 0"))
+        vis.append(_v(f"vrollsv_{side}", "box", f"{HH:.6f} {HW:.6f} {HL:.6f}",
                       # Lifted off the roll axis so it clears the floor in foot mode,
                       # where the axle is only 12 mm up. Safe despite the larger
                       # radius because |x| > 23 mm puts it outside the wheel-servo sweep.
-                      f"{-(0.058+HH):.5f} 0 0.0125", C_SERVO))
+                      f"{-(0.058+HH):.6f} 0 0.0125", C_SERVO))
     elif link == "rollbracket":
         # Wheel-drive servo and bearing block, OUTBOARD. The 90 deg roll maps
         # +y onto +z, so outboard becomes directly above the flat wheel, which
@@ -453,19 +492,19 @@ def _link_geoms(link, side, sgn, meshes=False):
         # the SHAFT 12.5 mm off it, and the wheel bolts straight to the horn.
         # Negative, so the case sits back under the arm at x = -44..0 rather
         # than reaching forward past it.
-        vis.append(_v(f"vwhlsv_{side}", "box", f"{HL:.5f} {HH:.5f} {HW:.5f}",
-                      f"{-SERVO_SHAFT_X:.5f} {sgn*(0.0135+HH):.5f} 0", C_SERVO))
+        vis.append(_v(f"vwhlsv_{side}", "box", f"{HL:.6f} {HH:.6f} {HW:.6f}",
+                      f"{-SERVO_SHAFT_X:.6f} {sgn*(0.0135+HH):.6f} 0", C_SERVO))
         # The printed arm the wheel servo bolts to. It was dropped when the
         # tie and tongue were replaced by the web, which left the bracket as
         # two loose pieces in the sim - caught by the one-rigid-piece test.
         vis.append(_v(f"vrollarm_{side}", "box", "0.022 0.0057 0.005",
-                      f"-0.022 {sgn*0.0178:.5f} 0.01735", C_PRINT))
+                      f"-0.022 {sgn*0.0178:.6f} 0.01735", C_PRINT))
         # Web straight from the arm to the roll axis, at x = -45..-41: the one
         # window forward of the yoke's post that is still outside the 40 mm
         # wheel. The tie, tongue and corner rib it replaces existed only to
         # crank round the shin's old post.
         vis.append(_v(f"vrollweb_{side}", "box", "0.002 0.012 0.011",
-                      f"-0.043 {sgn*0.012:.5f} 0.011", C_PRINT))
+                      f"-0.043 {sgn*0.012:.6f} 0.011", C_PRINT))
         vis.append(_v(f"vrollhub_{side}", "cylinder", "0.008 0.002",
                       "-0.043 0 0", C_PRINT, euler="0 1.5708 0"))
         # Coupler disc bolted to the roll servo's horn - what the servo turns -
@@ -486,6 +525,9 @@ def _link_geoms(link, side, sgn, meshes=False):
         vis = _swap_meshes(vis, link, side, sgn)
     if meshes:
         vis = _servo_meshes(vis)
+        vis += _hw_geoms(link, side)
+        if link == "shin":
+            vis.append(_drive_body(side, sgn))
     return col + vis
 
 
@@ -495,7 +537,7 @@ CHAIN = [("hip", "thigh", None), ("knee", "shin", "0 0 -0.110"),
          ("ankle_roll", "rollbracket", "0 0 0"), ("wheel", "wheel", "0 0 0")]
 
 
-def _leg(side, backlash, meshes=False):
+def _leg(side, backlash, meshes=False, parallel=False):
     """One leg: hip pitch, knee pitch, ankle pitch, ankle ROLL, wheel.
 
     The roll bracket is its own body because the wheel-drive servo bolts to it
@@ -519,7 +561,12 @@ def _leg(side, backlash, meshes=False):
         joint_xml = f'<joint name="{jn}" axis="{axis}"{rng}/>'
         body = f"{link}_{side}"
 
-        if backlash > 0:
+        # A PARALLELOGRAM HAS NO GEARBOX AT THE ANKLE, so it gets no lash
+        # joint. That is the whole mechanical argument for it: the ankle's free
+        # play does not exist to be compensated, because there is no reduction
+        # in that path - only links and pin joints.
+        lashed = backlash > 0 and not (parallel and joint == "ankle_pitch")
+        if lashed:
             opens.append(
                 f'{ind}<body name="{jn}_drv" pos="{pos}">\n{ind}  {joint_xml}\n'
                 f'{ind}  {stub}\n'
@@ -549,8 +596,8 @@ def _hip_servos():
         # z = SERVO_SHAFT_X, not HL. It was HL, which put the BOTTOM of the
         # case on the hip axis and the shaft 10.2 mm - one SHAFT_INSET - above
         # it. The servo was not driving the joint it is bolted to.
-        g.append(_v(f"vhipsv{sgn}", "box", f"{HW:.5f} {HH:.5f} {HL:.5f}",
-                    f"0 {sgn*(0.060+SPINE_Y-SPY-HH):.5f} {SERVO_SHAFT_X:.5f}",
+        g.append(_v(f"vhipsv{sgn}", "box", f"{HW:.6f} {HH:.6f} {HL:.6f}",
+                    f"0 {sgn*(0.060+SPINE_Y-SPY-HH):.6f} {SERVO_SHAFT_X:.6f}",
                     C_SERVO))
     return g
 
@@ -573,11 +620,11 @@ def _torso_visual(meshes=False):
     for sgn in (1, -1):
         for x0, x1 in ((-0.0365, -notch_x), (notch_x, 0.0535)):
             g.append(_v(f"vside{sgn}f{x0:.3f}", "box",
-                        f"{(x1-x0)/2:.5f} 0.0015 {notch_z/2:.5f}",
-                        f"{(x0+x1)/2:.5f} {sgn*0.0381:.4f} {notch_z/2:.5f}",
+                        f"{(x1-x0)/2:.6f} 0.0015 {notch_z/2:.6f}",
+                        f"{(x0+x1)/2:.6f} {sgn*0.0381:.4f} {notch_z/2:.6f}",
                         C_PLATE))
         g.append(_v(f"vside{sgn}", "box", "0.045 0.0015 0.0673",
-                    f"{x} {sgn*0.0381:.4f} {notch_z+0.0673:.5f}", C_PLATE))
+                    f"{x} {sgn*0.0381:.4f} {notch_z+0.0673:.6f}", C_PLATE))
     # The RS-BOT decal, on the outside of each side plate. Cosmetic only: no
     # mass, no collision, and NOT in PRINTED_VIS, so the mesh swap leaves it
     # alone and it survives meshes=True. 60 x 60 mm, sitting 0.2 mm proud so it
@@ -595,8 +642,8 @@ def _torso_visual(meshes=False):
     # one-rigid-piece test called out as a torso in four loose parts.
     for x0, x1 in ((-0.0365, -0.0124), (0.0124, 0.0535)):
         g.append(_v(f"vshelf1{x0:.3f}", "box",
-                    f"{(x1-x0)/2:.5f} 0.0366 0.0015",
-                    f"{(x0+x1)/2:.5f} 0 0.0200", C_PLATE))
+                    f"{(x1-x0)/2:.6f} 0.0366 0.0015",
+                    f"{(x0+x1)/2:.6f} 0 0.0200", C_PLATE))
     # Sits ON 4 mm standoffs above the shelf, not on the shelf itself: the
     # PCB needs clearance underneath for its through-hole legs.
     g.append(_v("vpistand", "box", "0.040 0.026 0.002", f"{x} 0 0.0235", C_PLATE))
@@ -646,6 +693,96 @@ def _decal_assets():
         f'<material name="{n}" texture="{n}" texuniform="false" '
         f'texrepeat="1 1" specular="0.25" shininess="0.35"/>'
         for n, p in (("decal", f), ("decal_r", fr)))
+
+
+# link -> the hardware meshes that ride on it. From cad/hardware.py, which
+# writes them in each body's own frame; see local_parts() there.
+#
+# WHY THIS IS IN THE SIM AND NOT ONLY IN THE CAD VIEWER. The bearings, shafts,
+# pulleys and belt are what actually hold this robot together, and until they
+# were here the twin showed printed parts floating with nothing between them.
+# A digital twin you cannot see the joints of is not one.
+HW_MESHES = {
+    "ankle": [("hw_shaft_roll", C_STEEL), ("hw_bearing_roll", C_STEEL),
+              ("hw_shaft_pitch", C_STEEL), ("hw_bearing_pitch", C_STEEL),
+              ("hw_pulley40", C_ALU)],
+    "shin": [("hw_belt", C_BELT), ("hw_horn_vkneesv", C_STEEL)],
+    "thigh": [("hw_horn_vhipsv", C_STEEL)],
+    "rollbracket": [("hw_horn_vrollsv", C_STEEL)],
+    "wheel": [("hw_horn_vwhlsv", C_STEEL)],
+}
+
+# The drive pulley is not a geom on the shin, it is its own BODY with a hinge,
+# geared to the ankle-pitch joint by an equality constraint. That is the belt,
+# expressed as physics rather than as a picture: turn the ankle and the pulley
+# turns twice, in the sim, because MuJoCo is enforcing the ratio.
+#
+# Mass is a stub, like the backlash gear bodies above. The pulleys' real 34 g is
+# already carried on the shin as BELT_DRIVE in cad/masses.py, and moving it here
+# would be double-counting - so this body exists to carry a DOF and a mesh, not
+# to be weighed twice.
+PULLEY_MASS = 1e-4
+
+
+def _hw_assets():
+    """<mesh> entries for the bought hardware, mirrored for the right side."""
+    out = []
+    for stems in list(HW_MESHES.values()) + [[("hw_pulley20", None)]]:
+        for stem, _ in stems:
+            f = CAD_OUT / f"{stem}.stl"
+            if not f.exists():
+                raise FileNotFoundError(
+                    f"{f} is missing - run `uv run python -m cad.hardware "
+                    f"--export` once before loading with meshes=True")
+            for side, sgn in (("l", 1), ("r", -1)):
+                out.append(f'<mesh name="{stem}_{side}" file="{f}" '
+                           f'scale="0.001 {0.001 * sgn} 0.001"/>')
+    return "\n    ".join(out)
+
+
+def _drive_body(side, sgn):
+    """The 20T pulley as a spinning child of the shin."""
+    import cad.hardware as _hw
+
+    x, y, z = _hw.drive_pulley_pos()
+    return (f'<body name="beltdrive_{side}" pos="{x} {sgn * y:.6f} {z:.6f}">'
+            f'<joint name="beltdrive_{side}" type="hinge" axis="0 1 0" '
+            f'limited="false" damping="1e-5"/>'
+            f'<inertial pos="0 0 0" mass="{PULLEY_MASS}" '
+            f'diaginertia="1e-8 1e-8 1e-8"/>'
+            f'<geom name="hw_pulley20_{side}" type="mesh" '
+            f'mesh="hw_pulley20_{side}" rgba="{C_ALU}" contype="0" '
+            f'conaffinity="0" mass="0" group="0"/></body>')
+
+
+def _parallelogram(side):
+    """hip + knee + ankle_pitch = 0, enforced as a constraint.
+
+    That sum IS the foot's orientation relative to the torso, which is what
+    src/rsbot/model.py's ankle_pitch_level() commands a servo to hold. A
+    four-bar linkage holds it mechanically instead, so this models the linkage
+    as what it is: a rigid kinematic constraint, not an actuator.
+    """
+    return (f'    <fixed name="par_{side}">\n'
+            f'      <joint joint="hip_{side}" coef="1"/>\n'
+            f'      <joint joint="knee_{side}" coef="1"/>\n'
+            f'      <joint joint="ankle_pitch_{side}" coef="1"/>\n'
+            f'    </fixed>')
+
+
+def _belt_equality():
+    """joint1 = 2 x joint2. The reduction, as a constraint MuJoCo solves."""
+    from cad.belt import RATIO
+    return ("  <equality>\n" + "\n".join(
+        f'    <joint joint1="beltdrive_{s}" joint2="ankle_pitch_{s}" '
+        f'polycoef="0 {RATIO} 0 0 0"/>' for s in ("l", "r")) + "\n  </equality>")
+
+
+def _hw_geoms(link, side):
+    """The hardware geoms for one link, visual only."""
+    return [f'<geom name="{stem}_{side}" type="mesh" mesh="{stem}_{side}" '
+            f'rgba="{rgba}" contype="0" conaffinity="0" mass="0" group="0"/>'
+            for stem, rgba in HW_MESHES.get(link, [])]
 
 
 def _mesh_assets(meshes):
@@ -746,7 +883,7 @@ def _write_stance(m):
     m.key_ctrl[0] = ctrl
 
 
-def load(trim=None, backlash=0.0, meshes=False):
+def load(trim=None, backlash=0.0, meshes=False, parallel=False):
     """Return (model, data) reset to the stance keyframe.
 
     `backlash` is total gear lash per joint in radians, split +/- either side.
@@ -758,18 +895,26 @@ def load(trim=None, backlash=0.0, meshes=False):
     shift the torso to null it. Linear, so one pass is exact. Any residual
     offset shows up as a permanent standing lean.
     """
-    def build(x_trim, meshes):
+    def build(x_trim, meshes, parallel=parallel):
         mass, com, I = SEG_INERTIA["torso"]
         ixx, iyy, izz, ixy, ixz, iyz = I
         inertial = (f'<inertial pos="{x_trim:.6f} {com[1]:.6f} {com[2]:.6f}" '
                     f'mass="{mass:.6f}" fullinertia="{ixx:.6e} {iyy:.6e} '
                     f'{izz:.6e} {ixy:.6e} {ixz:.6e} {iyz:.6e}"/>')
         return (XML.read_text()
-                .replace("<!--LEGS-->", _leg("l", backlash, meshes)
-                         + _leg("r", backlash, meshes))
-                .replace("<!--EXCLUDES-->", _excludes())
+                .replace("<!--LEGS-->", _leg("l", backlash, meshes, parallel)
+                         + _leg("r", backlash, meshes, parallel))
+                .replace("<!--EXCLUDES-->", _excludes()
+                          + ("\n" + _belt_equality() if meshes else "")
+                          + (("\n  <tendon>\n" + _parallelogram("l") + "\n"
+                              + _parallelogram("r") + "\n  </tendon>\n"
+                              "  <equality>\n"
+                              '    <tendon tendon1="par_l"/>\n'
+                              '    <tendon tendon1="par_r"/>\n'
+                              "  </equality>") if parallel else ""))
                 .replace("<!--MESHES-->", _decal_assets() + "\n    "
-                          + _mesh_assets(meshes))
+                          + _mesh_assets(meshes)
+                          + ("\n    " + _hw_assets() if meshes else ""))
                 .replace("<!--TORSO_INERTIAL-->", inertial)
                 .replace("<!--TORSO_VIS-->", _torso_visual(meshes)))
 

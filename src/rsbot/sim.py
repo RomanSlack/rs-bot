@@ -129,11 +129,14 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
 
 
 def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None,
-                   backlash=0.0):
+                   backlash=0.0, parallel=False):
     """Balance, deploy the feet, then stand there. Returns metrics + state log."""
     from .transition import DeployMachine, STAND, NAMES
 
-    m, d = load(backlash=backlash)
+    m, d = load(backlash=backlash, parallel=bool(parallel))
+    if parallel == "lash-only":
+        m.eq_active0[:] = 0          # keep the rigid ankle, drop the linkage
+        d.eq_active[:] = 0
     mach = DeployMachine(gains, cfg)
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     wheel_l = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "wheel_l")
@@ -187,7 +190,7 @@ def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None
     }
 
 
-def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0,
+def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0, parallel=False,
                   duration=26.0, v_des=0.35, viewer=None, backlash=0.0):
     """Drive, flip to feet, stand, flip back, drive on. Returns metrics.
 
@@ -196,7 +199,10 @@ def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0,
     """
     from .transition import DeployMachine, STAND, WHEEL, NAMES
 
-    m, d = load(backlash=backlash)
+    m, d = load(backlash=backlash, parallel=bool(parallel))
+    if parallel == "lash-only":
+        m.eq_active0[:] = 0          # keep the rigid ankle, drop the linkage
+        d.eq_active[:] = 0
     mach = DeployMachine(gains, cfg)
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))

@@ -245,6 +245,28 @@ CASE_MOUNT_NO_BRACKET_BOLTS_TO_CASE = True     # checked, C018 kit, 3 bracket ty
 # Ø20.00 pocket for a Ø19.93 horn: 0.035 mm per side, from a print service
 # quoting +/-0.3 mm. Most wheels would not have accepted the horn at all. Fixed
 # there, not here, and the fix has to clear the servo's own Ø20 boss as well.
+# The pocket a horn-driven part needs cut into its mounting face.
+#
+# THE HORN STANDS PROUD OF THE SPLINE. It is 4.50 mm overall over a spline that
+# protrudes 3.40, so its outer face is 1.10 mm beyond the spline tip - and the
+# spline tip is where the servo's bounding box ends, which is where four parts
+# were positioned. Measured 2026-08-02: the thigh and the shin each clashed
+# 1.10 mm into their horn, and a part that lands inside its horn does not seat,
+# it rocks on the horn's rim.
+#
+# The pocket receives that 1.10 rather than moving the part, so the kinematics
+# do not change.
+#
+# THE DEPTH IS EXACT AND THE CLEARANCE IS RADIAL. The first version cut 1.30
+# for a 1.10 horn "to be safe", which put the pocket floor 0.20 mm beyond the
+# horn's face and left the part bearing on nothing at all. That is not a safety
+# margin, it is a standoff, and it is the fault this design has already been
+# bitten by at 0.5 mm, 0.035 mm and 0.005 mm. A face that transmits load has no
+# tolerance to give: slack goes sideways, where Ø20.60 over a Ø19.93 horn gives
+# 0.335 per side, the same as the wheel's pocket.
+HORN_PROUD = 4.50 - 3.40         # 1.10, horn overall minus spline proud
+HORN_POCKET_R = 10.30            # Ø20.60, the same as cad/wheel.py's
+HORN_POCKET_T = HORN_PROUD
 HORN_OD = 19.93                  # measured
 HORN_PLATE_T = 2.51              # measured, the part that seats
 HORN_OVERALL_T = 4.50            # measured, including the nub

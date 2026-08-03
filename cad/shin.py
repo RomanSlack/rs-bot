@@ -205,6 +205,12 @@ def build():
     # 14 mm below it, which no amount of stress margin would have saved.
     part += bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HUB_R, 12)
     part -= bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HORN_BORE, 14)
+    # Horn pocket, on the face that meets the knee servo. Without it this hub
+    # lands 1.10 mm INSIDE the horn: the part was positioned at the spline tip
+    # and the horn finishes 1.10 mm beyond it. See cad/servo.py HORN_PROUD.
+    from cad.servo import HORN_POCKET_R as _HPR, HORN_POCKET_T as _HPT
+    part -= (bd.Pos(0, SPINE_Y - SPY + _HPT / 2, 0) * bd.Rot(90, 0, 0)
+             * bd.Cylinder(_HPR, _HPT))
     for dx in (-HORN_DX, HORN_DX):
         for dz in (-HORN_DY, HORN_DY):
             part -= (bd.Pos(dx, SPINE_Y, dz) * bd.Rot(90, 0, 0)

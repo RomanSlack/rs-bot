@@ -32,8 +32,7 @@ almost nowhere, so the free space is much smaller than either suggests.
 import build123d as bd
 import numpy as np
 
-WHEEL_R = 40.0
-WHEEL_HALF_W = 12.0
+from cad.wheel_dims import R as WHEEL_R, HALF_W as WHEEL_HALF_W  # noqa: F401
 ANKLE_Z = -110.0          # ankle axis in the shin frame
 
 # Ankle pitch actually used, plus margin. Everything below the pitch joint -
@@ -47,16 +46,48 @@ PITCH_RANGE = (-20.0, 45.0)
 # WAS 45.2, 24.7, 35.4 - the original product-listing guesses, superseded twice
 # and never updated here. This file is what solved which bands the ankle-pitch
 # bearing is allowed to sit in, against a servo 1.1 mm short in its shaft axis.
-from cad.servo_dims import LENGTH as SERVO_L, WIDTH as SERVO_W, HEIGHT as SERVO_H
+from cad.servo_dims import (LENGTH as SERVO_L, WIDTH as SERVO_W,
+                            HEIGHT as SERVO_H, SHAFT_X)
 HL, HW, HH = SERVO_L / 2, SERVO_W / 2, SERVO_H / 2
+
+# EVERY servo dimension below comes from servo_dims, and every servo POSITION
+# is written about its shaft rather than its case. Both of those are the fix
+# for the same fault, found by cad.twin's bought-box check on 2026-08-02:
+# these boxes had drifted from the sim's by 12.5 mm and 3.5 mm, and nothing
+# could see it because no check ever compared them. cad.twin.bought() does now,
+# to 0.01 mm, so a literal edited here fails there instead of going quiet.
 
 # Wheel-drive servo: outboard, bolted to the roll bracket, so it turns with
 # the wheel in ROLL but shares the ankle's pitch.
-WHEEL_SERVO = ((-HL, HL), (14.0, 14.0 + 2 * HH), (-HW, HW))
-# Roll servo: on the yoke, aft and lifted.
-ROLL_SERVO = ((-(58.0 + 2 * HH), -58.0), (-HW, HW), (16.0 - HL, 16.0 + HL))
+#
+# CENTRED ON ITS SHAFT, at -SHAFT_X, not on the wheel axis. It used to be
+# (-HL, HL), which put the case symmetric about x = 0, and the shaft is 12.5 mm
+# from the case centre so those are never the same box. That is the identical
+# mistake the SIM made with this identical servo and had corrected on
+# 2026-08-01; the envelope was simply never told. It matters more here than it
+# looks: the envelope reserves space for the NEXT part, so it was offering
+# 12.5 mm forward that the servo does not use and hiding 12.5 mm aft that it
+# does.
+WHEEL_SERVO = ((-SHAFT_X - HL, -SHAFT_X + HL), (13.5, 13.5 + 2 * HH), (-HW, HW))
+# Roll servo: on the yoke, aft and lifted. Its shaft runs along x, so the case
+# spans HEIGHT in x and LENGTH in z, centred on the shaft at SHAFT_X. The 16.0
+# that used to sit where SHAFT_X does was a literal from before the shaft
+# offset was known, and it put this whole box 3.5 mm high.
+ROLL_SERVO = ((-(58.0 + 2 * HH), -58.0), (-HW, HW),
+              (SHAFT_X - HL, SHAFT_X + HL))
 # Ankle-pitch servo: on the SHIN, high and outboard. Given in the shin frame.
-ANKLE_SERVO_SHIN = ((-HW, HW), (34.0, 34.0 + 2 * HH), (-62.6, -17.4))
+#
+# 6.8 mm out in z until 2026-08-02, which is the largest drift of the four and
+# the last one found. It read (-62.6, -17.4): a 45.2 span, the product-listing
+# length, centred on -40.0 where the sim has it at -33.2. Its x and y were exact
+# to a thousandth, which is what made it worth checking rather than assuming -
+# two axes agreeing that precisely is not a frame mismatch, it is a file that
+# was right once and got edited in one axis.
+#
+# This is the box cad/envelope.py exists to reason with: the header says it is
+# what solved which bands the ankle-pitch bearing may sit in. Those bands were
+# solved against a servo 6.8 mm from where the sim puts it.
+ANKLE_SERVO_SHIN = ((-HW, HW), (34.0, 34.0 + 2 * HH), (-33.2 - HL, -33.2 + HL))
 
 
 def _box(spec):

@@ -33,10 +33,11 @@ import numpy as np
 
 OUT = Path(__file__).parent / "out"
 
-R = 40.0                 # outer radius; the sim's WHEEL_R
-HALF_W = 12.0            # half width; the sim's WHEEL_HALF_W
-
-TYRE_T = 3.0             # tread thickness, so rigid stops at r = 37
+# From cad/wheel_dims.py, which is the ONLY copy. These used to be written here
+# with comments reading "the sim's WHEEL_R" - an author noticing the duplication
+# and copying the number anyway. The one of the three that nobody kept in step
+# was the tyre thickness, which the sim had at 8 mm against this file's 3 mm.
+from cad.wheel_dims import R, HALF_W, TYRE_T  # noqa: E402,F401
 SOLE_T = 2.5             # TPU flange on the sole face
 SOLE_INNER = 26.0        # flange reaches in to here
 RIM_T = 4.0              # rigid rim wall

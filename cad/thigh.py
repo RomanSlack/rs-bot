@@ -137,6 +137,12 @@ def build():
     # Hip hub, centred ON the hip axis.
     part += bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HUB_R, 12)
     part -= bd.Pos(0, SPINE_Y, 0) * bd.Rot(90, 0, 0) * bd.Cylinder(HORN_BORE, 14)
+    # Horn pocket, on the face that meets the hip servo. Same 1.10 mm clash as
+    # the shin's, same cause: positioned at the spline tip, and the horn ends
+    # 1.10 mm past it. See cad/servo.py HORN_PROUD.
+    from cad.servo import HORN_POCKET_R as _HPR, HORN_POCKET_T as _HPT
+    part -= (bd.Pos(0, SPINE_Y - 6 + _HPT / 2, 0) * bd.Rot(90, 0, 0)
+             * bd.Cylinder(_HPR, _HPT))
     # The real horn pattern: a 9.9 x 10.0 mm rectangle, not a circle at r = 8.
     # Every one of these holes used to be 0.71 mm out of position.
     for dx in (-HORN_DX, HORN_DX):

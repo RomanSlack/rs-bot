@@ -76,8 +76,23 @@ PETG_SOLID, INFILL = 1.270, 0.60
 #
 # A 3 mm shaft runs -56.5..-41 through all of it. The servo drives one end, the
 # yoke bearing supports the middle, the bracket grips both ends.
-POST = ((-51, -45), (-6, 6), (-6, 6))          # bearing carrier, on the roll axis
-COUPLER_X = (-56.5, -52.0)
+from cad.servo import HORN_PROUD as _HORN_PROUD  # noqa: E402
+ROLL_SV_X1 = -58.0          # the roll servo's output end; ROLL_SV asserts this
+
+# SHORTENED from (-51, -45) to free 1.5 mm for the roll bracket's web.
+#
+# The post's job is to house the 623ZZ, which is 4.0 mm wide and sits at
+# x = -49, so it needs -51..-47 and had -51..-45. The spare 1.5 mm was doing
+# nothing, and the web next door was the most loaded part in the robot at 99%
+# of PA6-CF. Measured: 4.0 mm web is 56.6 MPa, 5.5 mm is 31.4. The window
+# between this post and the wheel at x = -40 is the whole budget.
+POST = ((-51, -46.5), (-6, 6), (-6, 6))       # bearing carrier, on the roll axis
+# The inner face is DERIVED from the horn, not typed. It read -56.5, which left
+# the coupler standing 0.40 mm off the horn it bolts to - measured 2026-08-02 by
+# cad.hardware.horn_joints(). The horn is 4.50 thick over a spline that stands
+# 3.40 proud, so its outer face is HORN_PROUD past the servo's box end, and the
+# box end here is ROLL_SV's near face.
+COUPLER_X = (ROLL_SV_X1 + _HORN_PROUD, -52.0)
 COUPLER_R = 9.0
 ROLL_SHAFT_X = (-56.5, -41.0)   # between servo (ends -58) and the flat wheel,
                                 # which needs |x| > 40
@@ -108,7 +123,11 @@ PITCH_SHAFT_R = 2.0           # 3 mm shaft, clearance
 # Starts at x = -51, not -56: the roll bracket's coupler disc spins at radius 9
 # about the axis over x = -56.5..-52, and the cross used to run straight
 # through it - 734 mm3 of a joint that would simply not turn.
-YOKE_CROSS = ((-51, -45), (-6, 59), (-8, 8))
+# x ends at -46.5, not -45, for the same reason POST was shortened: the roll
+# bracket's web moved out to -46.5 to get its section, and this bar was still
+# reaching to -45. That put 477 mm3 of yoke inside the bracket, which
+# assemble_check caught the moment the web moved.
+YOKE_CROSS = ((-51, -46.5), (-6, 59), (-8, 8))
 YOKE_FWD = ((-56, 0), (56, 66), (-8, 8))
 YOKE_BOSS_Y = (56.0, 66.0)
 # THIS BOX WAS WRONG, AND NOTHING HAD EVER CHECKED IT. It read
@@ -120,7 +139,23 @@ YOKE_BOSS_Y = (56.0, 66.0)
 # this constant rather than merely near it. assemble_check put 491 mm3 of new
 # wall inside the servo, which is the check earning its keep: a box that is
 # 3.4 mm off but never used for anything is invisible.
-ROLL_SV = ((-97.6, -58.0), (-12.4, 12.4), (-10.2, 35.2))
+#
+# AND THEN IT WAS WRONG AGAIN, 2026-08-02, for the same reason one layer up: it
+# was rewritten to the SIM's 39.6 x 24.8 x 45.4, and the manufacturer's drawing
+# had already superseded that with 36.5 x 24.73 x 45.23. 3.1 mm in x, plus
+# 0.035 in y and 0.085 in z. The two that bit are the small ones, because they
+# are on the faces the cradle is built from: the walls stood 0.035 mm off the
+# case they are supposed to grip, which is the same standoff fault this design
+# has now been bitten by at 0.5 mm, 0.035 mm and 0.005 mm.
+#
+# So it is no longer written down here at all. This IS envelope.ROLL_SERVO -
+# the same servo, the same frame, stated twice - and cad.twin.bought() now
+# fails if either drifts from the sim. One box, one place.
+from cad.envelope import ROLL_SERVO as ROLL_SV  # noqa: E402
+# The wheel-drive servo, in this same frame, for the cradle at the end of
+# roll_bracket(). Imported for the same reason: it is one box and this is not
+# where it lives.
+from cad.envelope import WHEEL_SERVO as WHEEL_SV  # noqa: E402
 # The arm reaches 4 mm further aft and the tie is deeper and wider, so the two
 # actually LAP instead of grazing. They used to overlap in a box 2.00 x 0.50 x
 # 2.65 mm - 2.65 mm3 - and the entire wheel load went through it. FEA put the
@@ -166,7 +201,12 @@ ROLL_TIE = ((-56, -42), (7.1, 14.5), (5, 16.0))
 # been: a plate in the y-z plane running straight from the arm to the roll
 # axis. x = -45..-41 is the one window forward of the yoke's post that is still
 # outside the 40 mm wheel in both of its shapes.
-ROLL_WEB_X = (-45.0, -41.0)
+# WIDENED to 5.5 mm, which took this part from 99% of PA6-CF to 55%. The plate
+# carries the whole wheel load in bending and stress goes as 1/thickness, so
+# the last 1.5 mm was worth 44 points of margin. Bounded by POST above and by
+# the flat wheel at |x| = 40 below; the 1.0 mm to the wheel is the running
+# clearance cad/assemble_check.py checks.
+ROLL_WEB_X = (-46.5, -41.0)
 ROLL_WEB = ((0.0, 0.0), (0.0, 23.5), (-23.5, 22.35))   # (unused placeholder)
 ROLL_HUB_R = 8.0
 
@@ -233,7 +273,10 @@ def yoke():
                       (sv_z[0] - CRADLE_CLEAR, CRADLE_Z_TOP)))
     # Tie the ring back to the bearing carrier, clear of the coupler. Upper
     # only, for the same reason.
-    part += _box(((-52, -45), (-6, 6), (6, 16)))
+    # Ends at -46.5 with POST and YOKE_CROSS, not -45. Three separate boxes
+    # referenced the old web face and only two were moved with it; this one was
+    # 45 mm3 inside the bracket until assemble_check said so.
+    part += _box(((-52, -46.5), (-6, 6), (6, 16)))
     # Reserve the roll-to-wheel cable, in both poses.
     from cad.wiring import channel as _channel
     part = _channel(part, "vrollsv_l -> vwhlsv_l", "ankle_l", r=CABLE_CH_R)
@@ -297,11 +340,6 @@ def roll_bracket():
     part -= (bd.Pos(-48, 0, 0) * bd.Rot(0, 90, 0)
              * bd.Cylinder(ROLL_SHAFT_R, 60))
 
-    # The roll-to-wheel lead crosses this part too, and it never had a channel:
-    # cad/wiring.py put 2-3 mm3 of bracket through the cable in foot mode.
-    from cad.wiring import channel as _channel
-    part = _channel(part, "vrollsv_l -> vwhlsv_l", "rollbracket_l", r=CABLE_CH_R)
-
     # Wheel axle bore and the wheel servo's mounting bolts, through the ARM
     # this time. All four of these used to be drawn at z = 0, on the wheel spin
     # axis, while the arm they pass through spans z = 12.35..22.35 - so every
@@ -321,11 +359,47 @@ def roll_bracket():
     # them because it checks that a hole is PARALLEL to its servo's shaft, not
     # that it arrives at the servo.
     #
-    # NOT REPLACED WITH A CRADLE YET, deliberately. The other four mounts had an
-    # unambiguous servo box to grip - ROLL_SV here, the notch on the chassis,
-    # the belt centre distance on the shin. This one does not: the arm's frame
-    # and envelope.WHEEL_SERVO's frame disagree about where the case sits, and
-    # guessing would just be a fifth invented pattern. Pin the box first.
+    # THE FIFTH CRADLE. It was left out on 2026-08-01 because the arm's frame
+    # and envelope.WHEEL_SERVO's frame disagreed about where the case sits, and
+    # building against a box that is wrong is how you get a fifth invented
+    # pattern. That box is now derived from servo_dims about SHAFT_X and checked
+    # against the sim by cad.twin.bought(), so there is something real to grip.
+    #
+    # WHY THIS ONE IS A C AND NOT A RIM. The four cradles built yesterday all
+    # grew from a plate on the case's END face. This mount is different: the arm
+    # lies across the servo's +z FACE, over x = -35.1..0, and that face is
+    # already one half of an opposed pair. The couple is about the shaft, which
+    # is y here, so it is reacted by forces in x-z - which means a wall under
+    # the case at -z completes the pair on its own, with the arm doing the other
+    # half. Two opposed faces, exactly the yoke's argument, and no new plate.
+    #
+    # An x-pair was the other option and it is worse: the aft wall is free, but
+    # the forward one would sit at x = +10.1 where the arm ends at x = 0, so it
+    # would mean growing the arm 13 mm outboard to have anything to hang from.
+    # That is a proportions change to win a joint we can get for a web.
+    (wx0, wx1), (wy0, wy1), (wz0, wz1) = WHEEL_SV
+    cz0 = wz0 - CRADLE_CLEAR - CRADLE_WALL       # underside of the bottom wall
+    cz1 = wz0 - CRADLE_CLEAR                     # the face that grips the case
+    cx0 = wx0 - CRADLE_CLEAR - CRADLE_WALL       # outside of the aft web
+    # y is clipped to the ARM's own span. The case runs on to y = 50 and the arm
+    # stops at 24.3, and a wall reaching past the thing it grows from is the
+    # floating solid cad.servo.cradle() spent a day failing to attach.
+    cy = (max(wy0, ROLL_ARM[1][0]), ROLL_ARM[1][1])
+    part += _box(((cx0, 0.0), cy, (cz0, cz1)))            # under the case
+    part += _box(((cx0, wx0 - CRADLE_CLEAR), cy,
+                  (cz0, ROLL_ARM[2][1])))                 # aft web, up to the arm
+
+    # The roll-to-wheel lead crosses this part, and the channel for it is cut
+    # HERE, last, after every piece of material that could stand in it.
+    #
+    # It used to be cut before the cradle above, and the cradle promptly filled
+    # it back in: 156 mm3 of new wall through the run, 2 of 8 blocked where the
+    # robot had been at 0 of 8 in both poses. Same shape of bug as the fillet
+    # that ate a servo seat on 2026-08-01 - a feature subtracted before the
+    # material that would have obstructed it exists is a feature subtracted from
+    # nothing. Cut last, and the order stops mattering.
+    from cad.wiring import channel as _channel
+    part = _channel(part, "vrollsv_l -> vwhlsv_l", "rollbracket_l", r=CABLE_CH_R)
     return part.clean()
 
 

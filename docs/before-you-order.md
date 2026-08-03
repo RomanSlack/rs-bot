@@ -147,7 +147,9 @@ sweep the manoeuvre the robot actually performs.
 
 ## Where it stands
 
-**1.858 kg**, every gram derived from geometry rather than assigned.
+**1.907 kg**, every gram derived from geometry rather than assigned. It read
+1.858 until 2026-08-02: five servo cradles and a closed chassis, none of which
+had reached this page.
 
 The robot balances, drives, steers, flips both ways, and survives 2 deg of gear
 lash against a measured 0.87 in the real servo.

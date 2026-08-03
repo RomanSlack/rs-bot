@@ -129,16 +129,35 @@ perimeters sit at the extreme fibre. Print a coupon and correct it.
 
 Worst of in-plane and interlayer, each part in its chosen print orientation.
 
+> **Every number in this file before 2026-08-02 was computed on a mesh with
+> INVERTED ELEMENTS, and they were all too low.** See "The meshes were broken"
+> below. The table here is the first one from meshes that are valid.
+
 | part | PETG | ABS | PA6-CF |
 |---|---|---|---|
-| thigh | 76% | 94% | **38%** |
-| shin | **135%** | **167%** | **67%** |
-| ankle yoke | 45% | 58% | **22%** |
-| roll bracket | **146%** | **189%** | **84%** |
-| chassis | 35% | 44% | **18%** |
+| thigh | 47% | 58% | **23%** |
+| shin | **169%** | **209%** | **83%** |
+| ankle yoke | 71% | **92%** | **41%** |
+| roll bracket | **201%** | **248%** | **99%** |
+| chassis | 27% | 33% | **13%** |
+| wheel body | 8% | 10% | **4%** |
+| leg assembly | 91% | **112%** | **45%** |
 
-**PA6-CF passes every part.** PETG and ABS both fail the shin and the roll
-bracket, and the thigh in ABS is marginal at 94%.
+**PA6-CF still passes every part, and the roll bracket passes by 1%.** That is
+not a margin, it is a coincidence. It was reported at 70% this morning and at
+84% before that, and both of those came off broken meshes.
+
+The roll bracket now also FAILS in MJF PA12 (118%), SLS PA12GF (126%) and FDM
+PA12CF (135%). Those are the three print services this project was actually
+choosing between, so the material decision is no longer "PA6-CF is comfortable,
+the others are close" - it is **PA6-CF or nothing**, on one part, at 99%.
+
+The shin went 60% to 83% for the same reason and is the second-worst part.
+
+The leg assembly appears here for the first time. It never converged before,
+because its mesh was the worst of the seven at -0.622, and a matrix that is not
+positive definite does not have to fail loudly. At 45% it is well inside PA6-CF,
+which says the joints are not where the trouble is - the individual parts are.
 
 The shin and the roll bracket are the two parts that reach the ankle-pitch
 joint, and that is not a coincidence: the bearing is forced 68 mm outboard and

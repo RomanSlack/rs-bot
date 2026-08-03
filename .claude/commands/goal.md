@@ -43,16 +43,22 @@ Run it. Do not ask whether to start.
 
 ```
 uv run python -m cad.drives          is every servo's shaft on the joint it turns
-uv run python -m cad.twin            is every sim box backed by real CAD material
+uv run python -m cad.twin            every sim box backed by CAD material, and
+                                     every CAD copy of a bought part still the
+                                     same box the sim has
 uv run python -m cad.servo           the bench and drawing numbers, and what is open
 uv run python -m cad.fasteners       every screw specified, and pointing at something
 uv run python -m cad.wiring          can the cables physically get there
-uv run python -m cad.assemble_check  interference and seating, both poses
+uv run python -m cad.assemble_check  interference, seating, the worst-case
+                                     tolerance stack, and the flip swept on
+                                     real solids. Four checks, a few minutes
 uv run python fitcheck.py            interference through all 26 flip poses
 uv run python -m cad.toolaccess      can a driver reach every screw
 uv run python -m cad.printability    overhangs, thin walls, bridges
-uv run python -m pytest tests -q     everything, about 13 minutes, run last
-uv run python serve.py               look at it: localhost:8781
+uv run python -m pytest tests -q     everything, about 20 minutes, run last
+uv run python serve.py               look at it move: localhost:8781
+uv run python -m cad.fitview         look at how it goes together, with every
+                                     gap measured: localhost:8783
 ```
 
 `cad.drives` and `cad.twin` are the two that exist specifically to catch
@@ -83,6 +89,23 @@ extend them when you find a class of error they missed.
 - Fix the check as well as the bug when the check should have caught it.
 - Match the surrounding voice: plain, direct, no em-dashes, and record the
   reasoning that would otherwise be re-litigated next week.
+
+# Before you trust a green result
+
+`docs/how-checks-fail.md` is fifteen ways a check in this repo has lied,
+all of them things that actually happened. The short version:
+
+- a check that cannot fail, and a check nobody runs
+- a check whose INPUT nobody validated - every FEA here ran on broken meshes
+  for weeks and the solves converged anyway
+- a threshold set to the number the bug was already producing
+- a number copied into a second file, which then drifted. SHAFT_X was wrong in
+  four files in two days
+- a dead constant that was also wrong, believed because it sat among good ones
+- a viewer showing a different robot from the one the checks ran on
+
+> **What would this look like if it were wrong, and would I be able to tell?**
+> If the answer is "exactly like this", nothing has been checked yet.
 
 # Where the context is
 

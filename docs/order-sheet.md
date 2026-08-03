@@ -219,8 +219,30 @@ caliper can.
 
 ## Mass, for the record
 
-**1.875 kg**, every gram derived from geometry rather than assigned: 183 g of
-printed structure across five designs (the chassis gained 17 g closing its open
-ends into a box), 108 g of wheels, 550 g of servos, and 600 g of ballast
-standing in for the arms and head that arrive at stage 4.
-`uv run python -m cad.masses` regenerates it.
+**1.907 kg**, and every line below is `uv run python -m cad.masses`, summed,
+rather than a number carried forward from the last time someone wrote this out:
+
+| | g |
+|---|---|
+| printed structure, all seven parts | 341 |
+| servos, 10 x STS3215 | 550 |
+| arm/head ballast + IMU (stage 4 stand-in) | 605 |
+| torso electronics: Pi 5, 3S pack, bus adapter | 235 |
+| wheels, 2 x (printed body + TPU tyre + horn) | 108 |
+| belt drive, 2 x (pulleys, belt, shafts) | 68 |
+| **total** | **1907** |
+
+It said 1.875 kg until 2026-08-02, which was the SIM's number, and the sim had
+not been told about the cradles. The figure above is the CAD's, because the CAD
+is what gets printed and this is the sheet you order from.
+
+The printed line said **183 g** for weeks and was briefly "corrected" to 197 g
+on 2026-08-02 by adding the cradles to the stale figure instead of re-deriving
+it. It is 341 g. Incrementing a number you have not checked carries its error
+forward and puts your name on it, and it happened here in the one file where
+being wrong costs money.
+
+> **The sim still says 1.875 kg.** `cad.twin` fails on that gap, per body, and
+> it is open on purpose: closing it changes what the balancer was tuned
+> against. It does not affect anything you would buy, which is why this sheet
+> can be correct while that stays open.

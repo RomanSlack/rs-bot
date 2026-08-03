@@ -108,10 +108,10 @@ It predates the CAD port and most of what has been learned since:
 
 | line | says | reality |
 |---|---|---|
-| servo | 45.2 x 24.7 x 35.4 | 45.4 x 24.8 x **39.6**, measured off a real STEP |
+| servo | 45.2 x 24.7 x 35.4 | 45.23 x 24.73 x **36.50**, the manufacturer's drawing |
 | wheel | bought, 80 x 24, 60 g, ~$8 | **printed**, two parts, 54 g |
-| structure | "Printed PETG ~400 g" | **165 g of PA6-CF** |
-| total | 2.05 kg | **1.858 kg** |
+| structure | "Printed PETG ~400 g" | **197 g of PA6-CF** |
+| total | 2.05 kg | **1.907 kg** |
 
 And it is missing entirely: **fasteners, bearings, the belt and pulleys,
 shafts, and cables.** Those are most of the part count.
@@ -179,6 +179,16 @@ bolt somewhere unreachable and confirming the check screams.
 unreachable fastener. If it finds none on the first run, be suspicious of the
 check before believing the result.
 
+**Outcome, 2026-08-02.** It found four, on each roll bracket, and held them for
+a week. All four were false: they are the roll servo's horn screws, which are
+fitted on the bench before the bracket goes near the robot, and the check had
+been measuring each screw's distance to its servo from the CASE centre rather
+than from the shaft, 12.5 mm away. The prediction told us to be suspicious of a
+check that found nothing. The lesson is the other one: **be equally suspicious
+of a check that finds something and then never resolves it.** A red that sits
+still for a week is not evidence, it is furniture. See
+[status/2026-08-02](../status/2026-08-02-status.md).
+
 ---
 
 ### 4. Wire routing: completely unmodelled
@@ -227,6 +237,24 @@ right call for the check that caught the 0.1 mm rub, and it leaves two gaps:
 the flip sweep re-run with parts perturbed by the service tolerance rather than
 at nominal.
 
+**DONE, 2026-08-02.** `cad.assemble_check.sweep_stack()` applies the chain-depth
+stack at every step of the flip, not just at the two rest poses. Nothing closes
+anywhere: the tightest is the roll bracket against the wheel, 0.90 mm nominal
+across 2 interfaces, so **0.30 mm at worst case**, and it holds that value right
+through the manoeuvre because the two turn together. Control-tested by loosening
+the service to +/-0.5 mm, which closes 14 pairs.
+
+Analytic rather than perturbed, for the reason `stack()` already records:
+offsetting these solids by 0.3 mm fails outright in OCC, and assuming every
+error lines up the wrong way is what worst case means anyway.
+
+**And the sweep had never been running.** `stack`, `sweep` and `sweep_stack` all
+existed while `uv run python -m cad.assemble_check` called none of them - the
+entry point did the two rest poses and stopped. So the flip sweep on real
+solids, written 2026-08-01 and the first thing ever to sweep this robot on its
+actual geometry, only ran when somebody imported it by hand. All four now run
+from the one command, which takes a few minutes rather than one.
+
 ---
 
 ### 6. The FEA's own confidence
@@ -249,14 +277,68 @@ the bulk polymer.
 peak reported, so the trend is visible rather than assumed; and a cycle count
 with a knockdown applied to the two parts above 80%.
 
+> **RETRACTED, later the same day. This item does NOT close, and the risk it
+> describes is worse than when it was written.** Everything below was computed
+> on meshes containing inverted elements - tets with a flipped Jacobian, which
+> make the stiffness matrix indefinite and quietly UNDERSTATE stress. Six of
+> the seven parts were affected. On valid meshes the roll bracket is at **99%**
+> of PA6-CF, not 70%, and the shin is at **83%**, not 61%. See `docs/stress.md`.
+>
+> So the two thin margins this item was written about are not gone. One of them
+> is thinner than the 94% that prompted writing it, and the reason nobody
+> noticed is that the solver returned plausible numbers from a broken mesh for
+> weeks. `cad/fea.py` now refuses to return an invalid mesh at all.
+>
+> **Re-run, and the numbers hold.** Convergence on valid meshes:
+>
+> ```
+> roll bracket   57.00 / 56.41 / 56.40 MPa   at 3.0 / 2.6 / 2.2 mm
+> shin           47.59 / 47.83 / 48.07 MPa
+> ```
+>
+> Both flat to 1%, so 56.4 MPa is the roll bracket's answer and not a meshing
+> artifact. **99% of PA6-CF, converged.** Fatigue at 10 000 cycles is fine on
+> both - the roll bracket is at 74% of its endurance limit in plane, 56% across
+> layers - so fatigue is NOT the constraint. The static margin is, and there
+> is none.
+>
+> **This is now a geometry problem, not an analysis problem**, and it is the
+> thing that blocks an order. See item 8 below.
+
+**Superseded, kept for the record.** Both parts, both studies, on meshes that
+turned out to be invalid.
+
+| | mesh 3.0 / 2.6 / 2.2 mm | static, PA6-CF | fatigue @ 10k |
+|---|---|---|---|
+| roll bracket | 40.69 / 39.78 / 39.94 MPa | **70%** | 52% in-plane, 32% interlayer |
+| shin | 34.46 / 34.80 / 34.64 MPa | **61%** | 23% / 23% |
+
+Both peaks are flat to within 2% across three densities, so they are answers
+rather than artifacts of how finely the part was chopped. Neither is close to
+its endurance limit, and **0 of 8 material pairs fail in fatigue for the shin**.
+
+**Neither of the two "thin margins" this item was written about still exists.**
+It said the shin sits at 86% and the roll bracket at 94%, and warned that a 20%
+peak shift under refinement would change the answer for both. Refined: the peaks
+barely move. The numbers themselves were simply old - the shin is 61% and has
+been through redesigns since 86% was recorded, and the roll bracket came off 94%
+when its servo cradle added material in the load path.
+
+So the risk this item exists to flag is not merely quantified, it is gone, and
+it had been gone for a while without anyone re-running the numbers to notice.
+The remaining fiction is the material properties themselves, which are
+literature values: that is the validation order's job, not the solver's.
+
 ---
 
 ### 7. Refresh the entry documents
 
 `before-you-order.md` is the first thing anyone reads and it is now stale:
-1.863 kg (it is 1.858), the wheel before it had tread or retention, no mention
-of the material sourcing conclusion, and the risk framing corrected at the top
-of this file.
+1.863 kg (it is 1.907 as of 2026-08-02, and was 1.858 when this was written -
+the number has moved twice since, which is the argument for this item rather
+than against it), the wheel before it had tread or retention, no mention of the
+material sourcing conclusion, and the risk framing corrected at the top of this
+file. Its mass line is now correct; the rest of the item stands.
 
 `docs/bom.md` is covered by item 1.
 
@@ -281,6 +363,64 @@ against. Do them together.
 
 Item 6 goes while the validation order is in transit because it needs no
 hardware and it is the only item on this list that can be done in parallel.
+
+---
+
+### 8. The roll bracket is at 99% of PA6-CF, and that now blocks the order
+
+> **SOLVED the same day, and cheaply.** The web is 5.5 mm instead of 4.0 mm and
+> the part is at **55% of PA6-CF**, not 99%. It also passes in all three PA12
+> variants now - MJF 66%, SLS 70%, FDM 75% - where it was over in every one of
+> them, so the material choice is open again rather than PA6-CF or nothing.
+>
+> ```
+> web 4.0 mm   56.6 MPa   99%
+> web 5.5 mm   31.4 MPa   55%
+> web 7.0 mm   20.7 MPa   36%
+> ```
+>
+> Stress in a plate bending goes as 1/thickness, so the last 1.5 mm was worth 44
+> points of margin. The window between the yoke's post and the flat wheel was
+> the whole budget, and the post was 6.0 mm housing a 4.0 mm bearing: the spare
+> 1.5 mm was doing nothing. Three separate yoke boxes referenced the old web
+> face and only one moved with it; `assemble_check` found the other two, at
+> 477 mm3 and 45 mm3.
+>
+> Hub radius was tried first and is not the lever: 8 to 12 mm moves it 99% to
+> 97%. The section was the problem, not a stress concentration.
+
+**Status: was BLOCKING, added 2026-08-02, solved 2026-08-02.**
+
+Converged, on valid meshes, at 56.4 MPa against PA6-CF's 57 MPa allowable. One
+percentage point is not a margin - it is the same number twice. And PA6-CF is
+now the ONLY material that passes this part: MJF PA12 is at 118%, SLS PA12GF at
+126%, FDM PA12CF at 135%. Those are the three services this project was
+choosing between.
+
+This was invisible until today because every FEA in the repo ran on meshes
+containing inverted elements, which understate stress. The part has read 94%,
+then 70% after its servo cradle, and it is really 99%. The cradle did help; the
+mesh error was hiding more than the cradle gained.
+
+Fatigue is fine (74% of the endurance limit in plane), so this is a static
+ultimate problem, not a cycles problem.
+
+**What it needs, and it is one of these:**
+
+- **More section in the load path.** The bracket is a plate from the arm to the
+  roll axis and the peak is at the re-entrant corner where the web meets the
+  hub. It already carries the one fillet the FEA asked for.
+- **Less load through it.** The wheel's reaction arrives through the servo, so
+  this is really about the arm's cantilever, which is set by the wheel's 40 mm
+  radius and the 12.9 mm y-offset that keeps the arm off the tyre.
+- **Accept PA6-CF only, at 99%, and print a spare.** Defensible only if the
+  material properties are real, and they are literature values until the
+  validation order says otherwise. At 99% a 10% property shortfall is a broken
+  part.
+
+**Do not order printed parts until this is decided.** It is exactly the class
+of thing this project exists to catch before money is spent, and it was caught
+by a mesh-quality guard that did not exist this morning.
 
 ## The rule this all runs on
 

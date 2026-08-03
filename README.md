@@ -105,20 +105,24 @@ fitcheck.py                 do the real parts actually fit? (oriented-box audit)
 tune.py                     coordinate-descent gain search
 view.py                     native viewer (needs a working GLX display)
 cad/shin.py                 build123d proof of concept: STEP + MuJoCo mesh
+cad/fitview.py              the assembled robot in the browser, every gap
+                            measured: toggle parts, explode, both poses
+cad/servo_view.py           the servo model against the part on the desk
 tests/                      exit criteria as executable checks
 ```
 
 ## Run it
 
 ```bash
-uv run python -m pytest tests -q   # all exit criteria, ~8 s
+uv run python -m pytest tests -q   # all exit criteria, ~20 min (the FEA)
 uv run python serve.py             # live sim at localhost:8781, drive it around
+uv run python -m cad.fitview       # the assembly at localhost:8783, gaps measured
 uv run python fitcheck.py          # part interpenetration audit, both modes
 uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```
 
-Latest status report: [status/2026-08-01-status.md](status/2026-08-01-status.md).
+Latest status report: [status/2026-08-03-status.md](status/2026-08-03-status.md).
 Each one leads with what turned out to be wrong that day, which is the fastest
 way back into the project.
 
@@ -157,8 +161,17 @@ way back into the project.
 - [before-you-order.md](docs/before-you-order.md) - what has been verified, and
   against what
 
+**How this project goes wrong**
+
+- [how-checks-fail.md](docs/how-checks-fail.md) - **read this before trusting a
+  green result.** Fifteen ways a check here has lied, all of them things that
+  happened. The parts are in better shape than the things that verify them
+
 **Questions settled, so they stay settled**
 
+- [deleting-the-ankle-pitch-servo.md](docs/deleting-the-ankle-pitch-servo.md) -
+  could a passive four-bar replace the ankle-pitch servo? Yes, and it stands
+  10/10 in foot mode where the servo now manages 2/10
 - [deleting-the-roll-servo.md](docs/deleting-the-roll-servo.md) - could the
   wheel motor drive the ankle roll through a clutch? No, and the reason is not
   the one you would guess

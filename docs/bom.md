@@ -13,7 +13,7 @@ dimensions (45.2 x 24.7 x 35.4, really 45.4 x 24.8 x 39.6), the wheel as a
 bought $8 part when it is printed in two pieces, and 400 g of PETG structure
 against a real 165 g of PA6-CF. It had no fasteners, bearings, belt, pulleys or
 cables, which is most of the part count. Total mass 2.05 kg against a real
-1.858.
+1.907.
 
 This file keeps the part of it that was worth keeping: WHY the parts are what
 they are, and what modelling them at full size revealed. The quantities and

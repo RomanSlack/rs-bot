@@ -99,6 +99,16 @@ back, so a forward lean wants more ankle pitch. The integral absorbs the
 steady offset from the CoM not sitting dead centre on the foot, which leaves
 the P term free to fight disturbances.
 
+> **SUPERSEDED, 2026-08-02. The table below no longer holds.** It was measured
+> against the old inertia. `SEG_INERTIA` was regenerated from the CAD that day
+> (1874.8 g to 1907.0 g, and the roll bracket's centre of mass moved 11.5 mm),
+> and re-measured foot mode now stands **2/10 at 2 deg and 3/10 at 3 deg with
+> the loop ON**, not reliably as recorded here.
+>
+> Correcting the mass distribution broke foot mode at the lash the servos
+> actually have. See `docs/deleting-the-ankle-pitch-servo.md`, which measures a
+> passive parallelogram standing 10/10 at both.
+
 **Standing, 15 s:**
 
 | lash | loop off | loop on |

@@ -22,7 +22,25 @@ real thing, and how would I know?"** Guessing a dimension is the failure mode
 this project exists to prevent. Prefer measuring, and prefer a check that can
 fail over a comment that says it is fine.
 
-1. Read the root README and any CLAUDE.md.
+**Then read [docs/how-checks-fail.md](../../docs/how-checks-fail.md) before you
+trust a green result.** It is the shortest path into how this project actually
+goes wrong, and it is not what you would guess. The parts here are in better
+shape than the things that verify them: checks that cannot fail, checks nobody
+runs, checks whose INPUT nobody validated, thresholds set to whatever number was
+already being reported, and numbers copied into a second file that then drifted.
+Every entry happened, most of them recently, and the worst of them read as
+green for weeks.
+
+Two habits it will save you from learning the expensive way:
+
+- **Look at what you build.** `uv run python -m cad.fitview` is the assembly
+  viewer. Three real faults were found by looking at a screen and none of them
+  by anything measuring, including a shaft floating in front of a wheel while
+  every interference check reported clean.
+- **When a number turns out to be wrong, ask who else has a copy.** One
+  constant was wrong in four separate files in two days.
+
+1. Read the root README, `docs/how-checks-fail.md`, and any CLAUDE.md.
 2. Skim the main source directories — front end, back end, or whatever the
    equivalents are here. Breadth over depth: what the pieces are and how they
    talk to each other, not how any one of them works inside.

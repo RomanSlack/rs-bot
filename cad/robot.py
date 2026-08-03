@@ -85,10 +85,20 @@ def _quat(mat):
     return q
 
 
-def build_scene(mode="wheel"):
-    m, d = load()
-    pose(m, d, mode)
+def scene_items(m, d, linkage_on=True):
+    """(assets, [(name, geom xml, pos, quat)]) for everything drawn.
 
+    Split out of build_scene() so a STILL and an ANIMATION cannot disagree
+    about where a part goes. cad/linkage_anim.py compiles the scene once and
+    then rewrites body_pos and body_quat every frame from this same list, in
+    this same order; if the two had their own copies of the placement rules,
+    the moving picture would eventually stop being the still one. Three of the
+    faults in docs/how-checks-fail.md are a viewer showing a different robot
+    from the one being measured.
+
+    The model must already be POSED. This function reads it and does not
+    change it.
+    """
     assets, bodies, seen = [], [], {}
     for body_stem, (stem, rgba) in PARTS.items():
         for side, sgn in (("l", 1), ("r", -1)):
@@ -104,10 +114,9 @@ def build_scene(mode="wheel"):
                 assets.append(
                     f'<mesh name="{key}" file="{OUT / (stem + ".stl")}" '
                     f'scale="0.001 {0.001*sgn} 0.001"/>')
-            bodies.append(
-                f'<body pos="{p[0]} {p[1]} {p[2]}" '
-                f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">'
-                f'<geom type="mesh" mesh="{key}" rgba="{rgba}"/></body>')
+            bodies.append((f"pt_{key}",
+                           f'<geom type="mesh" mesh="{key}" rgba="{rgba}"/>',
+                           p.copy(), q))
 
     # The wheels, from their own solids.
     for side, euler in (("l", "1.5708 0 0"), ("r", "-1.5708 0 0")):
@@ -126,28 +135,26 @@ def build_scene(mode="wheel"):
             tag = f' name="wheelchk_{key}"' if stem == "wheel_tyre" else ""
             geoms += (f'<geom type="mesh" mesh="{key}"{tag} euler="{euler}" '
                       f'rgba="{rgba}"/>')
-        bodies.append(f'<body pos="{p[0]} {p[1]} {p[2]}" '
-                      f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">{geoms}</body>')
+        bodies.append((f"wh_{side}", geoms, p.copy(), q))
 
     # The parallelogram. Poses come from cad/linkage.py, which reads them off
     # the same posed model, so this picture cannot show a linkage in a place
     # the checks did not test. That is not a hypothetical worry here: three of
     # the faults in docs/how-checks-fail.md are a viewer drawing a different
     # robot from the one being measured.
-    for side in ("l", "r"):
-        for name, stem, sgn, pos_mm, R in linkage.placements(m, d, side):
-            key = f"{stem}_{side}"
-            if key not in seen:
-                seen[key] = True
-                assets.append(
-                    f'<mesh name="{key}" file="{OUT / (stem + ".stl")}" '
-                    f'scale="0.001 {0.001 * sgn} 0.001"/>')
-            p = pos_mm / 1000.0
-            q = _quat(R)
-            bodies.append(
-                f'<body pos="{p[0]} {p[1]} {p[2]}" '
-                f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">'
-                f'<geom type="mesh" mesh="{key}" rgba="{C_LINK}"/></body>')
+    if linkage_on:
+        for side in ("l", "r"):
+            for name, stem, sgn, pos_mm, R in linkage.placements(m, d, side):
+                key = f"{stem}_{side}"
+                if key not in seen:
+                    seen[key] = True
+                    assets.append(
+                        f'<mesh name="{key}" file="{OUT / (stem + ".stl")}" '
+                        f'scale="0.001 {0.001 * sgn} 0.001"/>')
+                bodies.append(
+                    (name,
+                     f'<geom type="mesh" mesh="{key}" rgba="{C_LINK}"/>',
+                     pos_mm / 1000.0, _quat(R)))
 
     # Servo blocks and electronics, straight from the sim's own visual geoms.
     # vtire/vhub are NOT in this list any more: the real wheel is drawn above,
@@ -168,8 +175,22 @@ def build_scene(mode="wheel"):
             g = f'<geom type="cylinder" size="{s[0]} {s[1]}" rgba="{col}"/>'
         else:
             g = f'<geom type="box" size="{s[0]} {s[1]} {s[2]}" rgba="{col}"/>'
-        bodies.append(f'<body pos="{p[0]} {p[1]} {p[2]}" '
-                      f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">{g}</body>')
+        bodies.append((f"sv_{n}", g, p.copy(), q))
+
+    return assets, bodies
+
+
+def build_scene(mode="wheel", md=None, linkage_on=True):
+    """The scene as MJCF. Every body is NAMED, so an animator can find it."""
+    if md is None:
+        m, d = load()
+        pose(m, d, mode)
+    else:
+        m, d = md
+    assets, items = scene_items(m, d, linkage_on)
+    bodies = [f'<body name="{name}" pos="{p[0]} {p[1]} {p[2]}" '
+              f'quat="{q[0]} {q[1]} {q[2]} {q[3]}">{geoms}</body>'
+              for name, geoms, p, q in items]
 
     return f'''<mujoco>
   <!-- angle="radian" to match rsbot.xml. MuJoCo defaults to DEGREES, and this

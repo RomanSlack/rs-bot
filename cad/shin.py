@@ -107,6 +107,22 @@ DROP = ((37, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -61))
 BACK = ((0, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -102))
 # --- the ankle-pitch servo mount ----------------------------------------------
 #
+# > **THIS HOLDS A SERVO THAT NO LONGER EXISTS.** The ankle-pitch servo is
+# > deleted (cad/linkage.py, 2026-08-03) and its mount is still here: STANDOFF
+# > is 9.40 cm3 of the shin's 53.05, about 7 g a leg, plus the two cradle walls
+# > built in build(). It is dead weight on the part with the least mass left to
+# > give.
+# >
+# > It is NOT removed yet, and deliberately. Taking it out is the first half of
+# > redrawing this part for the linkage, and the second half is the forward
+# > carrier below - FARM, FPOST, CROSS, DROP, BACK - which only reaches y = 136
+# > because the deleted BELT forced the ankle bearing out there. Removing one
+# > without the other means re-checking the packaging twice. cad/envelope.py's
+# > bands are already wider than that file last reported.
+# >
+# > What is safe to rely on meanwhile: this material is real in the model, so
+# > every clearance and mass number is conservative, not optimistic.
+#
 # THE OLD COMMENT HERE WAS WRONG, AND IT MATTERED. It read "runs the length of
 # the ankle servo's case so its mounting bolts can be far apart: 1.63 N.m
 # through bolts 12 mm apart is 136 N each, at 40 mm it is 41." The bolts were at

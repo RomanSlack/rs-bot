@@ -174,19 +174,31 @@ def _flip_with_offset(deg, lash=3.0, trials=5, opposite=False):
     return stood
 
 
-def test_the_worst_case_build_offset_still_flips():
-    """4.21 degrees of fixed foot tilt, both legs, and it has to survive - this
-    is the state the robot is in if it is built badly and never adjusted."""
-    assert _flip_with_offset(4.21) == 5
-    assert _flip_with_offset(4.21, opposite=True) == 5
+def test_an_adjusted_linkage_flips_every_time():
+    """Nulled, which is what the adjuster is for, and it has to be perfect.
+    Both legs the same way and opposed, because two independently printed legs
+    are not wrong in the same direction."""
+    assert _flip_with_offset(0.0, trials=8) == 8
+    assert _flip_with_offset(0.0, trials=8, opposite=True) == 8
 
 
-def test_there_is_a_cliff_just_past_it():
-    """And this is why the adjuster is not optional. 5.5 degrees is a degree
-    and a bit past the worst case and the robot does not get up at all, so the
-    unadjusted margin is 0.3 to 0.8 degrees between two numbers that are both
-    estimates."""
-    assert _flip_with_offset(5.5) == 0
+def test_there_is_a_cliff_and_the_worst_case_is_inside_it():
+    """Why the adjuster is not optional.
+
+    Measured, at 3 degrees of gear lash, 8 triggers each:
+
+        offset      same way    opposed
+        4.21 deg    8/8         7/8      <- the worst case, unadjusted
+        5.00 deg    8/8         4/8
+        5.50 deg    0/8         1/8
+
+    So the unadjusted worst case ALREADY misses stage 2's exit criterion of
+    zero falls, and it misses it in the direction two separately printed legs
+    actually go. The cliff at 5.5 is what this asserts, because it is the
+    unambiguous end; the 7/8 is recorded rather than asserted, since a test
+    that demands a failure breaks when the failure goes away.
+    """
+    assert _flip_with_offset(5.5, trials=8) == 0
 
 
 def test_the_error_budget_is_zero_when_nothing_is_wrong():

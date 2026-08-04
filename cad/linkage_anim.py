@@ -38,7 +38,6 @@ lean on the right is the real geometric consequence and not a drawing trick.
 import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "egl")
@@ -48,7 +47,7 @@ import numpy as np  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 import cad.robot as robot  # noqa: E402
-from src.rsbot.model import (ROLL_FOOT, WHEEL_R, ankle_pitch_level,  # noqa: E402
+from src.rsbot.model import (ROLL_FOOT, ankle_pitch_level,  # noqa: E402
                              axle_height, leg_ik, load)
 
 PANEL_W, H, FPS = 660, 760, 30

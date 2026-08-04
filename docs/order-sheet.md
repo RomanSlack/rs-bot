@@ -10,6 +10,13 @@ sit, and what modelling them at real size revealed. This is the shopping list.
 **Read `road-to-order.md` before spending anything.** Three lines here are still
 unverified and one servo will settle all three.
 
+> **BLOCKING, 2026-08-03: three linkage pieces are drawn as separate parts and
+> belong to other parts.** `lk_fin` is chassis, `lk_stub` is shin, `lk_arm` is
+> ankle yoke. Until they are cut into their hosts, this sheet describes a robot
+> that cannot be assembled, and the shin should shrink when it happens - its
+> outboard carrier only reaches y = 136 because the deleted belt forced the
+> ankle bearing out there.
+
 ---
 
 ## 1. Printed parts
@@ -22,13 +29,26 @@ Files are written into `cad/out/` by `uv run python -m cad.robot`.
 
 | file | qty | material | mass ea |
 |---|---|---|---|
-| `chassis.step` | 1 | PA6-CF | 109 g |
-| `thigh.step` | 2 | PA6-CF | 35 g |
-| `shin.step` | 2 | PA6-CF | 36 g |
+| `chassis.step` | 1 | PA6-CF | 135 g |
+| `thigh.step` | 2 | PA6-CF | 41 g |
+| `shin.step` | 2 | PA6-CF | 40 g |
 | `ankle_yoke.step` | 2 | PA6-CF | 14 g |
-| `roll_bracket.step` | 2 | PA6-CF | 6 g |
-| `wheel_body.step` | 2 | PA6-CF | 26 g |
+| `roll_bracket.step` | 2 | PA6-CF | 8 g |
+| `wheel_body.step` | 2 | PA6-CF | 27 g |
 | `wheel_tyre.step` | 2 | **TPU 95A** | 27 g |
+| `lk_rod1.step` | 2 | PA6-CF | 7 g |
+| `lk_rod2.step` | 2 | PA6-CF | 7 g |
+| `lk_idler.step` | 2 | PA6-CF | 4 g |
+
+> **THREE MORE LINKAGE PIECES ARE NOT ON THIS LIST AND THAT IS WHY YOU CANNOT
+> ORDER YET.** `lk_fin` (12 g), `lk_stub` (3 g) and `lk_arm` (2 g) are FEATURES
+> of the chassis, the shin and the ankle yoke, drawn separately in
+> cad/linkage.py and not yet cut into their hosts. Ordering today would buy
+> three loose pieces with nothing to bolt them to. See the blocking list below.
+>
+> `lk_rod2` is also drawn as one piece and specified as two, clamped, because
+> its length has to be adjustable at assembly. cad/linkage.py's ADJUST_MM says
+> why and tests/test_linkage.py measures what happens without it.
 
 Right-hand parts are the left mirrored in y, except the two wheels, which are
 the **same part flipped over**. One part number, print two.
@@ -38,7 +58,18 @@ service FDM often defaults far lower. That is a line on the order form, not an
 assumption you get to make afterwards.
 
 **Cost: get a real quote, because this is the line nobody can estimate.**
-12 physical pieces, 183 g of PA6-CF plus 54 g of TPU. Service FDM in PA6-CF
+19 physical pieces, 430 g of PA6-CF plus 53 g of TPU.
+
+> The 183 g this line used to claim was the LEGS ONLY, quoted as if it were the
+> robot, with the 135 g chassis never in it. It is in `docs/how-checks-fail.md`
+> as entry 7. The figure above is `uv run python -m cad.masses` summed over the
+> printed column, which is where it should have come from all along.
+>
+> **It is computed at PETG's 1.27 g/cm3 and these parts are ordered in PA6-CF
+> at 1.19.** That is about 26 g the model is carrying that the robot will not
+> be, and it is not fixed here because the material is not settled: three PA12
+> variants came back into play when the roll bracket went from 99% to 55%
+> (`road-to-order.md` item 8), and the density follows the material. Service FDM in PA6-CF
 prices per part rather than per gram, with a setup charge that dominates on
 small parts like the 6 g roll bracket, so expect somewhere between **$180 and
 $420** and treat any single number as fiction until Unionfab or Weerg have
@@ -54,20 +85,27 @@ Nobody should be surprised at the checkout page.
 
 | part | qty | unit | total | src | note |
 |---|---|---|---|---|---|
-| **Feetech STS3215-C018** (12 V, 1:345) | 10 | $16.00 | $160 | v | see the part-number warning below |
-| 25T **metal** servo horn | 10 | $2.50 | $25 | e | pattern measured, see `cad/servo.py`. Metal, not the POM horn that may ship in the box |
-| 623ZZ bearing, 3 x 10 x 4 | 4 | $1.00 | $4 | e | ankle pitch, both legs. Sold in 10-packs |
+| **Feetech STS3215-C018** (12 V, 1:345) | 8 | $16.00 | $128 | v | EIGHT, not ten: see the note below |
+| 25T **metal** servo horn | 8 | $2.50 | $20 | e | pattern measured, see `cad/servo.py`. Metal, not the POM horn that may ship in the box |
+| 623ZZ bearing, 3 x 10 x 4 | 6 | $1.00 | $6 | e | ankle pitch and the linkage idler, both legs. Sold in 10-packs |
 | 3 mm shaft, 30 mm | 4 | $1.00 | $4 | e | ankle pitch and ankle roll. Or cut from stock |
-| GT2 pulley, 20T | 2 | $5.00 | $10 | e | ankle pitch drive, servo end |
-| GT2 pulley, 40T | 2 | $7.00 | $14 | e | ankle pitch drive, joint end |
-| GT2 belt, 94T (188 mm) x 15 mm | 2 | $10.00 | $20 | e | closed loop. 15 mm width is uncommon and may need a specialist |
+| 3 mm pin, 18 mm | 8 | $0.50 | $4 | e | the parallelogram's four pivots a leg. Cut from the same stock |
 | Raspberry Pi 5 | 1 | $80.00 | $80 | e | 8 GB |
 | 3S LiPo, 2200 mAh | 1 | $25.00 | $25 | e | |
 | TTL bus adapter, FE-URT-1 class | 1 | $10.00 | $10 | e | needed for the validation order too, buy it early |
 | IMU, BNO085 class | 1 | $25.00 | $25 | e | breakout board |
-| Servo bus cable, 3-pin, 100 mm | 6 | $1.50 | $9 | e | |
-| Servo bus cable, 3-pin, 150 mm | 4 | $1.50 | $6 | e | hip and roll joint, which need slack |
-| | | | **$392** | | |
+| Servo bus cable, 3-pin, 100 mm | 4 | $1.50 | $6 | e | |
+| Servo bus cable, 3-pin, 150 mm | 4 | $1.50 | $6 | e | hip and roll joint, which need slack. `cad.wiring` now wants a 9 mm service loop, up from 6 |
+| | | | **$314** | | |
+
+> **TWO SERVOS AND A WHOLE BELT DRIVE CAME OFF THIS LIST.** $81 of parts
+> deleted against $6 added, so $78 net, and 178 g out against 70 g of linkage
+> back in, so 107 g net. The ankle-pitch servo is replaced by a passive parallelogram: see
+> `docs/deleting-the-ankle-pitch-servo.md`, and `cad/linkage.py` for the
+> mechanism. Gone with it: two 25T horns, a 20T GT2 pulley on a 4.40 mm hub
+> that was not a catalogue part, a 40T pulley that sat 2.23 mm below the floor
+> in foot mode, and a 188 mm x **15 mm** belt whose width this sheet flagged as
+> uncommon and possibly needing a specialist. That sourcing risk is gone.
 
 **Order by part number, not by name.** Feetech sells at least five STS3215
 variants that look identical in photographs and are not interchangeable:
@@ -159,16 +197,16 @@ live in the order sheet" and only the quantities did.
 | line | low | high | confidence |
 |---|---|---|---|
 | Printed parts, PA6-CF + TPU | $180 | $420 | **needs a real quote** |
-| Bought parts | $392 | $392 | servos verified, rest estimated |
+| Bought parts | $314 | $314 | servos verified, rest estimated |
 | Fasteners and inserts, incl. 25% spares | $40 | $40 | estimated |
-| **Build subtotal** | **$612** | **$852** | |
+| **Build subtotal** | **$534** | **$774** | |
 | Tools, one-time | $63 | $88 | estimated |
-| **Total** | **$675** | **$940** | |
+| **Total** | **$597** | **$862** | |
 
 Three things worth reading off that table:
 
-- **The printed parts may cost more than the servos.** The servo line looks
-  alarming at a glance and is under a quarter of the build. Until the STEP
+- **The printed parts cost more than the servos**, and by more than they used
+  to: the servo line is down to $128 and the printed mass is up to 431 g. Until the STEP
   files are quoted, the largest number here is the one nobody has priced.
 - **Buying the servos on Amazon adds about $85** to the total ($24.50 against
   $16 a unit) for next-day delivery. Worth it for the validation order,

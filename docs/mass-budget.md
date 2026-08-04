@@ -12,21 +12,35 @@ real CAD mass from `cad/shin.py`.
 
 | Item | Count | Each | Total |
 |---|---|---|---|
-| Leg servos, STS3215 | 10 | 55 g | 550 g |
-| Printed structure (all seven parts) | | | 341 g |
+| Leg servos, STS3215 | 8 | 55 g | 440 g |
+| Printed structure (chassis, thighs, shins, yokes, brackets) | | | 341 g |
+| The parallelogram, printed | 2 | 35 g | 70 g |
 | Arm/head ballast + IMU (stage 4) | | | 605 g |
 | 3S pack | 1 | 180 g | 180 g |
-| Wheels, printed body + TPU tyre + horn | 2 | 54 g | 108 g |
-| Belt drive: pulleys, belt, shafts | 2 | 34 g | 68 g |
+| Wheels, printed body + TPU tyre + horn | 2 | 55 g | 110 g |
 | Pi 5 | 1 | 45 g | 45 g |
 | Bus adapter | | | 10 g |
-| **Total** | | | **1907 g** |
+| **Total** | | | **1800 g** |
+
+**1907 to 1800 g on 2026-08-03**, and every gram of it is the ankle-pitch
+servos and their belt drive coming out: 2 x 55 g of servo and 2 x 34 g of
+pulleys, belt and shafts, against 2 x 35 g of linkage going in. See
+`docs/deleting-the-ankle-pitch-servo.md`.
+
+That 107 g is not just lighter, it is lighter IN THE RIGHT PLACE. It came off
+the far end of the leg, and foot mode now survives 4 degrees of gear lash where
+the same linkage on the old mass failed at 4 ten times out of ten.
 
 The printed structure came in at **341 g against a 400 g estimate**, which is
 much closer than the 165 g this page claimed until 2026-08-02. That 165 was the
 legs only, quoted as if it were the robot: the chassis alone is 135 g and was
 never in the figure. Estimating structure by eye overshoots, but not by the
 two-to-one this page was advertising.
+
+> **Still quoted at PETG's 1.27 g/cm3, and these parts are ordered in PA6-CF at
+> 1.19.** About 26 g the model carries that the robot will not. Not fixed,
+> because the material is not settled: `road-to-order.md` item 8 put three PA12
+> variants back in play when the roll bracket went from 99% to 55%.
 
 ## How that maps onto the sim model
 
@@ -36,18 +50,28 @@ actually lives on the roll bracket, 110 mm further out.
 
 | Body | Mass | Printed | Carries |
 |---|---|---|---|
-| torso | 1085.1 g | 135.1 g | 2 hip servos, Pi, pack, adapter, IMU, 600 g ballast |
-| thigh x2 | 96.3 g | 41.3 g | knee servo |
-| shin x2 | 128.9 g | 39.9 g | ankle-pitch servo, belt drive |
-| ankle x2 | 69.8 g | 14.8 g | ankle-roll servo |
-| rollbracket x2 | 62.0 g | 7.0 g | wheel servo |
-| wheel x2 | 54.0 g | - | body, tyre and horn |
-| **Total** | **1907.1 g** | **341.1 g** | |
+| torso | 1109.9 g | 135.1 g | 2 hip servos, Pi, pack, adapter, IMU, 600 g ballast, 2 linkage fins |
+| thigh x2 | 102.9 g | 41.1 g | knee servo, linkage rod 1 |
+| shin x2 | 54.1 g | 40.4 g | linkage rod 2, idler and stub. NO SERVO |
+| ankle x2 | 70.8 g | 13.7 g | ankle-roll servo, linkage arm |
+| rollbracket x2 | 62.6 g | 7.6 g | wheel servo |
+| wheel x2 | 54.8 g | - | body, tyre and horn |
+| **Total** | **1800.4 g** | **340.7 g** | |
 
-> **The sim does not agree with this table.** It weighs 1874.8 g, because
-> `SEG_MASS` in `src/rsbot/model.py` is a hand-copied snapshot that nobody
-> re-ran after the servo cradles landed. `cad.twin` fails on it per body. The
-> table above is the CAD's, which is what gets built; the gap is open on
+The shin is the row that moved: **128.9 g to 54.1 g**. It was carrying a 55 g
+servo and 34 g of belt drive out at y = 84.5, and it is now the lightest link
+in the leg. Its centre of mass moved 22.7 mm and most of its inertia went with
+the pulleys.
+
+> **The sim agrees with this table to a tenth of a gram**, per body, checked by
+> `uv run python -m cad.twin`. It has not always: it weighed 1874.8 g for a
+> fortnight against a CAD that said 1907, because `SEG_INERTIA` is pasted from
+> `cad.inertia --emit` and nobody re-ran it. What follows is that history.
+>
+> ~~The sim does not agree with this table.~~ It weighed 1874.8 g, because
+> `SEG_MASS` in `src/rsbot/model.py` was a hand-copied snapshot that nobody
+> re-ran after the servo cradles landed. `cad.twin` failed on it per body. The
+> table above is the CAD's, which is what gets built; the gap was open on
 > purpose because closing it changes what the balancer was tuned against.
 
 ## Torso fore/aft trim

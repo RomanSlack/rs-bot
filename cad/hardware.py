@@ -34,7 +34,6 @@ import build123d as bd
 import numpy as np
 
 import cad.ankle as ankle
-import cad.servo as sv
 import cad.shin as shin
 from cad.servo_dims import SHAFT_R as SPLINE_R
 
@@ -110,11 +109,7 @@ def horns(mode="wheel", targets=None):
     turns. That is the same lesson as the roll shaft in front of the tyre: ask
     the assembly where something belongs, do not infer it from a frame.
     """
-    import mujoco
-
-    from cad.assemble_check import _loc as ac_loc
     from cad.drives import _posed
-    from src.rsbot.model import SERVO_MESH
     import cad.servo as sv
 
     m, d, _ = _posed(mode)
@@ -428,7 +423,6 @@ def local_parts():
     ankle's origin is the axle, the shin's is the knee. That is not a
     coincidence to rely on quietly, so cad.twin's box check is what holds it.
     """
-    from cad.servo_dims import LENGTH as _L
     out = {}
 
     # Ankle frame: origin at the axle, pitch axis along y, roll axis along x.

@@ -13,7 +13,8 @@ dimensions (45.2 x 24.7 x 35.4, really 45.4 x 24.8 x 39.6), the wheel as a
 bought $8 part when it is printed in two pieces, and 400 g of PETG structure
 against a real 165 g of PA6-CF. It had no fasteners, bearings, belt, pulleys or
 cables, which is most of the part count. Total mass 2.05 kg against a real
-1.907.
+1.907 - and 1.800 since the ankle-pitch servos and their belt drive came out on
+2026-08-03.
 
 This file keeps the part of it that was worth keeping: WHY the parts are what
 they are, and what modelling them at full size revealed. The quantities and
@@ -24,14 +25,23 @@ sits at 11.1 V nominal, so expect about **2.7 N.m** rather than 2.9. RMS demand
 is 0.36 N.m so this is comfortable; it only means the peaks clip slightly
 sooner than sim says.
 
-## Five servos per leg, and where they go
+## Four servos per leg, and where they go
 
-hip pitch, knee pitch, ankle pitch, ankle **roll**, wheel drive.
+hip pitch, knee pitch, ankle **roll**, wheel drive.
+
+**It was five.** Ankle pitch had one, driving through a 2:1 belt because the
+wheel already owns the ankle axle, and it is deleted: a passive parallelogram
+holds `hip + knee + ankle = 0` mechanically instead. See
+`docs/deleting-the-ankle-pitch-servo.md` for the argument and `cad/linkage.py`
+for the mechanism. It came out because the belt provably did not fit - its 40T
+pulley sat 2.23 mm below the floor in foot mode - and it stayed out because the
+linkage is better than the servo it replaces, not merely lighter: foot mode
+stands where the servo version fell.
 
 The thigh and shin each carry one servo at their proximal end plus a printed
-bracket. The interesting part is the ankle, which carries **three**: pitch,
-roll, and the wheel drive. That is 165 g and three 45 mm bodies clustered at
-the end of the leg.
+bracket. The interesting part is the ankle, which carries **two**: roll and the
+wheel drive. That is 110 g and two 45 mm bodies clustered at the end of the leg,
+where it used to be 165 g and three.
 
 ## Does it actually fit? `uv run python fitcheck.py`
 
@@ -97,7 +107,7 @@ Overall size, for the record:
 | height on feet | 387 mm / 15.2 in |
 | width | 219 mm / 8.6 in |
 | depth | 131 mm / 5.2 in |
-| mass | 2.05 kg / 4.5 lb |
+| mass | 1.80 kg / 4.0 lb |
 
 ## Is it assembled, or just non-overlapping?
 

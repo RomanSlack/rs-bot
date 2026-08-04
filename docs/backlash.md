@@ -85,7 +85,19 @@ So the headline claim from stage 0b - "stands with the controller completely
 off" - is a rigid-model result. On real servos it needs a controller, just a
 weak one.
 
-## The fix: a low-gain ankle loop in foot mode. Built, and it works.
+## The fix that was: a low-gain ankle loop in foot mode
+
+> **DELETED 2026-08-03, and the whole section is kept for the argument rather
+> than the code.** There is no ankle servo any more, so there is nothing for a
+> loop to drive: a passive parallelogram takes up the lash mechanically and
+> does the job the loop could not. Foot mode stands **10/10 at 4 degrees**
+> where this loop managed 2/10 at 2. See
+> `docs/deleting-the-ankle-pitch-servo.md` and `cad/linkage.py`.
+>
+> What is worth keeping is the reasoning below, because it is what identified
+> the problem correctly - something has to take up the lash before the body can
+> rotate through it - and only got the solution wrong. A linkage cannot help
+> doing that, instantly, with no gain to tune.
 
 Foot mode no longer switches the controller fully off. It runs a weak
 PID on ankle pitch against IMU pitch - the support polygon still does the
@@ -108,6 +120,11 @@ the P term free to fight disturbances.
 > Correcting the mass distribution broke foot mode at the lash the servos
 > actually have. See `docs/deleting-the-ankle-pitch-servo.md`, which measures a
 > passive parallelogram standing 10/10 at both.
+>
+> **And then the mass moved again, favourably.** Deleting the ankle servo and
+> its belt drive took 89 g off the end of each leg (1907 g to 1800), and the
+> linkage now stands 10/10 at FOUR degrees, where the same linkage on the
+> heavier robot failed four ten times out of ten. The cliff is between 4 and 5.
 
 **Standing, 15 s:**
 

@@ -277,7 +277,7 @@ def test_every_servo_seats_flat_on_what_it_bolts_to():
     import cad.assemble_check as ac
 
     pairs = [("rollbracket_l", "vwhlsv_l"), ("ankle_l", "vrollsv_l"),
-             ("shin_l", "vanksv_l"), ("thigh_l", "vkneesv_l")]
+             ("thigh_l", "vkneesv_l")]
     items = dict(ac.parts("wheel"))
     for bracket, servo in pairs:
         assert ac.gap(items[bracket], items[servo]) < 1e-6, (
@@ -314,7 +314,7 @@ def test_servo_shaft_axis_matches_the_joint_it_drives():
     pose(m, d, "wheel")
     frames = F._servo_frames("wheel")
     pairs = [("vhipsv1", "hip_l"), ("vkneesv_l", "knee_l"),
-             ("vanksv_l", "ankle_pitch_l"), ("vrollsv_l", "ankle_roll_l"),
+             ("vrollsv_l", "ankle_roll_l"),
              ("vwhlsv_l", "wheel_l")]
     for sname, jname in pairs:
         _, _, shaft = frames[sname]
@@ -527,7 +527,11 @@ def test_the_cable_channels_are_cut_and_the_cables_fit():
 
     for mode in ("wheel", "foot"):
         rows = W.check(mode, verbose=False)
-        assert len(rows) == 8, f"{mode}: expected 8 runs, got {len(rows)}"
+        # SIX, not eight. The ankle-pitch servo is deleted, so the bus chain
+        # lost a node per leg: knee -> roll is now one hop over a joint that
+        # moves instead of two, and cad.wiring wants a 9.4 mm service loop
+        # where it wanted 6.4.
+        assert len(rows) == 6, f"{mode}: expected 6 runs, got {len(rows)}"
         blocked = {r["label"]: r for r in rows if r["blocked"] > W.TOUCH}
         # Symmetry: whatever is true of one side must be true of the other.
         left = {k for k in blocked if k.endswith("_l")}

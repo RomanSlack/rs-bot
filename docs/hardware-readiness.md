@@ -11,7 +11,7 @@ not peak, because peaks are what stall torque exists for.
 |---|---|---|---|
 | hip | 0.08 | 1.68 | 0.0% |
 | knee | **0.36** | 2.90 | 0.4% |
-| ankle pitch | 0.07 | 1.63 | 0.1% |
+| ankle pitch | 0.07 | 1.63 | 0.1% | (no servo: a linkage holds it) |
 | ankle roll | 0.18 | 0.92 | 0.0% |
 | wheel | 0.38 | 2.90 | 2.6% |
 
@@ -23,9 +23,12 @@ the 2.9 N.m clamp, but for 0.1-1.8% of the time - transient, which is fine.
 
 ## 2. How fast does the control loop need to run? At least 50 Hz.
 
-This one shapes the electronics, because 10 servos on one TTL bus will not give
-you 200 Hz if you read every joint back: a sync-write of 10 positions is quick,
-but 10 individual position reads are 10 round trips.
+This one shapes the electronics, because 8 servos on one TTL bus will not give
+you 200 Hz if you read every joint back: a sync-write of 8 positions is quick,
+but 8 individual position reads are 8 round trips. It was 10 until the
+ankle-pitch servos were deleted (`docs/deleting-the-ankle-pitch-servo.md`),
+which takes two round trips off the worst case and does not change the
+conclusion below.
 
 | control rate | balancing | flip round trip |
 |---|---|---|
@@ -40,9 +43,9 @@ but 10 individual position reads are 10 round trips.
 
 **The architecture that follows:** the balancer only needs the IMU (local,
 fast, I2C/SPI) and the two wheel velocities. It does not need to read the leg
-joints back at loop rate. So sync-write all 10 commands, read only the 2 wheel
-servos, and run at 100 Hz. Reading all ten every cycle is what would drop you
-into the 33 Hz danger zone.
+joints back at loop rate. So sync-write all 8 commands, read only the 2 wheel
+servos, and run at 100 Hz. Reading every joint every cycle is what would drop
+you into the 33 Hz danger zone.
 
 ## What sim still cannot tell you
 

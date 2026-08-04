@@ -1,7 +1,7 @@
 # rs-bot
 
 A desk-scale wheeled biped whose wheels rotate flat to become its feet.
-~43 cm tall, ~2.05 kg.
+~43 cm tall, ~1.80 kg.
 
 It balances on two wheels like a tiny Handle, and when it needs to hold still
 or manipulate something, each ankle rolls 90 degrees: the wheels lie down and
@@ -50,10 +50,13 @@ calipers on the real servo.
 its wheels flat to stand for 87 s with the controller off.
 
 Gear backlash is modelled, and it is the finding that most changed the plan.
-The passive foot stance needs a low-gain ankle loop to survive it, and the
-balancer needed much lower gain plus a low-pass on the wheel command, without
-which it limit-cycles through the deadzone. Both are built, and the full round
-trip now works with 2-3 deg of lash. See [docs/backlash.md](docs/backlash.md).
+The balancer needed much lower gain plus a low-pass on the wheel command,
+without which it limit-cycles through the deadzone. The passive foot stance
+needed a low-gain ankle loop too, until the ankle servo was deleted: a passive
+parallelogram holds the foot level mechanically and does it better than the
+loop did, standing 10/10 at 4 deg of lash where the servo managed 2/10 at 2.
+See [docs/backlash.md](docs/backlash.md) and
+[docs/deleting-the-ankle-pitch-servo.md](docs/deleting-the-ankle-pitch-servo.md).
 
 Stage 1 hardware has not started.
 
@@ -78,13 +81,14 @@ These are fixed up front so stage 4 doesn't invalidate stage 1.
 
 - **The whole skeleton is designed now, built in pieces.** The sim model already
   carries the arms, head and compute as torso ballast, so the legs are tuned
-  against final inertia (2.05 kg) rather than a bare stage-1 mass.
+  against final inertia (1.80 kg) rather than a bare stage-1 mass.
 - **STS3215-class serial bus servos throughout.** 2.9 N.m stall. The leg joints
   run position mode; the wheels run continuous rotation, which means the
   balancer gets a *velocity* command, not a torque. The controller is built
   around that constraint rather than pretending otherwise.
-- **The wheel is the foot.** 5 DOF per leg: hip pitch, knee pitch, ankle pitch,
-  ankle roll, wheel. Nothing deploys, nothing folds out. Two earlier mechanisms
+- **The wheel is the foot.** 5 DOF per leg - hip pitch, knee pitch, ankle
+  pitch, ankle roll, wheel - but only FOUR servos: ankle pitch is driven by a
+  passive parallelogram off the hip and knee, not by a motor. Nothing deploys, nothing folds out. Two earlier mechanisms
   with separate feet both failed for the same reason, recorded in
   docs/stage-0b.md.
 - **No hopping.** Bouncing needs real torque control at ~1 kHz and QDD ankles.
@@ -106,6 +110,7 @@ tune.py                     coordinate-descent gain search
 view.py                     native viewer (needs a working GLX display)
 cad/shin.py                 build123d proof of concept: STEP + MuJoCo mesh
 cad/linkage.py              the passive ankle parallelogram, drawn and swept
+cad/linkage_anim.py         it moving, beside a leg that has none
 cad/fitview.py              the assembled robot in the browser, every gap
                             measured: toggle parts, explode, both poses
 cad/servo_view.py           the servo model against the part on the desk
@@ -147,7 +152,7 @@ way back into the project.
 - [real-parts-in-sim.md](docs/real-parts-in-sim.md) - putting the CAD solids
   back into the physics model
 - [materials.md](docs/materials.md) - what to print in, and why
-- [mass-budget.md](docs/mass-budget.md) - where the 2.05 kg goes
+- [mass-budget.md](docs/mass-budget.md) - where the 1.80 kg goes
 - [stress.md](docs/stress.md) - FEA, per part, in five materials
 - [assembled-strength.md](docs/assembled-strength.md) - the leg solved as one
   solid rather than part by part

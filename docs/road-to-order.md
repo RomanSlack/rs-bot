@@ -1,5 +1,13 @@
 # The road to ordering
 
+> **2026-08-03: the ankle-pitch servos and their belt drive are deleted.** A
+> passive parallelogram replaces them (`cad/linkage.py`,
+> `docs/deleting-the-ankle-pitch-servo.md`). Ten servos to eight, 1907 g to
+> 1800, $78 off the bought-parts line, and one sourcing risk gone with the
+> 15 mm belt. The order sheet is updated and now BLOCKS on a new item: three
+> linkage pieces are drawn as separate parts and belong to the chassis, the
+> shin and the ankle yoke.
+>
 > **NEW, and it outranks everything below: the servo case mounting is not
 > just unverified, it may be the wrong idea.** 40 of this robot's screws go
 > into holes in the servo case. TheRobotStudio's own holder, which is the

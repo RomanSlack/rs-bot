@@ -75,7 +75,7 @@ import build123d as bd
 import mujoco
 import numpy as np
 
-from cad.hardware import BEARING_ID, BEARING_OD, BEARING_W
+from cad.hardware import BEARING_ID, BEARING_OD
 from cad.wheel_dims import HALF_W as WHEEL_HALF_W, R as WHEEL_R
 
 # --- the mechanism -------------------------------------------------------------
@@ -187,19 +187,20 @@ TOL = 0.3
 # of fixed foot tilt, and with no ankle actuator there is nothing left to trim
 # it with afterwards.
 #
-# What decides it is not that 4.21 sounds large, it is where the cliff is.
-# Injecting the offset into the tendon equality and flipping at 3 degrees of
-# gear lash, 8 triggers each:
+# What decides it is not that 4.21 sounds large, it is what happens at 4.21.
+# Injecting the offset into the tendon equality - which is exactly what a
+# mis-built linkage does, still rigid, just holding the wrong number - and
+# flipping at 3 degrees of gear lash, 8 triggers each:
 #
-#     offset      both legs the same way      opposite ways
-#     4.5 deg     8/8                         7/8
-#     5.0 deg     8/8                         4/8
-#     5.5 deg     0/8                         1/8
+#     offset      both legs the same way      opposed
+#     4.21 deg    8/8                         7/8   <- the worst case
+#     5.00 deg    8/8                         4/8
+#     5.50 deg    0/8                         1/8
 #
-# So the worst case lands 0.3 to 0.8 degrees inside a cliff, and BOTH numbers
-# bounding that margin are estimates: the 4.21 is a bound with its own
-# assumptions and the 3 degrees of lash has never been measured on hardware.
-# A margin that thin between two estimates is not a margin.
+# The worst case does not merely sit near the cliff, it is ALREADY OVER stage
+# 2's exit criterion of zero falls, and it is over in the direction two
+# separately printed legs actually go: opposed, not together. There is nothing
+# to argue about.
 #
 # The mechanism is a clamped lap: rod 2 is two printed halves overlapping in a
 # joint that is split along y, so the assembled envelope is unchanged and the
@@ -771,7 +772,6 @@ def placed(m, d, side="l"):
     from cad.assemble_check import _loc
 
     out = []
-    leg_y = None
     for name, stem, sgn, pos, R in placements(m, d, side):
         solid = (torso_boss(_leg_y(m, d, side)) if stem == "lk_fin"
                  else SOLIDS[stem]())

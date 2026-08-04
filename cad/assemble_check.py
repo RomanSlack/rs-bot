@@ -94,7 +94,7 @@ def parts(mode, frac=None, height=None, md=None):
     for i in range(m.ngeom):
         n = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i) or ""
         if m.geom_group[i] != 0 or not n.startswith(
-                ("vhipsv", "vkneesv", "vanksv", "vrollsv", "vwhlsv")):
+                ("vhipsv", "vkneesv", "vrollsv", "vwhlsv")):
             continue
         s = m.geom_size[i] * 2000.0
         box = bd.Box(*s)
@@ -102,7 +102,10 @@ def parts(mode, frac=None, height=None, md=None):
     return out
 
 
-LEG_CHAIN = ["thigh_l", "vkneesv_l", "shin_l", "vanksv_l",
+# The ankle-pitch servo used to sit between the shin and the yoke here. It is
+# deleted (cad/linkage.py), and the shin now reaches the yoke through the
+# ankle-pitch SHAFT rather than through a servo case.
+LEG_CHAIN = ["thigh_l", "vkneesv_l", "shin_l",
              "ankle_l", "vrollsv_l", "rollbracket_l", "vwhlsv_l"]
 
 

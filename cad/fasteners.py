@@ -89,8 +89,15 @@ SCHEDULE = [
     ("ankle yoke -> ankle pitch shaft", "M2.5 x 8", "insert in yoke", 2, ""),
     ("roll bracket -> roll servo horn", "M3 x 8", "the horn, tapped", 4, ""),
     ("wheel body -> wheel servo horn", "M3 x 8", "the horn, tapped", 4, ""),
-    ("horn -> servo shaft", "M3 x 6", "the servo, tapped", 5,
+    # FOUR per side, not five. It was five while there was an ankle-pitch
+    # servo; deleting that servo deletes its horn and its centre screw, and
+    # this literal did not notice. Kept as a literal rather than derived from
+    # the servo list because it is a schedule, and a schedule that computes
+    # itself cannot be read against a pile of parts on a bench.
+    ("horn -> servo shaft", "M3 x 6", "the servo, tapped", 4,
      "the centre screw, from the manufacturer's drawing. Never drawn before."),
+    ("rod 2 clamp -> its own nut", "M3 x 12", "M3 nut, captive", 2,
+     "the length adjuster, cad/linkage.py. Slots, so no thread in plastic."),
     ("chassis side plates -> top", "M2.5 x 10", "insert in chassis", 8, ""),
     ("Pi 5 -> chassis shelf", "M2.5 x 6", "insert in chassis", 4, ""),
 ]

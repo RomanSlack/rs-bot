@@ -373,7 +373,6 @@ def _link_geoms(link, side, sgn, meshes=False):
     col, vis = [_inertial(link, sgn)], []
     y = sgn * SPINE_Y
     off = HL - SHAFT_INSET
-    outb = sgn * (SPINE_Y + SPY + HH)     # servo flush outboard of the spine
 
     if link == "thigh":
         col.append(f'<geom class="leg" name="thigh_{side}" fromto="0 0 0  0 0 -0.110" '

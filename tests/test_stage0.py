@@ -18,18 +18,17 @@ def test_model_mass_matches_budget():
     # Look the torso up by name: the scale-reference human is also a
     # top-level body, so index 1 is not the robot.
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    # 1.907 kg, derived rather than estimated: see cad/masses.py. It has crept
-    # up from 1.756 as the fictions came out - ribs to get the parts under
-    # PETG, an ankle-pitch joint that was never drawn, a belt drive that was
-    # specified but never weighed, and five servo cradles.
+    # DERIVED, not a literal. This used to be `1.895 <= mass <= 1.920`, a
+    # second copy of a number that lives in cad/masses.py, and before that a
+    # range wide enough to absorb a real 32 g divergence for a fortnight.
     #
-    # This bound is a deliberate copy of a number that lives in cad/masses.py,
-    # and its job is to fail when the mass moves without anyone meaning it to.
-    # It held at 1.83..1.90 while the CAD went to 1.907, which is the failure
-    # mode of a range wide enough to be comfortable: it absorbed a real 32 g
-    # divergence for a fortnight. Regenerate with `uv run python -m cad.inertia
-    # --emit` and move this deliberately.
-    assert 1.895 <= m.body_subtreemass[t] <= 1.920
+    # The number is not the point: what has to be true is that the physics
+    # weighs what the CAD builds. So ask the CAD. This fails if SEG_INERTIA is
+    # not regenerated after the geometry moves, which is exactly the mistake it
+    # exists to catch, and it cannot go stale on its own.
+    import cad.masses as masses
+    built = sum(v[3] for v in masses.table().values()) / 1000.0
+    assert m.body_subtreemass[t] == pytest.approx(built, abs=3e-3)
 
 
 def test_stance_geometry():

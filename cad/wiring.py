@@ -49,9 +49,14 @@ MIN_BEND_R = 8.0          # do not kink a 28 AWG silicone bundle tighter
 PORT_LOCAL = [np.array([-0.55, -5.2, servo.Z_MIN]),
               np.array([-0.55, 5.2, servo.Z_MIN])]
 
-# The daisy chain, in order from the bus adapter outward.
-CHAIN_L = ["vhipsv1", "vkneesv_l", "vanksv_l", "vrollsv_l", "vwhlsv_l"]
-CHAIN_R = ["vhipsv-1", "vkneesv_r", "vanksv_r", "vrollsv_r", "vwhlsv_r"]
+# The daisy chain, in order from the bus adapter outward. FOUR servos a leg,
+# not five: the ankle-pitch servo is gone (cad/linkage.py), so the run that used
+# to go knee -> ankle -> roll now goes knee -> roll and crosses the leg in one
+# hop instead of two. That is a longer single run over a joint that moves, not
+# simply one fewer cable, which is why this is a routing question and not
+# bookkeeping.
+CHAIN_L = ["vhipsv1", "vkneesv_l", "vrollsv_l", "vwhlsv_l"]
+CHAIN_R = ["vhipsv-1", "vkneesv_r", "vrollsv_r", "vwhlsv_r"]
 
 TOUCH = 1.0               # mm3
 

@@ -1,4 +1,22 @@
-"""The ankle-pitch belt drive.  uv run python -m cad.belt
+"""The ankle-pitch belt drive.  SUPERSEDED 2026-08-03.
+
+    uv run python -m cad.belt
+
+> **This drive is deleted.** A passive parallelogram replaces the servo it
+> served: see cad/linkage.py and docs/deleting-the-ankle-pitch-servo.md. The
+> pulleys, the belt and their geometry are gone from cad/hardware.py and from
+> the sim; renders/servos-before-after-*.png is what they looked like.
+>
+> The file is kept because the SIZING ARGUMENT below is still the reason the
+> ratio could not be traded, and that argument is what made the drive
+> undeletable-in-place and therefore worth replacing wholesale: below 2:1 the
+> belt is overloaded, above it the servo runs out of travel, and at 2:1 the
+> driven pulley is 2.23 mm through the floor in foot mode. Nothing about the
+> ankle joint changed to fix that, so anyone who proposes putting a belt back
+> has to start from here.
+>
+> BELT_Y0, BELT_W and C are still read by nothing. Do not add a reader without
+> reading the line above.
 
 The pitch servo cannot sit on its own joint, because the wheel already owns
 that axle, so it drives down through a belt. That belt has been "specified but

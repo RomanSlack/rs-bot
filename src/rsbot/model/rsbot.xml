@@ -110,16 +110,22 @@
 
   <!--EXCLUDES-->
 
+  <!-- EIGHT actuators, not ten. Ankle pitch has no servo: a passive
+       parallelogram holds hip + knee + ankle = 0 mechanically, and the joint
+       is still a joint, it is just not driven. See cad/linkage.py and
+       docs/deleting-the-ankle-pitch-servo.md.
+
+       The ankle-pitch JOINTPOS SENSORS went with them. Nothing read them, and
+       on the real robot there is no encoder there any more, so obs() was
+       handing the controller a reading that will not exist. -->
   <actuator>
     <position class="servo_pos" name="hip_l"   joint="hip_l"   ctrlrange="-0.60 1.40"/>
     <position class="servo_pos" name="knee_l"  joint="knee_l"  ctrlrange="-2.00 0.05"/>
-    <position class="servo_pos" name="apit_l"  joint="ankle_pitch_l" ctrlrange="-1.60 1.60"/>
     <position class="servo_pos" name="aroll_l" joint="ankle_roll_l"  ctrlrange="-0.10 1.75"/>
     <velocity class="servo_vel" name="wheel_l" joint="wheel_l" ctrlrange="-40 40"/>
 
     <position class="servo_pos" name="hip_r"   joint="hip_r"   ctrlrange="-0.60 1.40"/>
     <position class="servo_pos" name="knee_r"  joint="knee_r"  ctrlrange="-2.00 0.05"/>
-    <position class="servo_pos" name="apit_r"  joint="ankle_pitch_r" ctrlrange="-1.60 1.60"/>
     <position class="servo_pos" name="aroll_r" joint="ankle_roll_r"  ctrlrange="-0.10 1.75"/>
     <velocity class="servo_vel" name="wheel_r" joint="wheel_r" ctrlrange="-40 40"/>
   </actuator>
@@ -128,18 +134,18 @@
     <framequat     name="imu_quat"  objtype="site" objname="imu"/>
     <gyro          name="imu_gyro"  site="imu"/>
     <accelerometer name="imu_acc"   site="imu"/>
-    <jointpos name="apit_l_pos"  joint="ankle_pitch_l"/>
     <jointpos name="aroll_l_pos" joint="ankle_roll_l"/>
     <jointvel name="wheel_l_vel" joint="wheel_l"/>
-    <jointpos name="apit_r_pos"  joint="ankle_pitch_r"/>
     <jointpos name="aroll_r_pos" joint="ankle_roll_r"/>
     <jointvel name="wheel_r_vel" joint="wheel_r"/>
   </sensor>
 
   <keyframe>
-    <!-- qpos: root(7) + [hip knee ankle_pitch ankle_roll wheel] x2 -->
+    <!-- qpos: root(7) + [hip knee ankle_pitch ankle_roll wheel] x2. The ankle
+         pitch is still in qpos, because the joint still exists; it is only the
+         ACTUATOR that has gone, so ctrl is [hip knee ankle_roll wheel] x2. -->
     <key name="stance"
          qpos="0 0 0.247 1 0 0 0   0.35 -0.70 0.35 0 0   0.35 -0.70 0.35 0 0"
-         ctrl="0.35 -0.70 0.35 0 0   0.35 -0.70 0.35 0 0"/>
+         ctrl="0.35 -0.70 0 0   0.35 -0.70 0 0"/>
   </keyframe>
 </mujoco>

@@ -133,7 +133,7 @@ def holes(mode="wheel"):
 # serviced". Both are worth knowing and they give very different answers: the
 # thigh's knee-servo bolts are buried by the shin and the ankle servo on the
 # finished robot, and completely open at the moment you actually fit them.
-BUILD_ORDER = ["torso", "vhipsv", "thigh", "vkneesv", "shin", "vanksv",
+BUILD_ORDER = ["torso", "vhipsv", "thigh", "vkneesv", "shin",
                "ankle", "vrollsv", "rollbracket", "vwhlsv", "wheel"]
 
 

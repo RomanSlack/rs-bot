@@ -15,8 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .model import (ROLL_WHEEL, WHEEL_R, ankle_pitch_level, leg_ik,
-                    make_ctrl)
+from .model import ROLL_WHEEL, WHEEL_R, leg_ik, make_ctrl
 
 
 @dataclass
@@ -123,6 +122,6 @@ class Balancer:
         dw = g.kyaw * (yaw_des - obs["gyro"][2]) / WHEEL_R
 
         hip, knee = leg_ik(self.height)
-        # Wheels upright, foot face held level so it is ready to plant.
-        return make_ctrl(hip, knee, ankle_pitch_level(hip, knee),
-                         ROLL_WHEEL, w_cmd - dw, w_cmd + dw)
+        # Wheels upright. The foot face is held level so it is ready to plant,
+        # but nothing here commands that any more: the parallelogram does it.
+        return make_ctrl(hip, knee, ROLL_WHEEL, w_cmd - dw, w_cmd + dw)

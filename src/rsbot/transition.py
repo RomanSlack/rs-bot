@@ -28,8 +28,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .balance import Balancer, Gains, pitch_from_quat
-from .model import (ROLL_FOOT, ROLL_WHEEL, ankle_pitch_level, leg_ik,
-                    make_ctrl)
+from .model import ROLL_FOOT, ROLL_WHEEL, leg_ik, make_ctrl
 
 WHEEL, SETTLE, FLIP, STAND, UNFLIP = range(5)
 NAMES = ["WHEEL", "SETTLE", "FLIP", "STAND", "UNFLIP"]
@@ -39,7 +38,6 @@ NAMES = ["WHEEL", "SETTLE", "FLIP", "STAND", "UNFLIP"]
 class DeployCfg:
     flip_rate: float = 2.0        # rad/s of ankle roll
     stand_height: float = 0.195   # leg length held through the flip
-    ankle_bias: float = 0.0       # deliberate foot tilt in foot mode
     # Tightened when the CAD inertias went in. The robot has to be genuinely
     # still before it commits to the flip, not merely nearly still: with the
     # real mass distribution the leftover motion carries straight through the
@@ -55,12 +53,6 @@ class DeployCfg:
     settle_timeout: float = 4.0
     trim_tau: float = 0.5
     unload_time: float = 0.20     # s to ramp the wheel command out
-    # Foot-mode ankle hold. Deliberately weak: it only has to take up the lash
-    # and damp, not balance an inverted pendulum.
-    stand_kp: float = 1.2
-    stand_kd: float = 0.12
-    stand_ki: float = 0.6
-    stand_i_clamp: float = 0.25   # rad of accumulated ankle offset
     reload_time: float = 0.30     # s to ramp it back in on the way up
 
 
@@ -76,7 +68,6 @@ class DeployMachine:
         self.unload = 1.0
         self.quiet_for = 0.0
         self.trim = 0.0
-        self.stand_i = 0.0
         self.cruise_height = cruise_height
         self.timed_out = False
         self.log = []
@@ -99,7 +90,6 @@ class DeployMachine:
 
     def start_retract(self):
         if self.state == STAND:
-            self.stand_i = 0.0
             # The balancer has been idle and its odometry is stale: x still
             # holds wherever the robot was when it stopped balancing. Clearing
             # it stops the position term yanking the robot back there.
@@ -155,10 +145,6 @@ class DeployMachine:
 
         elif self.state == STAND:
             self.unload = max(0.0, self.unload - dt / c.unload_time)
-            # Integral absorbs the steady offset from the CoM not sitting dead
-            # centre on the foot, so the P term is free to fight disturbances.
-            self.stand_i = float(np.clip(self.stand_i + c.stand_ki * pitch * dt,
-                                         -c.stand_i_clamp, c.stand_i_clamp))
 
         elif self.state == UNFLIP:
             self.roll = self._ramp(self.roll, ROLL_WHEEL, c.flip_rate, dt)
@@ -175,16 +161,24 @@ class DeployMachine:
                                          0.10, dt)
 
         hip, knee = leg_ik(self.bal.height)
-        apitch = ankle_pitch_level(hip, knee, c.ankle_bias)
 
         if self.state == STAND:
-            # Positive ankle pitch tips the toe down, whose reaction rotates
-            # the body back, so a forward lean wants MORE ankle pitch.
-            apitch += c.stand_kp * pitch + c.stand_kd * rate + self.stand_i
-            return make_ctrl(hip, knee, apitch, self.roll, 0.0)
+            # THERE IS NO ANKLE LOOP ANY MORE, and that is the whole point of
+            # the mechanism rather than an omission. This used to be
+            #
+            #     apitch += stand_kp * pitch + stand_kd * rate + stand_i
+            #
+            # a weak PID whose only job was to take up the ankle's gear lash
+            # before the body could rotate through it. It managed 2 of 10
+            # stands at the 2-3 degrees of lash these servos have
+            # (docs/deleting-the-ankle-pitch-servo.md). A linkage cannot help
+            # doing the same job, instantly, and it has no gain to tune.
+            #
+            # So the wheels are simply braked and the support polygon does the
+            # work, which is what STAND was always supposed to be.
+            return make_ctrl(hip, knee, self.roll, 0.0)
 
         ctrl = self.bal(obs, dt, v_des=v_des, yaw_des=yaw_des,
                         pitch_bias=self.trim if not self.bal.outer_enabled else 0.0)
-        ctrl[2] = ctrl[7] = apitch
-        ctrl[3] = ctrl[8] = self.roll
+        ctrl[2] = ctrl[6] = self.roll
         return ctrl

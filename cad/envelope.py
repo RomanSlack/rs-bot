@@ -75,19 +75,17 @@ WHEEL_SERVO = ((-SHAFT_X - HL, -SHAFT_X + HL), (13.5, 13.5 + 2 * HH), (-HW, HW))
 # offset was known, and it put this whole box 3.5 mm high.
 ROLL_SERVO = ((-(58.0 + 2 * HH), -58.0), (-HW, HW),
               (SHAFT_X - HL, SHAFT_X + HL))
-# Ankle-pitch servo: on the SHIN, high and outboard. Given in the shin frame.
+# THE ANKLE-PITCH SERVO IS NOT HERE ANY MORE. `ANKLE_SERVO_SHIN` described a
+# box on the shin, high and outboard, and this file's whole job was solving
+# which bands the ankle-pitch bearing may sit in against it. That servo is
+# deleted (cad/linkage.py), so the constant is deleted rather than left among
+# live ones for the next person to trust: see docs/how-checks-fail.md #6.
 #
-# 6.8 mm out in z until 2026-08-02, which is the largest drift of the four and
-# the last one found. It read (-62.6, -17.4): a 45.2 span, the product-listing
-# length, centred on -40.0 where the sim has it at -33.2. Its x and y were exact
-# to a thousandth, which is what made it worth checking rather than assuming -
-# two axes agreeing that precisely is not a frame mismatch, it is a file that
-# was right once and got edited in one axis.
-#
-# This is the box cad/envelope.py exists to reason with: the header says it is
-# what solved which bands the ankle-pitch bearing may sit in. Those bands were
-# solved against a servo 6.8 mm from where the sim puts it.
-ANKLE_SERVO_SHIN = ((-HW, HW), (34.0, 34.0 + 2 * HH), (-33.2 - HL, -33.2 + HL))
+# THE BANDS ARE THEREFORE WIDER THAN THIS FILE LAST REPORTED. The bearing was
+# pushed out to y = 71 partly by that servo and partly by the belt plane behind
+# it; with both gone the binding constraint is the wheel-drive servo's swept
+# corner at 51.5 mm. Re-run `uv run python -m cad.envelope` before redrawing the
+# shin's carrier: the answer it gave is from a robot that no longer exists.
 
 
 def _box(spec):
@@ -163,7 +161,6 @@ def obstacles(frame="ankle", swept=True, rolls_with_wheel=False):
         # found the shin clipping the wheel servo by 2.4 mm at 64% of the flip
         # - the servo moves in x with PITCH, which rotation about x cannot show.
         out = {k: _swept_pitch(v, z) for k, v in out.items()}
-        out["ankle servo"] = _box(ANKLE_SERVO_SHIN)   # on the shin, fixed
     return out
 
 

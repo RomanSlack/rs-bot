@@ -59,16 +59,20 @@ def leg_ik(height, shift=0.0):
     return psi + phi, -2.0 * phi
 
 
-def make_ctrl(hip, knee, apitch, aroll, wheel, wheel_r=None):
-    """Assemble the 10-actuator command.
+def make_ctrl(hip, knee, aroll, wheel, wheel_r=None):
+    """Assemble the 8-actuator command.
 
     Legs share the joint angles; the wheels can differ, which is how the robot
     steers - there is no steering joint, only a speed difference.
+
+    EIGHT, not ten. There is no ankle-pitch command because there is no ankle
+    pitch servo: the parallelogram holds that angle mechanically. The joint is
+    still in qpos, because the joint still exists.
     """
     if wheel_r is None:
         wheel_r = wheel
-    return np.array([hip, knee, apitch, aroll, wheel,
-                     hip, knee, apitch, aroll, wheel_r])
+    return np.array([hip, knee, aroll, wheel,
+                     hip, knee, aroll, wheel_r])
 
 
 # --- Real part dimensions, metres --------------------------------------------
@@ -187,16 +191,16 @@ SEG_MASS = {"thigh": 0.0894, "shin": 0.0889, "ankle": 0.0693,
 # LEFT side and torso; the right side mirrors in y.
 # Regenerate with: uv run python -m cad.inertia --emit
 SEG_INERTIA = {
-    "thigh": (0.096285, (-0.000001, -0.001149, -0.081951),
-              (1.166366e-04, 9.445128e-05, 3.243692e-05, -9.083951e-10, 1.698262e-09, -2.868406e-05)),
-    "shin": (0.128934, (+0.005559, +0.055544, -0.050691),
-              (1.898835e-04, 1.505453e-04, 9.264018e-05, 8.391850e-06, 1.041695e-05, 5.926789e-05)),
-    "ankle": (0.069774, (-0.068413, +0.007788, +0.010296),
-              (4.102891e-05, 3.816959e-05, 5.671995e-05, -2.071352e-05, 4.959693e-06, 5.617753e-06)),
-    "rollbracket": (0.062009, (-0.014474, +0.029830, +0.001100),
-              (1.255286e-05, 1.715978e-05, 2.131752e-05, -2.345015e-06, 7.335724e-07, 7.915240e-07)),
-    "torso": (1.085122, (+0.007866, +0.000000, +0.083875),
-              (3.944708e-03, 3.734991e-03, 1.363432e-03, -7.115279e-21, -6.830449e-05, 5.976059e-20)),
+    "thigh": (0.102877, (+0.001999, +0.001405, -0.080038),
+              (1.393205e-04, 1.132682e-04, 4.799957e-05, -7.532671e-06, -6.080659e-06, -3.627201e-05)),
+    "shin": (0.054425, (+0.018186, +0.038878, -0.041876),
+              (7.626765e-05, 7.683152e-05, 3.507857e-05, -7.433580e-06, 1.804575e-05, 1.865858e-05)),
+    "ankle": (0.070842, (-0.066127, +0.009153, +0.010247),
+              (4.622563e-05, 5.376683e-05, 7.756610e-05, -3.000482e-05, 5.910038e-06, 6.176137e-06)),
+    "rollbracket": (0.062637, (-0.014798, +0.029617, +0.001139),
+              (1.292240e-05, 1.785285e-05, 2.230819e-05, -2.779284e-06, 8.089292e-07, 8.200901e-07)),
+    "torso": (1.109891, (+0.008360, +0.000000, +0.081869),
+              (4.254341e-03, 3.943869e-03, 1.488176e-03, 1.732533e-23, -2.013142e-05, 5.921539e-20)),
     "wheel": (0.053953, (+0.000000, -0.000851, -0.000000),
               (3.234820e-05, 5.846831e-05, 3.234820e-05, -5.622078e-17, 1.773255e-16, 3.057370e-15)),
 }
@@ -246,7 +250,7 @@ ANK_Y = 0.032        # ankle structure runs outboard of the shin's, so the
 #
 # So it is a pattern now, with the alternatives spelled out rather than left as
 # a loose prefix, because "vroll" and "vank" would otherwise swallow vrollsv and
-# vanksv - the SERVOS, which are bought parts and must stay. _check_no_standins()
+# vrollsv - the SERVOS, which are bought parts and must stay. _check_no_standins()
 # below turns the whole thing into a check that can fail.
 PRINTED_VIS_RE = re.compile(
     r"^v(thigh|shin\w*|ank(ring|tie|stand|post|face)|yoke\w*"
@@ -270,7 +274,7 @@ MESH_STEM = {"thigh": "thigh", "shin": "shin", "ankle": "ankle_yoke",
 # The euler comes from cad/servo.py, which explains at length why there is one
 # mesh and not three: MuJoCo canonicalises mesh vertices onto principal axes, so
 # an orientation baked into the STL does not survive the compiler.
-SERVO_MESH = {"vhipsv": "wsl", "vkneesv": "wsl", "vanksv": "wsl",
+SERVO_MESH = {"vhipsv": "wsl", "vkneesv": "wsl",
               "vrollsv": "swl", "vwhlsv": "lsw"}
 
 MESH_MULTI = {"wheel": [("wheel_body", C_HUB), ("wheel_tyre", C_TIRE)]}
@@ -409,8 +413,11 @@ def _link_geoms(link, side, sgn, meshes=False):
         # but only catches sim-BIGGER-than-CAD; this was the other way.
         vis.append(_v(f"vankstand_{side}", "box", "0.0153 0.0035 0.022",
                       f"0 {sgn*(SPINE_Y+SPY+0.0035):.6f} -0.034", C_PRINT))
-        vis.append(_v(f"vanksv_{side}", "box", f"{HW:.6f} {HH:.6f} {HL:.6f}",
-                      f"0 {outb+sgn*0.007:.6f} {-0.110+0.0768:.6f}", C_SERVO))
+        # NO ANKLE-PITCH SERVO. It is deleted, along with the belt drive it
+        # needed, and a passive parallelogram holds hip + knee + ankle = 0
+        # instead. cad/linkage.py draws the mechanism and checks that it fits;
+        # docs/deleting-the-ankle-pitch-servo.md is why. The joint remains, it
+        # is simply not driven.
         # NO AFT MEMBER. There used to be a "vshinarm" here, stepping aft to
         # reach the ankle bearing, and cad/shin.py ABANDONED that route: "it
         # cannot go AFT either, which is what the first two attempts did. In
@@ -526,8 +533,6 @@ def _link_geoms(link, side, sgn, meshes=False):
     if meshes:
         vis = _servo_meshes(vis)
         vis += _hw_geoms(link, side)
-        if link == "shin":
-            vis.append(_drive_body(side, sgn))
     return col + vis
 
 
@@ -537,7 +542,7 @@ CHAIN = [("hip", "thigh", None), ("knee", "shin", "0 0 -0.110"),
          ("ankle_roll", "rollbracket", "0 0 0"), ("wheel", "wheel", "0 0 0")]
 
 
-def _leg(side, backlash, meshes=False, parallel=False):
+def _leg(side, backlash, meshes=False):
     """One leg: hip pitch, knee pitch, ankle pitch, ankle ROLL, wheel.
 
     The roll bracket is its own body because the wheel-drive servo bolts to it
@@ -564,8 +569,10 @@ def _leg(side, backlash, meshes=False, parallel=False):
         # A PARALLELOGRAM HAS NO GEARBOX AT THE ANKLE, so it gets no lash
         # joint. That is the whole mechanical argument for it: the ankle's free
         # play does not exist to be compensated, because there is no reduction
-        # in that path - only links and pin joints.
-        lashed = backlash > 0 and not (parallel and joint == "ankle_pitch")
+        # in that path - only links and pin joints. What play it does have is
+        # pin clearance, which cad/linkage.py budgets at 0.10 deg on bearings
+        # against the 2-3 deg of gear lash it replaces.
+        lashed = backlash > 0 and joint != "ankle_pitch"
         if lashed:
             opens.append(
                 f'{ind}<body name="{jn}_drv" pos="{pos}">\n{ind}  {joint_xml}\n'
@@ -703,31 +710,20 @@ def _decal_assets():
 # were here the twin showed printed parts floating with nothing between them.
 # A digital twin you cannot see the joints of is not one.
 HW_MESHES = {
+    # The pitch SHAFT and its bearing stay: the joint still exists. The 40T
+    # pulley, the 20T and the belt have gone with the servo that needed them.
     "ankle": [("hw_shaft_roll", C_STEEL), ("hw_bearing_roll", C_STEEL),
-              ("hw_shaft_pitch", C_STEEL), ("hw_bearing_pitch", C_STEEL),
-              ("hw_pulley40", C_ALU)],
-    "shin": [("hw_belt", C_BELT), ("hw_horn_vkneesv", C_STEEL)],
+              ("hw_shaft_pitch", C_STEEL), ("hw_bearing_pitch", C_STEEL)],
+    "shin": [("hw_horn_vkneesv", C_STEEL)],
     "thigh": [("hw_horn_vhipsv", C_STEEL)],
     "rollbracket": [("hw_horn_vrollsv", C_STEEL)],
     "wheel": [("hw_horn_vwhlsv", C_STEEL)],
 }
 
-# The drive pulley is not a geom on the shin, it is its own BODY with a hinge,
-# geared to the ankle-pitch joint by an equality constraint. That is the belt,
-# expressed as physics rather than as a picture: turn the ankle and the pulley
-# turns twice, in the sim, because MuJoCo is enforcing the ratio.
-#
-# Mass is a stub, like the backlash gear bodies above. The pulleys' real 34 g is
-# already carried on the shin as BELT_DRIVE in cad/masses.py, and moving it here
-# would be double-counting - so this body exists to carry a DOF and a mesh, not
-# to be weighed twice.
-PULLEY_MASS = 1e-4
-
-
 def _hw_assets():
     """<mesh> entries for the bought hardware, mirrored for the right side."""
     out = []
-    for stems in list(HW_MESHES.values()) + [[("hw_pulley20", None)]]:
+    for stems in HW_MESHES.values():
         for stem, _ in stems:
             f = CAD_OUT / f"{stem}.stl"
             if not f.exists():
@@ -740,21 +736,11 @@ def _hw_assets():
     return "\n    ".join(out)
 
 
-def _drive_body(side, sgn):
-    """The 20T pulley as a spinning child of the shin."""
-    import cad.hardware as _hw
-
-    x, y, z = _hw.drive_pulley_pos()
-    return (f'<body name="beltdrive_{side}" pos="{x} {sgn * y:.6f} {z:.6f}">'
-            f'<joint name="beltdrive_{side}" type="hinge" axis="0 1 0" '
-            f'limited="false" damping="1e-5"/>'
-            f'<inertial pos="0 0 0" mass="{PULLEY_MASS}" '
-            f'diaginertia="1e-8 1e-8 1e-8"/>'
-            f'<geom name="hw_pulley20_{side}" type="mesh" '
-            f'mesh="hw_pulley20_{side}" rgba="{C_ALU}" contype="0" '
-            f'conaffinity="0" mass="0" group="0"/></body>')
-
-
+# THE MESH BUILD USED TO CARRY 2 MORE DOF THAN THE PLAIN ONE. The belt's 20T
+# pulley was its own hinged body, geared to the ankle by an equality, and it
+# only existed when meshes=True - so the twin's degree-of-freedom count depended
+# on a display flag, which is the kind of split this project keeps getting
+# bitten by. It went with the belt.
 def _parallelogram(side):
     """hip + knee + ankle_pitch = 0, enforced as a constraint.
 
@@ -768,14 +754,6 @@ def _parallelogram(side):
             f'      <joint joint="knee_{side}" coef="1"/>\n'
             f'      <joint joint="ankle_pitch_{side}" coef="1"/>\n'
             f'    </fixed>')
-
-
-def _belt_equality():
-    """joint1 = 2 x joint2. The reduction, as a constraint MuJoCo solves."""
-    from cad.belt import RATIO
-    return ("  <equality>\n" + "\n".join(
-        f'    <joint joint1="beltdrive_{s}" joint2="ankle_pitch_{s}" '
-        f'polycoef="0 {RATIO} 0 0 0"/>' for s in ("l", "r")) + "\n  </equality>")
 
 
 def _hw_geoms(link, side):
@@ -883,35 +861,42 @@ def _write_stance(m):
     m.key_ctrl[0] = ctrl
 
 
-def load(trim=None, backlash=0.0, meshes=False, parallel=False):
+def load(trim=None, backlash=0.0, meshes=False):
     """Return (model, data) reset to the stance keyframe.
 
     `backlash` is total gear lash per joint in radians, split +/- either side.
     Zero builds the rigid model with no extra bodies, so joint indices are
     unchanged. See docs/backlash.md.
 
+    THE PARALLELOGRAM IS NOT OPTIONAL any more and there is no flag for it. It
+    used to be `parallel=True`, a proposal sitting beside the belt-driven servo
+    it was competing with, and keeping both meant keeping two robots: two
+    actuator counts, two ctrl layouts, two mass budgets. The comparison is
+    settled and recorded in docs/deleting-the-ankle-pitch-servo.md, and the
+    before/after picture is built from the CAD by `cad.robot compare`, so
+    nothing needs the old one to still be loadable.
+
     `trim` is the fore/aft offset of the torso mass, solved for rather than
     hardcoded: build once, measure how far the standing CoM sits from the axle,
     shift the torso to null it. Linear, so one pass is exact. Any residual
     offset shows up as a permanent standing lean.
     """
-    def build(x_trim, meshes, parallel=parallel):
+    def build(x_trim, meshes):
         mass, com, I = SEG_INERTIA["torso"]
         ixx, iyy, izz, ixy, ixz, iyz = I
         inertial = (f'<inertial pos="{x_trim:.6f} {com[1]:.6f} {com[2]:.6f}" '
                     f'mass="{mass:.6f}" fullinertia="{ixx:.6e} {iyy:.6e} '
                     f'{izz:.6e} {ixy:.6e} {ixz:.6e} {iyz:.6e}"/>')
         return (XML.read_text()
-                .replace("<!--LEGS-->", _leg("l", backlash, meshes, parallel)
-                         + _leg("r", backlash, meshes, parallel))
+                .replace("<!--LEGS-->", _leg("l", backlash, meshes)
+                         + _leg("r", backlash, meshes))
                 .replace("<!--EXCLUDES-->", _excludes()
-                          + ("\n" + _belt_equality() if meshes else "")
-                          + (("\n  <tendon>\n" + _parallelogram("l") + "\n"
-                              + _parallelogram("r") + "\n  </tendon>\n"
-                              "  <equality>\n"
-                              '    <tendon tendon1="par_l"/>\n'
-                              '    <tendon tendon1="par_r"/>\n'
-                              "  </equality>") if parallel else ""))
+                          + "\n  <tendon>\n" + _parallelogram("l") + "\n"
+                          + _parallelogram("r") + "\n  </tendon>\n"
+                          "  <equality>\n"
+                          '    <tendon tendon1="par_l"/>\n'
+                          '    <tendon tendon1="par_r"/>\n'
+                          "  </equality>")
                 .replace("<!--MESHES-->", _decal_assets() + "\n    "
                           + _mesh_assets(meshes)
                           + ("\n    " + _hw_assets() if meshes else ""))
@@ -932,22 +917,6 @@ def load(trim=None, backlash=0.0, meshes=False, parallel=False):
                                                    / probe.body_mass[t])
 
     m = mujoco.MjModel.from_xml_string(build(trim, meshes))
-    if parallel:
-        # NO ANKLE ACTUATOR. A parallelogram is not a servo with a constraint
-        # bolted on, it is the absence of a servo, and leaving the actuator in
-        # is not conservative - it is worse than either. The tendon holds
-        # hip + knee + ankle = 0 while the STAND loop pushes the ankle to a
-        # different angle, and the two fight: foot mode goes from 10/10 to
-        # 0/10, which is below the servo it was supposed to beat.
-        #
-        # That trap cost an afternoon. `rollout_deploy(parallel=True)` LOOKED
-        # like the way to reproduce docs/deleting-the-ankle-pitch-servo.md and
-        # it reproduced the opposite, because the measurement that produced
-        # that table also turned the ankle loop off and nothing recorded that
-        # it had to. Now the flag means what it says on its own.
-        for name in ("apit_l", "apit_r"):
-            i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
-            m.actuator_gear[i, 0] = 0.0
     _write_stance(m)
     d = mujoco.MjData(m)
     mujoco.mj_resetDataKeyframe(m, d, 0)

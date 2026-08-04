@@ -131,6 +131,62 @@ def _pieces(m, body):
     return out
 
 
+# Which body carries each linkage part's MASS. Three of them are features of a
+# part and are simply that part's: the fin is chassis, the stub is shin, the arm
+# is yoke. The other three are links in their own right and are assigned to the
+# body they shadow, which is an APPROXIMATION and worth naming:
+#
+#   rod 1   stays parallel to the thigh and its centroid is the thigh's
+#           centroid plus a constant offset in the TORSO frame, so it moves
+#           with the thigh in orientation but not exactly in position.
+#   rod 2   the same, against the shin.
+#   idler   rides on the shin's stub at the knee and holds the torso's
+#           attitude, so it rotates relative to the shin as the leg squats.
+#
+# The error is bounded by the part's mass times its offset, and the parts weigh
+# 4 to 7 g each on a 1794 g robot. Modelling them as real bodies would need
+# three extra bodies and two closed-loop constraints per leg to answer a
+# question worth a few gram-millimetres; the KINEMATICS, which is what actually
+# matters, are exact already through the tendon equality.
+LINKAGE_HOST = {"lk_boss": "torso", "lk_stub": "shin", "lk_arm": "ankle",
+                "lk_rod1": "thigh", "lk_rod2": "shin", "lk_idler": "shin"}
+
+
+def _linkage_pieces(m, link):
+    """[(mass_g, com_mm, I)] for the parallelogram parts `link` carries.
+
+    Resolved at the STANCE pose: each part is placed in world by
+    cad.linkage.placed(), then pulled back into its host body's frame. Exact
+    there and approximate elsewhere, for the three that are not rigidly bolted
+    to their host. See LINKAGE_HOST.
+    """
+    import cad.linkage as linkage
+    from fitcheck import pose
+
+    m2, d2 = load()
+    pose(m2, d2, "wheel")
+    bid = mujoco.mj_name2id(m2, mujoco.mjtObj.mjOBJ_BODY,
+                            link if link == "torso" else f"{link}_l")
+    R = np.array(d2.xmat[bid]).reshape(3, 3)
+    origin = np.array(d2.xpos[bid]) * 1000.0
+
+    # BOTH sides for the torso, one for a leg. body_inertials() builds the left
+    # leg and lets the sim mirror it, but the torso is a single body and
+    # carries both legs' worth: it already gets both hip servos from _pieces(),
+    # and it has to get both chassis fins the same way. Counting one is 12 g
+    # missing from the body every clearance and balance number hangs off.
+    sides = ("l", "r") if link == "torso" else ("l",)
+    out = []
+    for name, solid in [q for sd in sides for q in linkage.placed(m2, d2, sd)]:
+        stem = name.rsplit("_", 1)[0]
+        if LINKAGE_HOST[stem] != link:
+            continue
+        g = solid.volume / 1000.0 * masses.PA6CF
+        com_w, I_w = solid_inertia(solid, g)
+        out.append((g, R.T @ (com_w - origin), R.T @ I_w @ R))
+    return out
+
+
 def compose(pieces):
     """Combine (mass, com, I_about_com) into one. Parallel axis on each."""
     M = sum(p[0] for p in pieces)
@@ -156,18 +212,11 @@ def body_inertials():
         vol = part.volume
         printed_g = vol * PETG_G_MM3 * INFILL
         com, I = solid_inertia(part, printed_g)
-        pieces = [(printed_g, com, I)] + _pieces(m, body)
-        if link == "shin":
-            # The ankle-pitch belt drive rides on the shin: a 40T pulley at the
-            # joint, a 20T at the servo shaft, the belt and two shafts. Lumped
-            # at their weighted centroid, out in the belt plane at y = 84.5 -
-            # which is 84 mm off the leg's centreline, so where it sits matters
-            # more than what it weighs.
-            import cad.belt as belt
-            y = (belt.BELT_Y0 + belt.BELT_Y1) / 2
-            for g, z in ((14.0, ANKLE_Z_MM), (7.0, belt.SERVO_SHAFT_Z),
-                         (13.0, (ANKLE_Z_MM + belt.SERVO_SHAFT_Z) / 2)):
-                pieces.append((g, np.array([0.0, y, z]), np.zeros((3, 3))))
+        pieces = ([(printed_g, com, I)] + _pieces(m, body)
+                  + _linkage_pieces(m, link))
+        # THE BELT DRIVE USED TO BE LUMPED HERE, 34 g out at y = 84.5 in the
+        # belt plane, which is 84 mm off the leg's centreline. It has gone with
+        # the ankle servo it drove.
         if link == "torso":
             # The IMU, and 600 g standing in for the arms and head that arrive
             # at stage 4. Kept as the same uniform box, in the same place, that

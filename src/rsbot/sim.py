@@ -28,27 +28,15 @@ def obs(m, d):
     }
 
 
-def _lash_only(m, d):
-    """The control test from docs/deleting-the-ankle-pitch-servo.md: an ankle
-    with no free play and no linkage, so the question "is the win just the lash
-    removal?" can be asked on its own.
-
-    It has to put the ankle ACTUATOR back, because load(parallel=True) takes it
-    out - a parallelogram is the absence of a servo, not a servo plus a
-    constraint. Dropping the equality alone would leave the ankle with neither
-    a linkage nor a motor, which is not the control, it is a broken robot that
-    would fail for a reason that has nothing to do with the question.
-
-    The gear comes off the hip actuator rather than a literal 1.0: every leg
-    servo shares the servo_pos class, so the hip is the same actuator and it is
-    one that nothing here has touched.
-    """
-    m.eq_active0[:] = 0              # keep the rigid ankle, drop the linkage
-    d.eq_active[:] = 0
-    ref = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "hip_l")
-    for name in ("apit_l", "apit_r"):
-        i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
-        m.actuator_gear[i, 0] = m.actuator_gear[ref, 0]
+# THE LASH-ONLY CONTROL IS GONE, and deliberately. It asked whether the
+# linkage's win was really just the missing ankle lash, by dropping the
+# constraint and leaving the servo driving a rigid ankle: 2/5 at 2 degrees and
+# 0/5 at 3, against 5/5 both times with the linkage. That settled the question
+# and it is written down in docs/deleting-the-ankle-pitch-servo.md.
+#
+# It cannot be run any more because there is no ankle servo to put back, and
+# rebuilding one would mean keeping a second robot alive to re-answer a
+# question that is already answered.
 
 
 def _yaw_err(hist):
@@ -152,13 +140,11 @@ def rollout(gains=None, duration=10.0, shove=None, v_des=0.0, viewer=None,
 
 
 def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None,
-                   backlash=0.0, parallel=False):
+                   backlash=0.0):
     """Balance, deploy the feet, then stand there. Returns metrics + state log."""
     from .transition import DeployMachine, STAND, NAMES
 
-    m, d = load(backlash=backlash, parallel=bool(parallel))
-    if parallel == "lash-only":
-        _lash_only(m, d)
+    m, d = load(backlash=backlash)
     mach = DeployMachine(gains, cfg)
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     wheel_l = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "wheel_l")
@@ -212,7 +198,7 @@ def rollout_deploy(cfg=None, gains=None, trigger=2.0, duration=20.0, viewer=None
     }
 
 
-def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0, parallel=False,
+def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0,
                   duration=26.0, v_des=0.35, viewer=None, backlash=0.0):
     """Drive, flip to feet, stand, flip back, drive on. Returns metrics.
 
@@ -221,9 +207,7 @@ def rollout_cycle(cfg=None, gains=None, flip_at=4.0, stand_for=4.0, parallel=Fal
     """
     from .transition import DeployMachine, STAND, WHEEL, NAMES
 
-    m, d = load(backlash=backlash, parallel=bool(parallel))
-    if parallel == "lash-only":
-        _lash_only(m, d)
+    m, d = load(backlash=backlash)
     mach = DeployMachine(gains, cfg)
     torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))

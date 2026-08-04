@@ -113,12 +113,15 @@ BOUGHT = [
     ("envelope.WHEEL_SERVO", "WHEEL_SERVO", "vwhlsv_l", ("joint", "ankle_roll_l")),
     ("envelope.ROLL_SERVO", "ROLL_SERVO", "vrollsv_l", ("joint", "ankle_roll_l")),
     ("ankle.ROLL_SV", "ROLL_SV", "vrollsv_l", ("joint", "ankle_roll_l")),
-    # Left uncovered when this check was written, on the grounds that the shin
-    # frame was not pinned against the sim's shin body. It is: this box's x and
-    # y match to a thousandth of a millimetre, which is the pinning. Only z had
-    # drifted, by 6.8 mm, and the excuse for not looking was hiding it.
-    ("envelope.ANKLE_SERVO_SHIN", "ANKLE_SERVO_SHIN", "vanksv_l",
-     ("body", "shin_l")),
+    # ANKLE_SERVO_SHIN used to be here. It was the entry that proved the value
+    # of not excusing a constant: it had been left uncovered on the grounds
+    # that the shin frame was not pinned against the sim's shin body, and the
+    # first line of the measurement disproved that - x and y matched to a
+    # thousandth of a millimetre, and only z had drifted, by 6.8 mm.
+    #
+    # There is nothing to compare now: that servo is deleted, so there is no
+    # sim box for it. The constant is gone from cad/envelope.py too, rather
+    # than left sitting among live ones with nothing reading it.
 ]
 
 # These are copies of one measurement, so they should agree exactly. 0.01 mm is

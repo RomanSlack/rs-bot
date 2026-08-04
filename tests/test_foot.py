@@ -223,27 +223,53 @@ def _stand_in_foot_mode(backlash, cfg, impulse=0.0, duration=9.0):
     return True
 
 
-def _no_loop(cfg):
-    from dataclasses import replace
-    return replace(cfg, stand_kp=0.0, stand_kd=0.0, stand_ki=0.0)
+# THE ANKLE LOOP IS GONE, and with it the two tests that guarded it. They
+# asserted that a weak PID on the ankle was what made foot mode survive gear
+# lash, and that removing it broke the stance - which was true of a robot that
+# had an ankle servo. It does not, and the loop it tested drove an actuator
+# that is not in the model any more. See docs/deleting-the-ankle-pitch-servo.md
+# and src/rsbot/transition.py's STAND branch.
+#
+# What replaced them is below: the same question asked of the mechanism.
 
 
-@pytest.mark.parametrize("deg", [1.0, 2.0, 3.0])
-def test_ankle_loop_is_what_makes_foot_mode_survive_backlash(deg):
-    """Passive stance depends on rigidity, so lash breaks it. The loop only has
-    to take up the lash, not balance."""
+@pytest.mark.parametrize("deg", [1.0, 2.0, 3.0, 4.0, 6.0])
+def test_standing_in_foot_mode_is_not_what_lash_breaks(deg):
+    """Dropped straight into foot mode, already flat, the robot stands at any
+    lash tried - including 6 degrees, which the FLIP cannot survive.
+
+    That is worth an assertion of its own, because it says where the difficulty
+    actually is. It is not holding the pose, it is arriving in it: the flip
+    carries momentum in, and the deadzone is what lets the body use it.
+
+    It also caught a bad check. The first version of the cliff test below used
+    this harness with ten different durations, which is not ten trials - the
+    initial condition never changes, so it is one trial run ten times, and it
+    came back 10/10 at a lash the robot demonstrably cannot flip at.
+    """
     cfg = DeployCfg(flip_rate=2.0)
-    assert _stand_in_foot_mode(math.radians(deg), cfg), f"loop failed at {deg} deg"
+    assert _stand_in_foot_mode(math.radians(deg), cfg), f"fell at {deg} deg"
 
 
-def test_foot_mode_falls_without_the_loop_once_lash_is_real():
-    """Guards the claim above: the loop is load-bearing, not cosmetic.
+def test_the_flip_still_has_a_cliff_and_it_is_past_the_design_point():
+    """Guards test_linkage.py's 10/10 from becoming a check that cannot fail.
+    If the robot flipped at any lash you cared to name it would be measuring
+    nothing.
 
-    The threshold moved from 2 to 3 deg when the robot got lighter - less
-    momentum builds inside the deadzone - so the loop earns its keep later
-    than it used to, but it still earns it."""
-    cfg = DeployCfg(flip_rate=2.0)
-    assert not _stand_in_foot_mode(math.radians(3.0), _no_loop(cfg))
+    Ten real trials, varying the moment the flip is triggered, which is the
+    thing that changes what the robot carries into the manoeuvre. The bound is
+    HALF, which is a stated position rather than the number that came back
+    (3/10): stage 2's exit criterion is 20 consecutive transitions with zero
+    falls, so anything at a coin flip has missed it by a mile.
+    """
+    from src.rsbot.sim import rollout_deploy
+    stood = 0
+    for i in range(10):
+        t = 2.0 + 0.1 * i
+        r = rollout_deploy(backlash=math.radians(6.0), trigger=t,
+                           duration=t + 15.0)
+        stood += (not r["fell"]) and r["state"] == "STAND"
+    assert stood <= 5, f"6 deg of lash flipped {stood}/10, so where is the cliff?"
 
 
 def test_round_trip_survives_backlash():
@@ -266,17 +292,19 @@ def test_visual_parts_carry_no_mass_or_collision():
                 and not name.startswith("h_"):   # visual build
             assert m.geom_contype[i] == 0 and m.geom_conaffinity[i] == 0, name
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    # 1.907 kg, regenerated rather than trailing the geometry. It has moved
+    # 1.799 kg, regenerated rather than trailing the geometry. It has moved
     # for real reasons every time: tread cut into the wheel, the press fit and
     # retaining bead that stop the tyre spinning on the rim, every horn hole
     # growing 0.7 mm when the pattern turned out to be M3, +17 g of chassis end
     # panels that close an open U-section into a box, and five servo cradles.
+    # Then 1.907 to 1.799, which is the ankle-pitch servos and their belt drive
+    # coming out and the parallelogram going in: see cad/linkage.py.
     #
     # It sat at 1.875 for a fortnight while the CAD said 1.907, because
     # SEG_INERTIA is pasted from `cad.inertia --emit` and nobody re-ran it after
     # the cradles landed. This assertion was RIGHT to be tight - it is the one
     # that would have caught it, if the value had been regenerated alongside.
-    assert m.body_subtreemass[t] == pytest.approx(1.907, abs=3e-3)
+    assert m.body_subtreemass[t] == pytest.approx(1.799, abs=3e-3)
 
 
 def test_no_real_part_hits_the_floor_in_either_mode():

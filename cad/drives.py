@@ -22,12 +22,15 @@ the robot walks perfectly well with its motors floating next to the joints they
 turn. It is only wrong against REALITY, which is the thing this project is
 trying to be right about.
 
-THE ANKLE PITCH IS OFF AXIS ON PURPOSE and that is the interesting case. It is
-belt driven, because the wheel already owns the space its servo would need
-(cad/belt.py), so the correct answer there is not zero - it is the belt's centre
-distance. A check that demanded zero everywhere would have to be switched off
-for that joint, and a check with an exception in it is a check people stop
-believing. So it is asserted against the belt geometry instead.
+THE ANKLE PITCH USED TO BE THE INTERESTING CASE and it is not here any more.
+It was belt driven, because the wheel already owns the space its servo would
+need, so the right answer for that one joint was not zero but the belt's centre
+distance - and this file asserted it against the belt geometry rather than
+switching the check off for that joint, because a check with an exception in it
+is a check people stop believing.
+
+That servo is deleted (cad/linkage.py) and the exception went with it. Every
+drive in this robot is now direct, which is a simpler claim and a stronger one.
 """
 
 import sys
@@ -39,14 +42,14 @@ import cad.servo as servo
 
 # servo geom -> the joint it turns, and how it turns it.
 #   "direct"  the horn bolts to the driven link, so the shaft IS the axis
-#   ("belt", module)  the shaft is offset by that module's centre distance
+#
+# All of them are direct now. The "belt" mode this used to carry, for the
+# ankle-pitch servo's 2:1 drive, went with that servo.
 DRIVES = {
     "vhipsv1": ("hip_l", "direct"),
     "vhipsv-1": ("hip_r", "direct"),
     "vkneesv_l": ("knee_l", "direct"),
     "vkneesv_r": ("knee_r", "direct"),
-    "vanksv_l": ("ankle_pitch_l", "belt"),
-    "vanksv_r": ("ankle_pitch_r", "belt"),
     "vrollsv_l": ("ankle_roll_l", "direct"),
     "vrollsv_r": ("ankle_roll_r", "direct"),
     "vwhlsv_l": ("wheel_l", "direct"),

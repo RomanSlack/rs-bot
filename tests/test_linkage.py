@@ -17,55 +17,64 @@ import cad.linkage as lk
 from src.rsbot.sim import rollout_deploy
 
 
-# --- the flag means what it says ----------------------------------------------
+# --- the servo is really gone --------------------------------------------------
 #
-# This is a regression test for a trap, not for a feature. `parallel=True` used
-# to build the linkage AND leave the ankle actuator in, so the STAND loop fought
-# the constraint and foot mode went to 0/10 - worse than the servo it replaces.
-# Reproducing the published 10/10 needed the caller to know to switch the ankle
-# loop off, and nothing anywhere said so.
+# There is no `parallel` flag any more. It was a proposal sitting beside the
+# design it was competing with, and keeping both meant keeping two robots: two
+# actuator counts, two ctrl layouts, two mass budgets. These assert that the one
+# that is left is the one that was chosen.
 
 @pytest.mark.parametrize("deg", [2.0, 3.0])
-def test_the_linkage_stands_where_the_servo_does_not(deg):
-    """10 flips at 2 and 3 degrees of lash, with the DEFAULT config."""
+def test_the_linkage_stands_where_the_servo_did_not(deg):
+    """10 flips at the lash these servos actually have. The belt-driven servo
+    and its ankle loop managed 2 and 3 out of 10 at these numbers."""
     stood = 0
     for i in range(10):
         trigger = 2.0 + 0.1 * i
-        r = rollout_deploy(backlash=np.deg2rad(deg), parallel=True,
+        r = rollout_deploy(backlash=np.deg2rad(deg),
                            trigger=trigger, duration=trigger + 15.0)
         stood += (not r["fell"]) and r["state"] == "STAND"
     assert stood == 10
 
 
-def test_a_parallel_model_has_no_ankle_actuator():
-    """The mechanical claim, in the model: there is no ankle servo left."""
-    from src.rsbot.model import load
+def test_there_are_eight_actuators_and_no_ankle_pitch():
+    """The mechanical claim, in the model: four servos a leg, not five. Checked
+    by NAME rather than by counting, because a count of 8 would also be
+    satisfied by losing the wrong two."""
     import mujoco
-    m, _ = load(parallel=True)
-    for name in ("apit_l", "apit_r"):
-        i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
-        assert m.actuator_gear[i, 0] == 0.0
+    from src.rsbot.model import load
     m, _ = load()
-    for name in ("apit_l", "apit_r"):
-        i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
-        assert m.actuator_gear[i, 0] != 0.0
+    names = {mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, i)
+             for i in range(m.nu)}
+    assert names == {"hip_l", "knee_l", "aroll_l", "wheel_l",
+                     "hip_r", "knee_r", "aroll_r", "wheel_r"}
 
 
-def test_the_lash_only_control_still_has_its_servo():
-    """The control test asks whether the win is just the missing lash. It only
-    means anything if the ankle can still be driven; without this the control
-    is a robot with no ankle actuator and no linkage, which falls for a reason
-    that has nothing to do with the question."""
+def test_the_ankle_joint_still_exists_and_is_held_by_the_tendon():
+    """Deleting the SERVO is not deleting the JOINT. The ankle still moves; it
+    is the parallelogram, modelled as a tendon equality, that decides where."""
     import mujoco
     from src.rsbot.model import load
-    from src.rsbot.sim import _lash_only
-    m, d = load(parallel=True)
-    _lash_only(m, d)
-    ref = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "hip_l")
-    for name in ("apit_l", "apit_r"):
-        i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
-        assert m.actuator_gear[i, 0] == m.actuator_gear[ref, 0]
-    assert not m.eq_active0.any()
+    m, d = load()
+    j = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "ankle_pitch_l")
+    assert j >= 0
+    assert m.ntendon == 2 and m.neq == 2
+    hip = d.qpos[m.jnt_qposadr[mujoco.mj_name2id(
+        m, mujoco.mjtObj.mjOBJ_JOINT, "hip_l")]]
+    knee = d.qpos[m.jnt_qposadr[mujoco.mj_name2id(
+        m, mujoco.mjtObj.mjOBJ_JOINT, "knee_l")]]
+    assert d.qpos[m.jnt_qposadr[j]] == pytest.approx(-(hip + knee), abs=1e-6)
+
+
+def test_the_belt_drive_is_gone_from_the_sim():
+    """It was a body with its own DOF that existed only when meshes=True, so
+    the twin's degree-of-freedom count depended on a display flag."""
+    import mujoco
+    from src.rsbot.model import load
+    plain, _ = load()
+    mesh, _ = load(meshes=True)
+    assert plain.nv == mesh.nv
+    assert mujoco.mj_name2id(mesh, mujoco.mjtObj.mjOBJ_BODY, "beltdrive_l") < 0
 
 
 # --- the mechanism closes ------------------------------------------------------

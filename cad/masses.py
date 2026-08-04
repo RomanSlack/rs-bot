@@ -36,17 +36,38 @@ SERVO = 55.0          # STS3215
 # current figure and this has to be moved to match it by hand; cad/inertia.py's
 # check_masses is what catches it if you forget.
 WHEEL = 54.01
-# GT2 20T and 40T aluminium pulleys, a 188 mm x 15 mm belt, and the 3 mm shafts.
-BELT_DRIVE = 34.0
+# PA6-CF, for the parallelogram's links. The printed structure is quoted at
+# PETG x infill above because that is what those parts were costed in; the
+# linkage is small, solid and highly loaded per gram, so it is quoted at the
+# material cad/stress.py actually solves it in.
+PA6CF = 1.19          # g/cm3, solid
 PI5, BATT, DRIVER, IMU = 45.0, 180.0, 10.0, 5.0
 BALLAST = 600.0       # arms (480) + head (120), stage 4
 
 PRINTED = ("vthigh", "vshin", "vankstand", "vankpost", "vankface",
            "vrollarm", "vrolltie", "vside", "vtop", "vshelf", "vpistand")
-SERVOS = ("vhipsv", "vkneesv", "vanksv", "vrollsv", "vwhlsv")
+# Four per leg, not five. "vanksv" is gone: see cad/linkage.py.
+SERVOS = ("vhipsv", "vkneesv", "vrollsv", "vwhlsv")
+
+
+# The parallelogram, per leg, from cad/linkage.py's own solids at PA6CF. Keyed
+# by the body that carries each part's mass, the same split cad/inertia.py
+# uses, because two tables of "which body owns which link" would drift.
+def _linkage_g():
+    import cad.inertia as inertia
+    import cad.linkage as linkage
+    out = {}
+    for stem, host in inertia.LINKAGE_HOST.items():
+        g = linkage.SOLIDS[stem.replace("lk_boss", "lk_fin")]().volume
+        # The torso is ONE body carrying BOTH legs' fins; a leg body is one
+        # leg's. Same asymmetry cad/inertia.py has to handle.
+        n = 2 if host == "torso" else 1
+        out[host] = out.get(host, 0.0) + n * g / 1000.0 * PA6CF
+    return out
 
 
 def table():
+    LINKAGE_G = _linkage_g()
     m, d = load()
     gname = lambda i: mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i) or ""
     bname = lambda i: mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, i)
@@ -93,8 +114,7 @@ def table():
         total = printed + r["servos"] * SERVO + r["bought"]
         if b == "torso":
             total += IMU + BALLAST
-        if link == "shin":
-            total += BELT_DRIVE      # pulleys, belt and shafts ride on the shin
+        total += LINKAGE_G.get(link, 0.0)
         out[b] = (printed, r["servos"], r["bought"], total)
     return out
 

@@ -66,6 +66,17 @@ def _linkage_g():
     return out
 
 
+# The three linkage parts that are sim BODIES rather than features of one.
+# They have no group-0 geoms in the plain build, so they never appear in the
+# geom sweep below and have to be added by name - which is also the only reason
+# cad/twin.py can weigh them.
+def _linkage_bodies_g():
+    import cad.linkage as linkage
+    import cad.linkage_dims as ld
+    return {name: linkage.SOLIDS[stem]().volume / 1000.0 * PA6CF
+            for name, stem in ld.SIM_MESH.items()}
+
+
 def table():
     LINKAGE_G = _linkage_g()
     m, d = load()
@@ -116,6 +127,9 @@ def table():
             total += IMU + BALLAST
         total += LINKAGE_G.get(link, 0.0)
         out[b] = (printed, r["servos"], r["bought"], total)
+    for name, g in _linkage_bodies_g().items():
+        for side in ("l", "r"):
+            out[f"{name}_{side}"] = (g, 0, 0.0, g)
     return out
 
 

@@ -125,6 +125,16 @@ def solids(mode="wheel"):
             s = bd.mirror(s, bd.Plane.XZ)
         out.append((n, ac._loc(d.geom_xpos[i], d.geom_xmat[i]) * s))
 
+    # The parallelogram. It was missing from this viewer entirely: 41 solids
+    # measured against each other and not one of them the newest mechanism on
+    # the robot, so the tool whose whole job is measuring every gap was
+    # measuring every gap except this one's. Placed by cad/linkage.py off the
+    # same posed model, so it cannot show a linkage in a place the checks did
+    # not test.
+    import cad.linkage as linkage
+    for side in ("l", "r"):
+        out.extend(linkage.placed(m, d, side))
+
     # The bought hardware: shafts, bearings, belts. Without these there is
     # literally nothing between the shin and the ankle yoke on screen, because
     # there was nothing in the model - both existed only as holes. See

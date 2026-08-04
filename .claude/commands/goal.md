@@ -92,7 +92,7 @@ extend them when you find a class of error they missed.
 
 # Before you trust a green result
 
-`docs/how-checks-fail.md` is fifteen ways a check in this repo has lied,
+`docs/how-checks-fail.md` is seventeen ways a check in this repo has lied,
 all of them things that actually happened. The short version:
 
 - a check that cannot fail, and a check nobody runs

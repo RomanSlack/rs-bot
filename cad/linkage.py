@@ -76,7 +76,16 @@ import mujoco
 import numpy as np
 
 from cad.hardware import BEARING_ID, BEARING_OD
+# Every dimension of the mechanism lives in cad/linkage_dims.py, which carries
+# no build123d so the physics can import it too. One copy.
+from cad.linkage_dims import (DZ, R, SIM_BODIES, SIM_MESH,  # noqa: F401
+                              U1, U2, Y_ARM, Y_FIN, Y_IDLER, Y_ROD1, Y_ROD2,
+                              sim_stance)
 from cad.wheel_dims import HALF_W as WHEEL_HALF_W, R as WHEEL_R
+
+# linkage_dims keeps them as plain tuples so it can stay free of numpy as well
+# as of build123d. Everything here does vector arithmetic on them.
+U1, U2 = np.array(U1), np.array(U2)
 
 # --- the mechanism -------------------------------------------------------------
 #
@@ -86,12 +95,6 @@ from cad.wheel_dims import HALF_W as WHEEL_HALF_W, R as WHEEL_R
 THIGH_L = 110.0               # hip to knee
 SHIN_L = 110.0                # knee to ankle
 
-# Crank radius: the offset of every pin from the axis it works about. It sets
-# the rod force (torque / R), the swept width, and how much a given error at a
-# pin is worth at the foot, which goes as 1/R. Clearance chose it and not
-# strength: 34 mm grazes the shin, 26 works, 30 is the middle of the window.
-R = 30.0
-DZ = 6.0                      # the idler's two pins, either side of the offset
 
 # The linkage plane, leg-local y. Positive is OUTBOARD.
 #
@@ -130,21 +133,6 @@ FLAT_WHEEL_R = float(np.hypot(WHEEL_R, WHEEL_HALF_W))
 # The steps are not equal and there is no reason they should be. Each slice is
 # where its own part can be; 6 mm is only the minimum, which is what stops two
 # 6 mm-wide parts sharing a band.
-Y_FIN = 31.0
-Y_ROD1 = 38.0
-Y_IDLER = 48.0
-Y_ROD2 = 54.5
-Y_ARM = 61.0
-
-# Both offsets forward, split in z, for the reasons in the module docstring.
-# Given as (x, z) in the TORSO frame, which is the only frame they are constant
-# in. Stage 1 sits low because the thigh leans back and stage 2 sits high
-# because the shin leans forward, which keeps both transmission angles above
-# 69 degrees rather than one of them at 57. The other way round would do that
-# too and is wrong for two other reasons: it crosses the rods below the knee,
-# and it puts stage 2's pin BELOW an axle that is 12 mm off the floor.
-U1 = np.array([+R, -DZ])
-U2 = np.array([+R, +DZ])
 
 # --- sections ------------------------------------------------------------------
 #
@@ -193,14 +181,13 @@ TOL = 0.3
 # flipping at 3 degrees of gear lash, 8 triggers each:
 #
 #     offset      both legs the same way      opposed
-#     4.21 deg    8/8                         7/8   <- the worst case
-#     5.00 deg    8/8                         4/8
-#     5.50 deg    0/8                         1/8
+#     4.21 deg    8/8                         8/8   <- the worst case
+#     5.50 deg    3/8                         4/8
+#     8.00 deg    0/8                         0/8
 #
-# The worst case does not merely sit near the cliff, it is ALREADY OVER stage
-# 2's exit criterion of zero falls, and it is over in the direction two
-# separately printed legs actually go: opposed, not together. There is nothing
-# to argue about.
+# The worst case clears, by about 1.3 degrees, and that is thinner than it
+# looks: the 4.21 is a bound with its own assumptions, the 3 degrees of gear
+# lash has never been measured on hardware, and the two stack.
 #
 # The mechanism is a clamped lap: rod 2 is two printed halves overlapping in a
 # joint that is split along y, so the assembled envelope is unchanged and the
@@ -844,6 +831,72 @@ def pivots(m, d, side="l"):
     }
 
 
+def sim_matches_cad(verbose=True):
+    """Does the SIM's linkage sit where this file says it does?
+
+    Two routes to the same six poses, and they must agree.
+
+        cad     placements() reads the thigh, shin and ankle out of the sim and
+                hangs each part off them with the offsets at the top of this
+                file, carrying the torso's attitude where a stage's offset is
+                constant.
+        sim     src/rsbot/model.py builds the rods and the idler as real
+                bodies on real hinges, and four tendon equalities a leg pin
+                those hinges to the angles the mechanism puts them at.
+
+    Nothing forces those to agree. The sim's version could have a coupling sign
+    backwards, or an offset in the wrong parent's frame, and the robot would
+    balance perfectly well with its rods hanging off at an angle - which is
+    exactly how the wheel-drive servo came to sit 12.5 mm off the joint it
+    turns for eleven weeks. This is cad/twin.py's question asked of the one
+    mechanism cad/twin.py cannot see.
+
+    It earned itself the first time it ran: 32.8 degrees of divergence at full
+    squat with the POSITIONS exact to the micron, which is what a wrong angle
+    looks like. fitcheck.pose() was not setting the linkage hinges at all, and
+    mj_forward does not solve equality constraints, so every geometric check in
+    the repo had been posing the rods hanging straight down off their pins.
+
+    Control-tested by flipping the idler's coupling sign, which takes it to
+    65.5 degrees.
+    """
+    import mujoco as mj
+
+    from fitcheck import pose as set_pose
+    from src.rsbot.model import load
+
+    m, d = load()
+    rows = []
+    for mode, height in (("wheel", 0.207), ("wheel", 0.185), ("foot", 0.195),
+                         ("foot", 0.215)):
+        set_pose(m, d, mode, None, height)
+        for side in ("l", "r"):
+            want = {n: (p, R) for n, _, _, p, R in placements(m, d, side)}
+            for name, stem in SIM_MESH.items():
+                bid = mj.mj_name2id(m, mj.mjtObj.mjOBJ_BODY, f"{name}_{side}")
+                got_p = np.array(d.xpos[bid]) * 1000.0
+                got_R = np.array(d.xmat[bid]).reshape(3, 3)
+                key = f"lk_{stem.split('_', 1)[1]}_{side}"
+                exp_p, exp_R = want[key]
+                dp = float(np.linalg.norm(got_p - exp_p))
+                dr = float(np.degrees(np.arccos(np.clip(
+                    (np.trace(got_R.T @ exp_R) - 1) / 2, -1, 1))))
+                rows.append((max(dp, dr), name, side, dp, dr,
+                             f"{mode} h={height:.3f}"))
+    rows.sort(reverse=True)
+    if verbose:
+        print("--- does the sim's linkage sit where the CAD says?")
+        seen = set()
+        for _, name, side, dp, dr, where in rows:
+            if name in seen:
+                continue
+            seen.add(name)
+            flag = "ok" if max(dp, dr) < 0.01 else "DIVERGED"
+            print(f"   {name:<9} {dp:7.4f} mm  {dr:7.4f} deg   {flag}   "
+                  f"({where})")
+    return max(r[0] for r in rows)
+
+
 def seats(verbose=True):
     """Do the pivots actually land on each other, over the poses?
 
@@ -1121,6 +1174,8 @@ def main():
           f"leg, {2 * (out - mass_g()):.0f} g on the robot")
     print()
     corridor()
+    print()
+    bad += sim_matches_cad() > 0.01
     print()
     bad += ground() <= 5.0
     print()

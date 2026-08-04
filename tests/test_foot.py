@@ -144,10 +144,15 @@ def test_twenty_consecutive_transitions():
 # --- backlash ---------------------------------------------------------------
 
 def test_backlash_zero_is_the_rigid_model():
-    """backlash=0 must add no bodies, so every index-based test still holds."""
+    """backlash=0 must add no bodies, so every index-based test still holds.
+
+    23, not 17: the parallelogram's rods and idler are real bodies in the sim
+    now (cad/linkage_dims.py's SIM_BODIES), which is 3 hinges a leg. That is
+    six more qpos than this test was written against, and NONE of them are lash
+    joints - which is the thing it is actually guarding."""
     a, _ = load()
     b, _ = load(backlash=0.0)
-    assert a.nq == b.nq == 17 and a.nbody == b.nbody
+    assert a.nq == b.nq == 23 and a.nbody == b.nbody
 
 
 def test_backlash_adds_one_lash_joint_per_actuator():
@@ -257,19 +262,25 @@ def test_the_flip_still_has_a_cliff_and_it_is_past_the_design_point():
     nothing.
 
     Ten real trials, varying the moment the flip is triggered, which is the
-    thing that changes what the robot carries into the manoeuvre. The bound is
-    HALF, which is a stated position rather than the number that came back
-    (3/10): stage 2's exit criterion is 20 consecutive transitions with zero
-    falls, so anything at a coin flip has missed it by a mile.
+    thing that changes what the robot carries into the manoeuvre.
+
+    TEN DEGREES, and it used to be six. Putting the linkage into the sim as
+    real bodies moved the cliff a long way out - 10.6 g came off the shin into
+    bodies of their own, and that is the same mechanism that made deleting the
+    ankle servo worth a degree. But it is not all mass: between about 5 and 8
+    degrees the answer is sensitive to LINKAGE_DAMPING, a modelling constant,
+    so nothing in that band is a measurement. 10 comes back 0 out of 8 at both
+    zero damping and the value the model ships, which makes it the honest place
+    to put a guard.
     """
     from src.rsbot.sim import rollout_deploy
     stood = 0
     for i in range(10):
         t = 2.0 + 0.1 * i
-        r = rollout_deploy(backlash=math.radians(6.0), trigger=t,
+        r = rollout_deploy(backlash=math.radians(10.0), trigger=t,
                            duration=t + 15.0)
         stood += (not r["fell"]) and r["state"] == "STAND"
-    assert stood <= 5, f"6 deg of lash flipped {stood}/10, so where is the cliff?"
+    assert stood == 0, f"10 deg of lash flipped {stood}/10, so where is the cliff?"
 
 
 def test_round_trip_survives_backlash():

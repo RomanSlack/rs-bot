@@ -42,7 +42,7 @@ C_HUB = "0.55 0.56 0.60 1"
 # The parallelogram, in its own colour. It is the newest thing on the robot
 # and the one a picture is most useful for, so it does not get to hide among
 # the orange.
-C_LINK = "0.20 0.55 0.85 1"
+from src.rsbot.model import C_LINK  # noqa: E402  one copy, see there
 
 # The bought hardware, from cad/hardware.py's own frames. It was not in this
 # picture at all, which made the belt drive - the biggest single thing the

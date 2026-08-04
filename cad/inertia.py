@@ -131,25 +131,17 @@ def _pieces(m, body):
     return out
 
 
-# Which body carries each linkage part's MASS. Three of them are features of a
-# part and are simply that part's: the fin is chassis, the stub is shin, the arm
-# is yoke. The other three are links in their own right and are assigned to the
-# body they shadow, which is an APPROXIMATION and worth naming:
+# Which body carries each linkage part's MASS.
+# THREE OF THEM ARE BODIES NOW, so they are not lumped anywhere: the rods and
+# the idler are in the sim in their own right (cad/linkage.py's SIM_BODIES),
+# carrying their own mass in their own frames. The approximation this table
+# used to make for them - "assign each rod to the link it shadows" - is gone,
+# and with it the paragraph excusing it.
 #
-#   rod 1   stays parallel to the thigh and its centroid is the thigh's
-#           centroid plus a constant offset in the TORSO frame, so it moves
-#           with the thigh in orientation but not exactly in position.
-#   rod 2   the same, against the shin.
-#   idler   rides on the shin's stub at the knee and holds the torso's
-#           attitude, so it rotates relative to the shin as the leg squats.
-#
-# The error is bounded by the part's mass times its offset, and the parts weigh
-# 4 to 7 g each on a 1794 g robot. Modelling them as real bodies would need
-# three extra bodies and two closed-loop constraints per leg to answer a
-# question worth a few gram-millimetres; the KINEMATICS, which is what actually
-# matters, are exact already through the tendon equality.
-LINKAGE_HOST = {"lk_boss": "torso", "lk_stub": "shin", "lk_arm": "ankle",
-                "lk_rod1": "thigh", "lk_rod2": "shin", "lk_idler": "shin"}
+# What stays lumped is the three that are FEATURES of a part: the fin is
+# chassis, the stub is shin, the arm is yoke. Those are not approximations, they
+# are the part.
+LINKAGE_HOST = {"lk_boss": "torso", "lk_stub": "shin", "lk_arm": "ankle"}
 
 
 def _linkage_pieces(m, link):
@@ -179,7 +171,10 @@ def _linkage_pieces(m, link):
     out = []
     for name, solid in [q for sd in sides for q in linkage.placed(m2, d2, sd)]:
         stem = name.rsplit("_", 1)[0]
-        if LINKAGE_HOST[stem] != link:
+        # The rods and the idler are BODIES now, not lumps: they are absent
+        # from LINKAGE_HOST on purpose, and skipping them here is what stops
+        # their mass being counted twice.
+        if LINKAGE_HOST.get(stem) != link:
             continue
         g = solid.volume / 1000.0 * masses.PA6CF
         com_w, I_w = solid_inertia(solid, g)
@@ -233,6 +228,26 @@ def body_inertials():
         out[link] = (M / 1000.0, com / 1000.0, I / 1000.0 / 1e6)
 
     out["wheel"] = _wheel_inertia()
+    out.update(_linkage_bodies())
+    return out
+
+
+def _linkage_bodies():
+    """{sim body: (mass_kg, com_m, I)} for the rods and the idler.
+
+    Each one is built in its own body frame already - cad/linkage.py draws a rod
+    with its origin at the pin it hangs from, and the idler with its origin on
+    the knee axis - so there is nothing to transform. That is not luck, it is
+    why placements() and SIM_BODIES agree about where a body's origin is.
+    """
+    import cad.linkage as linkage
+
+    out = {}
+    for name, stem in linkage.SIM_MESH.items():
+        part = linkage.SOLIDS[stem]()
+        g = part.volume / 1000.0 * masses.PA6CF
+        com, I = solid_inertia(part, g)
+        out[name] = (g / 1000.0, com / 1000.0, I / 1000.0 / 1e6)
     return out
 
 

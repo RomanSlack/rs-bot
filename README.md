@@ -110,6 +110,8 @@ tune.py                     coordinate-descent gain search
 view.py                     native viewer (needs a working GLX display)
 cad/shin.py                 build123d proof of concept: STEP + MuJoCo mesh
 cad/linkage.py              the passive ankle parallelogram, drawn and swept
+cad/linkage_dims.py         its geometry, with no build123d, so the sim can
+                            import it too
 cad/linkage_anim.py         it moving, beside a leg that has none
 cad/fitview.py              the assembled robot in the browser, every gap
                             measured: toggle parts, explode, both poses
@@ -170,7 +172,7 @@ way back into the project.
 **How this project goes wrong**
 
 - [how-checks-fail.md](docs/how-checks-fail.md) - **read this before trusting a
-  green result.** Fifteen ways a check here has lied, all of them things that
+  green result.** Seventeen ways a check here has lied, all of them things that
   happened. The parts are in better shape than the things that verify them
 
 **Questions settled, so they stay settled**

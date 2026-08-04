@@ -58,7 +58,9 @@ def test_the_ankle_joint_still_exists_and_is_held_by_the_tendon():
     m, d = load()
     j = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "ankle_pitch_l")
     assert j >= 0
-    assert m.ntendon == 2 and m.neq == 2
+    # EIGHT, not two. One `par` tendon a leg holds the ankle, and three more
+    # pin the linkage's own bodies to the angles the mechanism puts them at.
+    assert m.ntendon == 8 and m.neq == 8
     hip = d.qpos[m.jnt_qposadr[mujoco.mj_name2id(
         m, mujoco.mjtObj.mjOBJ_JOINT, "hip_l")]]
     knee = d.qpos[m.jnt_qposadr[mujoco.mj_name2id(
@@ -151,7 +153,17 @@ def _flip_with_offset(deg, lash=3.0, trials=5, opposite=False):
         trigger = 2.0 + 0.1 * i
         m, d = load(backlash=np.deg2rad(lash))
         r = np.deg2rad(deg)
-        m.eq_data[0, 0], m.eq_data[1, 0] = r, -r if opposite else r
+        # BY NAME. This was `m.eq_data[0]` and `[1]`, which were the two ankle
+        # tendons right up until the linkage's own bodies arrived and added
+        # three equalities a leg. After that, index 1 was a ROD's coupling, and
+        # the test went on reporting 8/8 at offsets that used to floor the
+        # robot - because it was no longer injecting the fault it named.
+        for side, sign in (("l", 1.0), ("r", -1.0 if opposite else 1.0)):
+            t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_TENDON, f"par_{side}")
+            e = next(k for k in range(m.neq)
+                     if m.eq_type[k] == mujoco.mjtEq.mjEQ_TENDON
+                     and m.eq_obj1id[k] == t)
+            m.eq_data[e, 0] = sign * r
         mujoco.mj_resetDataKeyframe(m, d, 0)
         mujoco.mj_forward(m, d)
         mach = DeployMachine(cfg=DeployCfg(flip_rate=2.0))
@@ -188,17 +200,21 @@ def test_there_is_a_cliff_and_the_worst_case_is_inside_it():
     Measured, at 3 degrees of gear lash, 8 triggers each:
 
         offset      same way    opposed
-        4.21 deg    8/8         7/8      <- the worst case, unadjusted
-        5.00 deg    8/8         4/8
-        5.50 deg    0/8         1/8
+        4.21 deg    8/8         8/8      <- the worst case, unadjusted
+        5.50 deg    3/8         4/8
+        8.00 deg    0/8         0/8
 
-    So the unadjusted worst case ALREADY misses stage 2's exit criterion of
-    zero falls, and it misses it in the direction two separately printed legs
-    actually go. The cliff at 5.5 is what this asserts, because it is the
-    unambiguous end; the 7/8 is recorded rather than asserted, since a test
-    that demands a failure breaks when the failure goes away.
+    So the worst case clears, by about 1.3 degrees. That is the whole argument
+    for the adjuster and it is a thinner one than it looks: the 4.21 is a bound
+    with its own assumptions, the 3 degrees of gear lash has never been
+    measured on hardware, and the two stack.
+
+    An earlier run of this put the worst case at 7/8 opposed and concluded it
+    was already over the line. That was the TENDON model, before the linkage
+    had bodies of its own; moving 10.6 g off the shin moved the answer. Both
+    models agree about where the cliff is, which is the part worth trusting.
     """
-    assert _flip_with_offset(5.5, trials=8) == 0
+    assert _flip_with_offset(8.0, trials=8) == 0
 
 
 def test_the_error_budget_is_zero_when_nothing_is_wrong():

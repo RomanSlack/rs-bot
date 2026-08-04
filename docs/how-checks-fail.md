@@ -204,6 +204,40 @@ sign out of the physics** when the CAD already states where something lives.
 
 ---
 
+## 16. An index that quietly changed meaning
+
+A test injected a fault by writing `m.eq_data[0]` and `[1]`, which were the two
+ankle tendons on the day it was written. Then the parallelogram's own bodies
+went into the sim and added three equalities per leg, so index 1 became a
+ROD's coupling. The test went on running, went on passing, and went on
+reporting that the robot survived build offsets that used to floor it - because
+it was no longer injecting the fault it named.
+
+Nothing about the test changed. The world it indexed into did.
+
+**Anything addressed by position is a bet that nothing will ever be inserted
+before it.** `_write_stance` in `src/rsbot/model.py` was written for exactly
+this reason - the lash joints interleave, so a hand-written qpos vector
+scrambles the moment backlash is switched on - and the lesson had not been
+carried across to the equalities. Look up by NAME.
+
+## 17. A constraint that mj_forward does not solve
+
+`fitcheck.pose()` clears qpos, writes the joints it knows by name, and calls
+`mj_forward`. That is the whole posing mechanism behind every geometric check
+in the repo. When the linkage's rods and idler became real bodies held by
+equality constraints, `pose()` did not know their names, so it left them at
+zero - the rods hanging straight down off their pins - and `mj_forward` did not
+correct it, because forward kinematics does not run the constraint solver.
+
+It was caught by a check written the same hour, which reported 32.8 degrees of
+angular divergence with the POSITIONS exact to the micron. That signature is
+worth remembering: right place, wrong attitude, means something set a position
+and not an orientation.
+
+**A constraint is not a fact about the model, it is a thing the solver does.**
+If you did not run the solver, it has not happened.
+
 ## The shape of all of them
 
 Every entry here is the same mistake in different clothes: **something was

@@ -20,6 +20,10 @@ WHEEL_R = _WR / 1000.0
 WHEEL_HALF_W = _WHW / 1000.0
 THIGH_L = 0.110
 SHIN_L = 0.110
+# Half the track: how far each hip axis sits from the centreline. It was the
+# literal 0.060 inside _leg() and nowhere else, until cad/linkage.py needed it
+# too and the choice was between importing it and typing it again.
+LEG_Y = 0.060
 
 # Ankle roll: 0 is wheel mode, pi/2 lays the disc flat so it becomes the foot.
 ROLL_WHEEL = 0.0
@@ -120,6 +124,10 @@ C_PLATE = "0.62 0.64 0.68 0.30"   # translucent, so the internals show
 # steel shafts and races, anodised pulleys, a black rubber belt.
 C_STEEL = "0.84 0.86 0.88 1"
 C_ALU = "0.62 0.65 0.68 1"
+# The parallelogram, in its own colour, because it is the newest thing on the
+# robot and the one a picture is most useful for. cad/robot.py imports this
+# rather than keeping a second copy.
+C_LINK = "0.20 0.55 0.85 1"
 C_BELT = "0.07 0.07 0.09 1"
 
 
@@ -160,6 +168,11 @@ def _v(name, gtype, size, pos, rgba, euler=None):
 # The link bodies keep their canonical names (thigh_l, shin_l, wheel_l, ...)
 # so sensors, contact excludes and lookups work either way.
 
+# A whisker of damping on each linkage hinge. The hinges are pinned by exact
+# tendon equalities so they have nothing to do dynamically, and this is only
+# here to stop the solver ringing on a body with 7 g of inertia.
+LINKAGE_DAMPING = 1e-4
+
 GEAR_MASS = 0.002        # gearbox-side inertia stub, one per lashed joint
 LASH_DAMPING = 0.001
 LASH_ARMATURE = 0.0001
@@ -191,10 +204,10 @@ SEG_MASS = {"thigh": 0.0894, "shin": 0.0889, "ankle": 0.0693,
 # LEFT side and torso; the right side mirrors in y.
 # Regenerate with: uv run python -m cad.inertia --emit
 SEG_INERTIA = {
-    "thigh": (0.102877, (+0.001999, +0.001405, -0.080038),
-              (1.393205e-04, 1.132682e-04, 4.799957e-05, -7.532671e-06, -6.080659e-06, -3.627201e-05)),
-    "shin": (0.054133, (+0.018121, +0.038794, -0.041781),
-              (7.609099e-05, 7.668424e-05, 3.496325e-05, -7.378341e-06, 1.798338e-05, 1.857787e-05)),
+    "thigh": (0.096075, (-0.000001, -0.001186, -0.082131),
+              (1.151560e-04, 9.302291e-05, 3.237157e-05, -9.038478e-10, 1.720578e-09, -2.839567e-05)),
+    "shin": (0.043481, (+0.016436, +0.035565, -0.042533),
+              (5.806681e-05, 5.949586e-05, 3.085102e-05, -5.948093e-06, 1.628903e-05, 1.824890e-05)),
     "ankle": (0.070842, (-0.066127, +0.009153, +0.010247),
               (4.622563e-05, 5.376683e-05, 7.756610e-05, -3.000482e-05, 5.910038e-06, 6.176137e-06)),
     "rollbracket": (0.062637, (-0.014798, +0.029617, +0.001139),
@@ -203,6 +216,12 @@ SEG_INERTIA = {
               (4.254341e-03, 3.943869e-03, 1.488176e-03, 1.732533e-23, -2.013142e-05, 5.921539e-20)),
     "wheel": (0.054782, (+0.000000, -0.000683, -0.000000),
               (3.247476e-05, 5.851804e-05, 3.247476e-05, -5.598628e-17, 1.773249e-16, 3.053642e-15)),
+    "lkrod1": (0.006801, (-0.000000, -0.000000, -0.055000),
+              (8.050659e-06, 8.068349e-06, 5.849861e-08, -2.630324e-22, 7.188831e-23, -2.851857e-22)),
+    "lkidler": (0.004143, (+0.017786, -0.000000, -0.000000),
+              (1.570929e-07, 6.740512e-07, 6.054071e-07, -4.579281e-23, -1.816712e-22, -1.589795e-08)),
+    "lkrod2": (0.006510, (-0.000000, -0.000000, -0.055000),
+              (8.036603e-06, 8.054887e-06, 5.734404e-08, -2.659411e-22, 1.327761e-22, -2.824800e-22)),
 }
 _RANGE = {"hip": "-0.60 1.40", "knee": "-2.00 0.05",
           "ankle_pitch": "-1.60 1.60", "ankle_roll": "-0.10 1.75"}
@@ -541,6 +560,57 @@ CHAIN = [("hip", "thigh", None), ("knee", "shin", "0 0 -0.110"),
          ("ankle_roll", "rollbracket", "0 0 0"), ("wheel", "wheel", "0 0 0")]
 
 
+def _linkage_bodies(side, meshes, parent):
+    """The parallelogram's bodies that hang off `parent`, as MJCF.
+
+    Geometry and couplings come from cad/linkage.py, which owns them. This only
+    turns them into XML: a second copy of where a rod's pin sits is a second
+    place to be wrong about it, and this file has been that second place before.
+    """
+    import cad.linkage_dims as lk
+
+    sgn = 1 if side == "l" else -1
+    out = ""
+    close = ""
+    for name, par, offset, _ in lk.SIM_BODIES:
+        if par != parent:
+            continue
+        x, y, z = [v / 1000.0 for v in offset(LEG_Y * 1000.0, sgn)]
+        mass, com, I = SEG_INERTIA[name]
+        ixx, iyy, izz, ixy, ixz, iyz = I
+        geom = ""
+        if meshes:
+            stem = lk.SIM_MESH[name]
+            geom = (f'<geom name="{stem}_{side}" type="mesh" '
+                    f'mesh="{stem}_{side}" rgba="{C_LINK}" contype="0" '
+                    f'conaffinity="0" mass="0" group="0"/>')
+        out += (f'<body name="{name}_{side}" pos="{x:.6f} {y:.6f} {z:.6f}">'
+                f'<joint name="{name}_{side}" axis="0 1 0" limited="false" '
+                f'damping="{LINKAGE_DAMPING}"/>'
+                f'<inertial pos="{com[0]:.6f} {com[1]:.6f} {com[2]:.6f}" '
+                f'mass="{mass:.6f}" fullinertia="{ixx:.6e} {iyy:.6e} {izz:.6e} '
+                f'{ixy:.6e} {ixz:.6e} {iyz:.6e}"/>{geom}')
+        # anything parented to THIS body nests inside it
+        out += _linkage_bodies(side, meshes, name)
+        close += "</body>"
+    return out + close
+
+
+def _linkage_tendons(side):
+    """One fixed tendon per linkage hinge, each constrained to zero."""
+    import cad.linkage_dims as lk
+
+    out = []
+    for name, _, _, coef in lk.SIM_BODIES:
+        legs = "".join(
+            f'      <joint joint="{j}_{side}" coef="{c:g}"/>\n'
+            for j, c in coef.items())
+        out.append(f'    <fixed name="{name}_{side}">\n'
+                   f'      <joint joint="{name}_{side}" coef="1"/>\n'
+                   f'{legs}    </fixed>')
+    return "\n".join(out)
+
+
 def _leg(side, backlash, meshes=False):
     """One leg: hip pitch, knee pitch, ankle pitch, ankle ROLL, wheel.
 
@@ -548,7 +618,7 @@ def _leg(side, backlash, meshes=False):
     and must NOT spin with the wheel.
     """
     sgn = 1 if side == "l" else -1
-    y = sgn * 0.060
+    y = sgn * LEG_Y
     b = backlash / 2.0
     lash_attrs = (f'damping="{LASH_DAMPING}" armature="{LASH_ARMATURE}" '
                   f'frictionloss="{LASH_FRICTION}"')
@@ -590,8 +660,13 @@ def _leg(side, backlash, meshes=False):
 
         for g in _link_geoms(link, side, sgn, meshes):
             opens[-1] += gind + g + "\n"
+        # The idler rides on the knee, so it is a child of the SHIN, and rod 2
+        # is a child of the idler. They go in here rather than at the torso
+        # level because that is where they physically hang.
+        opens[-1] += _linkage_bodies(side, meshes, link)
 
-    return "".join(opens) + "".join(reversed(closes))
+    return ("".join(opens) + "".join(reversed(closes))
+            + _linkage_bodies(side, meshes, "torso"))
 
 
 def _hip_servos():
@@ -755,6 +830,43 @@ def _parallelogram(side):
             f'    </fixed>')
 
 
+def _constraints():
+    """The tendons that hold the parallelogram, and their equalities.
+
+    FOUR per leg, not one. `par` is the one that matters mechanically - it is
+    the ankle, held at -(hip + knee) - and the other three pin the linkage's own
+    bodies to the angles the mechanism puts them at. Those three change no
+    physics; they are what makes the rods and the idler appear where they
+    really are instead of swinging free on their hinges.
+    """
+    import cad.linkage_dims as lk
+
+    names = ["par"] + [b[0] for b in lk.SIM_BODIES]
+    tendons = "\n".join(_parallelogram(s) + "\n" + _linkage_tendons(s)
+                        for s in ("l", "r"))
+    eqs = "\n".join(f'    <tendon tendon1="{n}_{s}"/>'
+                    for s in ("l", "r") for n in names)
+    return (f"\n  <tendon>\n{tendons}\n  </tendon>\n"
+            f"  <equality>\n{eqs}\n  </equality>")
+
+
+def _linkage_assets():
+    """<mesh> entries for the parallelogram, mirrored for the right side."""
+    import cad.linkage_dims as lk
+
+    out = []
+    for stem in lk.SIM_MESH.values():
+        f = CAD_OUT / f"{stem}.stl"
+        if not f.exists():
+            raise FileNotFoundError(
+                f"{f} is missing - run `uv run python -m cad.linkage` once "
+                f"before loading with meshes=True")
+        for side, sgn in (("l", 1), ("r", -1)):
+            out.append(f'<mesh name="{stem}_{side}" file="{f}" '
+                       f'scale="0.001 {0.001 * sgn} 0.001"/>')
+    return "\n    ".join(out)
+
+
 def _hw_geoms(link, side):
     """The hardware geoms for one link, visual only."""
     return [f'<geom name="{stem}_{side}" type="mesh" mesh="{stem}_{side}" '
@@ -832,6 +944,21 @@ STANCE = {"hip": 0.35, "knee": -0.70, "ankle_pitch": 0.35,
           "ankle_roll": 0.0, "wheel": 0.0}
 
 
+def _stance():
+    """STANCE plus the linkage hinges, which are DERIVED from it.
+
+    A linkage hinge's stance angle is whatever makes its tendon zero, so it is
+    computed from the couplings rather than written down beside them. Written
+    down, the two would eventually disagree and the robot would start the sim
+    with its rods a degree out of assembly.
+    """
+    import cad.linkage_dims as lk
+
+    out = dict(STANCE)
+    out.update(lk.sim_stance(STANCE))
+    return out
+
+
 def _write_stance(m):
     """Rewrite keyframe 0 by joint NAME.
 
@@ -848,7 +975,7 @@ def _write_stance(m):
         if not name or name == "root":
             continue
         key = name.rsplit("_", 1)[0] if name.endswith(("_l", "_r")) else None
-        d.qpos[m.jnt_qposadr[i]] = 0.0 if key is None else STANCE.get(key, 0.0)
+        d.qpos[m.jnt_qposadr[i]] = 0.0 if key is None else _stance().get(key, 0.0)
     m.key_qpos[0] = d.qpos
 
     ctrl = np.zeros(m.nu)
@@ -889,16 +1016,11 @@ def load(trim=None, backlash=0.0, meshes=False):
         return (XML.read_text()
                 .replace("<!--LEGS-->", _leg("l", backlash, meshes)
                          + _leg("r", backlash, meshes))
-                .replace("<!--EXCLUDES-->", _excludes()
-                          + "\n  <tendon>\n" + _parallelogram("l") + "\n"
-                          + _parallelogram("r") + "\n  </tendon>\n"
-                          "  <equality>\n"
-                          '    <tendon tendon1="par_l"/>\n'
-                          '    <tendon tendon1="par_r"/>\n'
-                          "  </equality>")
+                .replace("<!--EXCLUDES-->", _excludes() + _constraints())
                 .replace("<!--MESHES-->", _decal_assets() + "\n    "
                           + _mesh_assets(meshes)
-                          + ("\n    " + _hw_assets() if meshes else ""))
+                          + ("\n    " + _hw_assets()
+                             + "\n    " + _linkage_assets() if meshes else ""))
                 .replace("<!--TORSO_INERTIAL-->", inertial)
                 .replace("<!--TORSO_VIS-->", _torso_visual(meshes)))
 

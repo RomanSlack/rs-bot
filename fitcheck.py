@@ -15,6 +15,7 @@ import math
 import mujoco
 import numpy as np
 
+from cad.linkage_dims import sim_stance
 from src.rsbot.model import (ROLL_FOOT, ROLL_WHEEL, WHEEL_HALF_W, WHEEL_R,
                              ankle_pitch_level, axle_height, leg_ik, load)
 
@@ -84,6 +85,14 @@ def pose(m, d, mode, frac=None, height=None):
     hip, knee = leg_ik(h)
     want = {"hip": hip, "knee": knee,
             "ankle_pitch": ankle_pitch_level(hip, knee), "ankle_roll": roll}
+    # THE LINKAGE HINGES TOO, and this is not optional. mj_forward does not
+    # solve equality constraints, so a pose that sets hip and knee and stops
+    # leaves the rods and the idler wherever they were - at zero, since qpos is
+    # cleared below, which is the rods hanging straight down off their pins.
+    # cad.linkage.sim_matches_cad() caught it: 32.8 degrees of divergence at
+    # full squat, with the positions exact, which is what a wrong ANGLE looks
+    # like. Derived from the couplings so it cannot drift from them.
+    want.update(sim_stance(want))
     d.qpos[:] = 0
     d.qpos[2], d.qpos[3] = z, 1.0
     for j in range(m.njnt):

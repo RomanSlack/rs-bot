@@ -235,3 +235,29 @@ def test_nothing_collides_over_squat_and_flip():
     has decided is worse than no check at all.
     """
     assert lk.clearance(verbose=False) == []
+
+
+# --- what the servo mounts give away ------------------------------------------
+
+def test_no_servo_can_turn_far_in_its_own_mount():
+    """Capture slop is in series with the gearbox, so it adds to that joint's
+    gear lash, and this robot has 1.5 degrees of margin to spend.
+
+    Asserted per servo and tightly. A single "worst is under X" would pass while
+    one mount quietly got worse and another got better.
+    """
+    from cad.fasteners import capture
+    got = {name: free for free, name, _ in capture(verbose=False)}
+    want = {"vhipsv1": 1.30, "vhipsv-1": 1.30, "vrollsv_l": 1.30,
+            "vrollsv_r": 1.30, "vkneesv_l": 0.70, "vkneesv_r": 0.70,
+            "vwhlsv_l": 0.10, "vwhlsv_r": 0.10}
+    assert got == pytest.approx(want, abs=0.05)
+
+
+def test_every_servo_is_stopped_by_something():
+    """The check reports its ceiling when nothing stops a servo, and a ceiling
+    read as a measurement is how a check comes to say a floating part is fine."""
+    from cad.fasteners import CAPTURE_MAX, capture
+    for free, name, by in capture(verbose=False):
+        assert by is not None, f"{name} turns freely"
+        assert free < CAPTURE_MAX

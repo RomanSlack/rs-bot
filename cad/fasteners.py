@@ -252,6 +252,81 @@ def bom():
     return counts, inserts
 
 
+# How finely to look, and how far. 0.1 deg either side of nothing is a servo
+# that is located; 4 deg is far past anything that could be called a fit.
+CAPTURE_STEP, CAPTURE_MAX = 0.1, 4.0
+CAPTURE_TOUCH = 2.0        # mm3, the same threshold assemble_check calls a hit
+
+
+def capture(mode="wheel", verbose=True):
+    """How far can each servo TURN in its mount before something stops it?
+
+    THE QUESTION THIS REPLACES was "does the servo touch the part that holds
+    it", and every servo in the robot answers yes to that - a gap of 0.000 mm
+    to its neighbour, eight for eight. It means nothing. A case can sit against
+    a plate on its end face and still be free to rotate about its own shaft,
+    which is the one direction its reaction torque actually pushes.
+
+    So this rotates the case about its own shaft axis, a tenth of a degree at a
+    time, and reports where it first bears on the printed part that is supposed
+    to hold it. That angle adds to the gear lash at the same joint, because it
+    is in series with the gearbox: the servo can turn that far before the link
+    feels anything.
+
+    The clearance is not a mistake and it cannot simply be closed. It is 0.4 mm
+    per side because the print service quotes +/-0.3, so a tighter cradle risks
+    not assembling at all. The fix is a preload feature - something compliant
+    on one wall that pushes the case onto two hard datum faces - and that is a
+    change to how four parts meet their servos, not a number to edit.
+
+    Control-tested by opening cad/servo_dims.CRADLE_CLEAR from 0.4 to 1.2 mm,
+    which takes the roll servo from 1.30 to 3.50 degrees and the hip from 1.30
+    to 2.90. It measures the thing it says it measures.
+    """
+    from cad.assemble_check import parts
+
+    ps = parts(mode)
+    printed = [(n, sol) for n, sol in ps if not n.startswith("v")]
+    frames = _servo_frames(mode)
+    rows = []
+    for name, sol in sorted(ps):
+        if not name.startswith(("vhipsv", "vkneesv", "vrollsv", "vwhlsv")):
+            continue
+        origin, _, axis = frames[name]
+        ax = bd.Axis(bd.Vector(*origin), bd.Vector(*axis))
+        free, by = CAPTURE_MAX, None
+        for deg in np.arange(CAPTURE_STEP, CAPTURE_MAX + 1e-9, CAPTURE_STEP):
+            # Both ways. A wall on one side only would stop it turning one way
+            # and read as located.
+            for s in (1.0, -1.0):
+                turned = sol.rotate(ax, float(s * deg))
+                for pn, p in printed:
+                    try:
+                        v = (turned & p).volume
+                    except Exception:
+                        v = 0.0
+                    if v > CAPTURE_TOUCH:
+                        free, by = deg, pn
+                        break
+                if by:
+                    break
+            if by:
+                break
+        rows.append((free, name, by))
+
+    if verbose:
+        print("--- how far can each servo turn in its own mount?")
+        for free, name, by in sorted(rows, reverse=True):
+            print(f"   {name:<12}{free:5.2f} deg   "
+                  f"{'stopped by ' + by if by else 'NOTHING STOPS IT'}")
+        worst = max(r[0] for r in rows)
+        print(f"   worst is {worst:.2f} deg, and it adds to that joint's gear "
+              f"lash of 2-3 deg")
+        print(f"   foot mode flips 8/8 at {3.0 + worst:.1f} deg total and dies "
+              f"by 5.5, so this spends the margin rather than breaking it")
+    return rows
+
+
 def main():
     print(__doc__.strip().split("\n\n")[0])
     print()
@@ -268,6 +343,8 @@ def main():
     print(f"   {inserts:>3} x M2.5 heat-set insert (3.5 mm bore, 4.0 deep)")
     print()
     audit()
+    print()
+    capture()
 
 
 if __name__ == "__main__":

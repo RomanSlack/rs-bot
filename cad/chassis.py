@@ -64,7 +64,7 @@ HIP_NOTCH_Z = (HIP_SERVO_Z[0] - 1.0, HIP_SERVO_Z[1] + 1.0)
 # servo's sides - it grips the case over the shelf's 3 mm thickness by accident
 # of being sized to clear it. All this adds is depth: a rim on the inside of the
 # side plate, running the length of the case.
-CRADLE_CLEAR = 0.4            # per side, and it must EXCEED the print tolerance
+from cad.servo_dims import CRADLE_CLEAR  # noqa: E402  one copy, see there
 CRADLE_WALL = 2.5
 CRADLE_DEPTH = 8.0            # inboard from the side plate, along the shaft
 # The SERVO's span, not the NOTCH's. The notch runs -1.0..SERVO_L + 1.0 because

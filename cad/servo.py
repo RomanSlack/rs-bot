@@ -423,7 +423,7 @@ if __name__ == "__main__":
 # --- capturing a servo instead of only bolting to it ---------------------------
 
 CRADLE_WALL = 2.0        # rim thickness; there is 3-4 mm free at every mount
-CRADLE_CLEAR = 0.4       # per side, and it must EXCEED the print tolerance
+from cad.servo_dims import CRADLE_CLEAR  # noqa: E402  one copy, see there
 CRADLE_DEPTH = 6.0       # how far the rim reaches along the shaft
 
 

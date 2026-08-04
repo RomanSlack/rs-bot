@@ -98,7 +98,7 @@ ROLL_SHAFT_X = (-56.5, -41.0)   # between servo (ends -58) and the flat wheel,
                                 # which needs |x| > 40
 
 # Capturing the roll servo instead of bolting into its case. See build().
-CRADLE_CLEAR = 0.4            # per side, and it must EXCEED the print tolerance
+from cad.servo_dims import CRADLE_CLEAR  # noqa: E402  one copy, see there
 CRADLE_WALL = 2.5
 CRADLE_DEPTH = 10.0           # how far the rim reaches along the shaft
 # How far up the walls run. They are carried by the ring, which stops at z = 17,

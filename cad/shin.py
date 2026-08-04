@@ -120,7 +120,7 @@ BACK = ((0, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -102))
 # Both are gone now anyway: the case holes are abandoned robot-wide because
 # nobody knows where they are (cad/servo.py). What replaces them is a rim.
 from cad.servo import WIDTH as SERVO_W  # noqa: E402
-CRADLE_CLEAR = 0.4            # per side, and it must EXCEED the print tolerance
+from cad.servo_dims import CRADLE_CLEAR  # noqa: E402  one copy, see there
 CRADLE_WALL = 2.5
 CRADLE_DEPTH = 10.0           # how far the rim reaches along the shaft
 CRADLE_X = SERVO_W / 2 + CRADLE_CLEAR + CRADLE_WALL      # 15.3

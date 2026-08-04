@@ -29,3 +29,20 @@ SHAFT_R = 2.95           # 25T spline, 5.9 mm across
 IDLER_R = 3.00           # Ø6 rear pivot boss
 
 assert abs(SPLINE_PROUD + BODY + REAR_BOSS_PROUD - HEIGHT) < 1e-9
+
+# --- how a printed part grips this servo ---------------------------------------
+#
+# 0.4 mm per side, and it must EXCEED the print tolerance: the services quote
+# +/-0.3 mm, so a cradle drawn to the case size can come out 0.3 mm small and
+# not go together at all.
+#
+# THIS NUMBER WAS IN FOUR FILES - cad/servo.py, cad/chassis.py, cad/shin.py and
+# cad/ankle.py - which is the repo's own rule broken four ways at once. They all
+# said 0.4, so nothing was wrong yet; that is what a second copy looks like
+# right up until it is not. The WALL and DEPTH stay per-part, because those are
+# real choices about how much room each mount has.
+#
+# It is also not free. cad/fasteners.capture() measures what it costs: 0.4 mm on
+# a 24.73 mm case is up to 1.5 degrees of free rotation about the shaft, which
+# adds to that joint's gear lash.
+CRADLE_CLEAR = 0.4

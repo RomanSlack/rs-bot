@@ -105,56 +105,33 @@ FPOST = ((37, 47), (SPINE_Y - SPY, SPINE_Y + SPY), (-70, -48))
 CROSS = ((37, 47), (SPINE_Y - SPY, PITCH_Y + PITCH_HALF), (-70, -61))
 DROP = ((37, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -61))
 BACK = ((0, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -102))
-# --- the ankle-pitch servo mount ----------------------------------------------
+# --- what used to be the ankle-pitch servo mount -------------------------------
 #
-# > **THIS HOLDS A SERVO THAT NO LONGER EXISTS.** The ankle-pitch servo is
-# > deleted (cad/linkage.py, 2026-08-03) and its mount is still here: STANDOFF
-# > is 9.40 cm3 of the shin's 53.05, about 7 g a leg, plus the two cradle walls
-# > built in build(). It is dead weight on the part with the least mass left to
-# > give.
-# >
-# > It is NOT removed yet, and deliberately. Taking it out is the first half of
-# > redrawing this part for the linkage, and the second half is the forward
-# > carrier below - FARM, FPOST, CROSS, DROP, BACK - which only reaches y = 136
-# > because the deleted BELT forced the ankle bearing out there. Removing one
-# > without the other means re-checking the packaging twice. cad/envelope.py's
-# > bands are already wider than that file last reported.
-# >
-# > What is safe to rely on meanwhile: this material is real in the model, so
-# > every clearance and mass number is conservative, not optimistic.
+# GONE, 2026-08-04. The ankle-pitch servo was deleted on 2026-08-03 when the
+# parallelogram went in (cad/linkage.py) and its mount outlived it by a day:
+# STANDOFF, two cradle side walls, an upper end wall and a clearance pocket, all
+# holding a part that is not on the order sheet. 53.05 cm3 -> 45.11, about 6 g
+# a leg, off the part with the least mass left to give.
+#
+# WHAT IS STILL HERE AND WHY. The forward carrier - FARM, FPOST, CROSS, DROP,
+# BACK - reaches y = 136 because the deleted BELT forced the ankle-pitch bearing
+# out there, and it is still carrying that bearing. Bringing it inboard is not a
+# deletion, it MOVES THE ANKLE PITCH AXIS, which is a kinematics change and a
+# decision rather than a tidy-up. Flagged, not taken.
+#
+# The diagonal relief further down stays too, and it is easy to misread now that
+# its comment mentions the standoff: it clears the WHEEL-DRIVE servo sweeping
+# past during the roll, not the ankle servo. Rebuilt without it the part is
+# 45.64 cm3, so it is still cutting 0.53 cm3 of real material.
 #
 # THE OLD COMMENT HERE WAS WRONG, AND IT MATTERED. It read "runs the length of
 # the ankle servo's case so its mounting bolts can be far apart: 1.63 N.m
 # through bolts 12 mm apart is 136 N each, at 40 mm it is 41." The bolts were at
-# z = -60 and -20. The servo case runs -56.5..-11.1 (its shaft is at -46.32,
-# from cad/belt.py, inset 10.2). So the z = -60 bolt was 3.5 mm off the END of
-# the servo, and it missed the standoff too, which only started at -56.
-#
-# It cut nothing. The shin has had ONE ankle-servo bolt, not two, and the whole
-# 41 N argument above was computed for a pair that does not exist.
-#
-# Both are gone now anyway: the case holes are abandoned robot-wide because
-# nobody knows where they are (cad/servo.py). What replaces them is a rim.
-from cad.servo import WIDTH as SERVO_W  # noqa: E402
-from cad.servo_dims import CRADLE_CLEAR  # noqa: E402  one copy, see there
-CRADLE_WALL = 2.5
-CRADLE_DEPTH = 10.0           # how far the rim reaches along the shaft
-CRADLE_X = SERVO_W / 2 + CRADLE_CLEAR + CRADLE_WALL      # 15.3
-# The ankle servo's case, from the sim's vanksv_l geom: z = -33.2 +/- 22.7.
-SERVO_Z = (-55.9, -10.5)
-
-# SIDE WALLS ONLY, NO LOWER END WALL, and that is forced rather than lazy.
-# The wheel-drive servo sweeps an annulus 14..50.9 mm about the roll axis at
-# z = -110 for |x| < 22.6. The servo's own lower end sits at z = -56.5, which is
-# 53.5 mm from that axis and clear. An end wall 2.9 mm below it would sit at
-# 50.6 mm, INSIDE the swept annulus, and would be clipped during the flip.
-#
-# Two opposed walls still do the job. The servo's reaction is a couple about its
-# own shaft, which lies along y here, so it is reacted by forces in x - which is
-# exactly what a pair of walls 25.6 mm apart provides. The end walls were never
-# the ones carrying it.
-STANDOFF = ((-CRADLE_X, CRADLE_X), (SPINE_Y + SPY, SPINE_Y + SPY + 7),
-            (-56, -12))
+# z = -60 and -20, the servo case ran -56.5..-11.1, so the z = -60 bolt was
+# 3.5 mm off the END of the servo and missed the standoff too. The shin has had
+# ONE ankle-servo bolt, not two, and that 41 N argument was computed for a pair
+# that never existed. Kept because it is the clearest example in this file of a
+# number that reads like engineering and was never checked against the geometry.
 
 # --- fasteners ---------------------------------------------------------------
 HUB_R = 13.0                  # hub outer radius
@@ -211,7 +188,7 @@ def _box(spec):
 
 
 def build():
-    part = (_box(SPINE) + _box(STANDOFF) + _box(FARM) + _box(FPOST)
+    part = (_box(SPINE) + _box(FARM) + _box(FPOST)
             + _box(CROSS) + _box(DROP) + _box(BACK))
     part += _gusset(RIB_SPINE, SPINE_Y - SPY, 2 * SPY)
     part += _gusset_yz(RIB_CROSS, RIB_X[0], RIB_X[1] - RIB_X[0])
@@ -255,20 +232,6 @@ def build():
     # inside the servo, which assemble_check caught as 57.5 mm3. The sim is what
     # the interference checks measure against, so the sim is what the part is
     # built from.
-    sz0, sz1 = SERVO_Z
-    face_y = SPINE_Y + SPY + 7.0
-    xi = SERVO_W / 2 + CRADLE_CLEAR
-    for sgn in (-1, 1):
-        part += _box(((min(sgn * xi, sgn * CRADLE_X),
-                       max(sgn * xi, sgn * CRADLE_X)),
-                      (face_y, face_y + CRADLE_DEPTH),
-                      (sz0 - CRADLE_CLEAR, sz1 + CRADLE_CLEAR + CRADLE_WALL)))
-    # Upper end wall. This end is 98 mm from the roll axis, so unlike the lower
-    # one it is nowhere near the wheel-drive servo's swept annulus.
-    part += _box(((-CRADLE_X, CRADLE_X),
-                  (face_y, face_y + CRADLE_DEPTH),
-                  (sz1 + CRADLE_CLEAR, sz1 + CRADLE_CLEAR + CRADLE_WALL)))
-
     # No lightening pocket. The first attempt cut a 10 mm slot clean through
     # a 20 mm spine, leaving a thin-necked keyhole, and the 0.73 mm stiffness
     # figure in docs/bom.md assumes a SOLID section. It saved about 2 g on a
@@ -313,10 +276,6 @@ def build():
                                  (-1, -58)),
         amount=26.0).moved(bd.Location((0, 10.0, 0)))
 
-    sz0, sz1 = SERVO_Z
-    part -= _box(((-SERVO_W / 2 - CRADLE_CLEAR, SERVO_W / 2 + CRADLE_CLEAR),
-                  (SPINE_Y + SPY + 7.0, SPINE_Y + SPY + 7.0 + 2 * CRADLE_DEPTH),
-                  (sz0 - CRADLE_CLEAR, sz1 + CRADLE_CLEAR)))
     # THE IDLER TURNS ON THIS PART. cad/linkage.py's bar rides on a stub axle
     # coaxial with the knee, and the shin is what is out there: probing the
     # knee axis finds the knee servo to y = 15, this part to y = 32, and air

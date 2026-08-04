@@ -207,8 +207,8 @@ SEG_MASS = {"thigh": 0.0894, "shin": 0.0889, "ankle": 0.0693,
 SEG_INERTIA = {
     "thigh": (0.096075, (-0.000001, -0.001186, -0.082131),
               (1.151560e-04, 9.302291e-05, 3.237157e-05, -9.038478e-10, 1.720578e-09, -2.839567e-05)),
-    "shin": (0.043138, (+0.016566, +0.035383, -0.042868),
-              (5.744608e-05, 5.877426e-05, 3.075540e-05, -6.078254e-06, 1.604900e-05, 1.858545e-05)),
+    "shin": (0.034371, (+0.020614, +0.036036, -0.045906),
+              (5.398202e-05, 5.187562e-05, 2.674926e-05, -5.590930e-06, 1.379589e-05, 1.825922e-05)),
     "ankle": (0.069571, (-0.067645, +0.008224, +0.010396),
               (4.277212e-05, 4.459982e-05, 6.513480e-05, -2.456065e-05, 5.072140e-06, 5.636587e-06)),
     "rollbracket": (0.062637, (-0.014798, +0.029617, +0.001139),
@@ -461,20 +461,10 @@ def _link_geoms(link, side, sgn, meshes=False):
         # for |x| < 23 mm. Clearing the two end poses is not enough.
         vis.append(_v(f"vshin_{side}", "box", f"0.010 {SPY} 0.0245",
                       f"0 {y:.6f} -0.0245", C_PRINT))
-        # Ankle-pitch servo. It cannot be coaxial with its own joint, because
-        # the wheel already owns that axle, so it sits high on the shin and
-        # drives down through a belt that is not drawn.
-        # Stood off 7 mm further outboard than the spine face. At the flush
-        # position its inner corner sits 49 mm from the roll axis, just inside
-        # the wheel-servo sweep, and clips it at mid-flip by 2.4 mm.
-        # SYNCED TO cad/shin.py's STANDOFF, which is x +/-15.3 and z -56..-12.
-        # The sim had it +/-8 and centred 0.8 mm high - narrower than the part
-        # it stands for, which is the dangerous direction: the swept-clearance
-        # check was routing the wheel servo past a member 7 mm thinner than the
-        # one that gets printed. cad/twin.py measures the box against the solid
-        # but only catches sim-BIGGER-than-CAD; this was the other way.
-        vis.append(_v(f"vankstand_{side}", "box", "0.0153 0.0035 0.022",
-                      f"0 {sgn*(SPINE_Y+SPY+0.0035):.6f} -0.034", C_PRINT))
+        # NO ANKLE-PITCH SERVO STANDOFF EITHER. The mount outlived the servo
+        # by a day; cad/shin.py deletes it, and cad.twin caught this box the
+        # moment it did - 0.0% backed, NOT IN THE CAD, and the shin 8.8 g heavy.
+        # That is the check working in the direction it was built for.
         # NO ANKLE-PITCH SERVO. It is deleted, along with the belt drive it
         # needed, and a passive parallelogram holds hip + knee + ankle = 0
         # instead. cad/linkage.py draws the mechanism and checks that it fits;

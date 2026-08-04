@@ -49,6 +49,8 @@ uv run python -m cad.twin            every sim box backed by CAD material, and
 uv run python -m cad.servo           the bench and drawing numbers, and what is open
 uv run python -m cad.fasteners       every screw specified, and pointing at something
 uv run python -m cad.wiring          can the cables physically get there
+uv run python -m cad.floating        what is held by nothing: every rigid body
+                                     one piece, every shaft reaching both ends
 uv run python -m cad.assemble_check  interference, seating, the worst-case
                                      tolerance stack, and the flip swept on
                                      real solids. Four checks, a few minutes
@@ -60,6 +62,11 @@ uv run python serve.py               look at it move: localhost:8781
 uv run python -m cad.fitview         look at how it goes together, with every
                                      gap measured: localhost:8783
 ```
+
+`cad.floating` is the one to run when something LOOKS wrong and everything
+reads green: the connectivity checks answer "is this one object" and stay green
+while a servo hovers off the plate it bolts to. It found four doing exactly
+that, and cad/fitview.py paints whatever it reports red.
 
 `cad.drives` and `cad.twin` are the two that exist specifically to catch
 sim-versus-CAD divergence. They are the newest and the least exercised, so
@@ -92,7 +99,7 @@ extend them when you find a class of error they missed.
 
 # Before you trust a green result
 
-`docs/how-checks-fail.md` is twenty ways a check in this repo has lied,
+`docs/how-checks-fail.md` is twenty-one ways a check in this repo has lied,
 all of them things that actually happened. The short version:
 
 - a check that cannot fail, and a check nobody runs

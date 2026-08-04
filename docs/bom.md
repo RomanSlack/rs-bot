@@ -13,8 +13,8 @@ dimensions (45.2 x 24.7 x 35.4, really 45.4 x 24.8 x 39.6), the wheel as a
 bought $8 part when it is printed in two pieces, and 400 g of PETG structure
 against a real 165 g of PA6-CF. It had no fasteners, bearings, belt, pulleys or
 cables, which is most of the part count. Total mass 2.05 kg against a real
-1.907 - and 1.800 since the ankle-pitch servos and their belt drive came out on
-2026-08-03.
+1.907 - then 1.800 when the ankle-pitch servos and their belt drive came out on
+2026-08-03, and 1.770 when the shin gave up their mount a day later.
 
 This file keeps the part of it that was worth keeping: WHY the parts are what
 they are, and what modelling them at full size revealed. The quantities and

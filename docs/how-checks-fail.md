@@ -324,6 +324,50 @@ because it was a literal. It now derives from `cad.masses.table()`. A number
 that goes stale every time something legitimate happens is not a tight check, it
 is a second copy.
 
+## 21. A global answer to a local question
+
+"Is the robot one connected object?" has been green in three different checks
+for the life of this project. `fitcheck.connectivity()` says one group at 4 mm,
+`cad.assemble_check.connected()` says one group at 0.05 mm on the real solids,
+and `tests/test_foot.py` asserts both.
+
+All three were true while **four of the six servos were held by nothing** - the
+two hip servos 0.400 mm off the chassis and the two roll servos 0.400 mm off the
+ankle yoke, touching no part of the robot anywhere.
+
+They stayed green because union-find over the whole robot at once cannot ask a
+local question. Each floating servo is still joined to the assembly through its
+own output horn, and a horn touching a servo is a real contact, so the graph
+stays connected. What is broken is not the graph. It is that a servo and the
+part it seats against belong to the SAME RIGID BODY, move as one lump, and have
+nothing between them.
+
+`cad/floating.py` asks the two local questions instead:
+
+- **a rigid body has to be one piece.** Union-find WITHIN a body, at a seam
+  rather than a running clearance.
+- **a connector has to reach both ends.** A shaft touching one body drives
+  nothing.
+
+The two have opposite tells, which is why one check could not do both: a
+bracket that touches one body is fine, a shaft that touches one body is not.
+
+**Two traps in writing it, both of which produced a confident wrong answer:**
+
+- Reach has to be TRANSITIVE. The first version reported all four ankle shafts
+  as reaching nothing, because a shaft does not touch the parts it joins - it
+  touches the BEARING pressed into them. Four false alarms is how you teach
+  somebody to ignore a check.
+- The control test has to push in a direction that actually separates. Nudging
+  the knee servo 2 mm into its cradle left the gap at 0.000, because the thigh
+  wraps it on three sides. The check looked broken and was not.
+
+**And note what the fix to one of these was already called.** `cad.fasteners`
+has been reporting "worst is 1.30 deg" of servo capture preload for weeks, and
+that 1.3 degrees IS this 0.4 mm, measured from the other end. Two checks
+describing one fault in units that do not obviously match is its own way of
+staying invisible.
+
 ## The shape of all of them
 
 Every entry here is the same mistake in different clothes: **something was

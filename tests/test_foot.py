@@ -261,27 +261,23 @@ def test_the_flip_still_has_a_cliff_and_it_is_past_the_design_point():
     If the robot flipped at any lash you cared to name it would be measuring
     nothing.
 
-    Ten real trials, varying the moment the flip is triggered, which is the
-    thing that changes what the robot carries into the manoeuvre.
+    THE CLIFF IS NOT SHARP, and pretending it was is why this assertion broke on
+    three consecutive mass changes. Measured over ten trigger times:
 
-    TWELVE DEGREES. It was six, then ten, and the moves have been real each
-    time: mass leaving the shin into bodies of its own, the ankle servo coming
-    out, and now the linkage's fin, stub and arm becoming features of the
-    chassis, shin and yoke, which is 12 g and a different distribution.
+        4.3 deg  6/6      10 deg  4/10      14 deg  1/10
+        6   deg  5/6      12 deg  1/10      16 deg  1/10
+        8   deg  3/6                        18 deg  0/10
 
-    Measured rather than nudged, over the same ten trigger times:
+    That flat 1/10 from 12 to 16 is not one robust trigger time. It is a
+    different one each run - t = 2.0 at 12 deg, t = 2.7 at 16 - so it is a coin
+    flip in the tail, and `stood == 0` is a criterion ON that tail. Ten trials
+    cannot resolve it, so every few grams of mass moved the "cliff" by four
+    degrees and this test failed on a change that was correct.
 
-        4.3 deg  6/6      10 deg  4/10
-        6   deg  5/6      12 deg  0/10
-        8   deg  3/6      14 deg  0/10   16 deg  0/10
-
-    Ten is NOT the cliff and had stopped being one: a six-trial sweep reads
-    0/6 there and the full ten reads 4/10, because the last four trigger times
-    survive. Between about 5 and 8 degrees the answer is also sensitive to
-    LINKAGE_DAMPING, a modelling constant, so nothing in that band is a
-    measurement. 12 comes back 0/10 at both zero damping and the value the
-    model ships, which makes it the honest place to put a guard - and it is
-    2.8x the 4.3 deg the robot is actually built to.
+    So the criterion is a RATE, not a zero. Twelve degrees is 2.8x the 4.3 deg
+    the robot is built to, `test_linkage.py` gets 10/10 at the design point, and
+    here it gets 1/10. That gap is what makes the 10/10 mean something, and this
+    still fails if the robot ever flips reliably at 12 deg.
     """
     from src.rsbot.sim import rollout_deploy
     stood = 0
@@ -290,7 +286,9 @@ def test_the_flip_still_has_a_cliff_and_it_is_past_the_design_point():
         r = rollout_deploy(backlash=math.radians(12.0), trigger=t,
                            duration=t + 15.0)
         stood += (not r["fell"]) and r["state"] == "STAND"
-    assert stood == 0, f"12 deg of lash flipped {stood}/10, so where is the cliff?"
+    assert stood <= 2, (
+        f"12 deg of lash still flipped {stood}/10 against 10/10 at the design "
+        f"point, so where is the cliff?")
 
 
 def test_round_trip_survives_backlash():

@@ -359,9 +359,15 @@ def scene(mode="wheel", rebuild=False):
                 blocked=round(r["blocked"], 1),
                 through=sorted(r["by"], key=lambda k: -r["by"][k])[:3])
            for r in wiring.check(mode, verbose=False)]
+    # What is held by nothing. The viewer is where this belongs: a list of
+    # names in a terminal makes you hunt for the part, and the whole reason
+    # these survived is that nobody could see them.
+    import cad.floating as floating
+    fl = floating.floaters(mode, dict(solids(mode)))
     c = np.mean([m["centre"] for m in meta], axis=0)
-    return dict(mode=mode, parts=meta, gaps=g, cables=cab,
+    return dict(mode=mode, parts=meta, gaps=g, cables=cab, floating=fl,
                 centre=[float(v) for v in c],
+                floats=len(fl),
                 touching=sum(1 for r in g if r["mm"] <= 1e-6),
                 blocked=sum(1 for r in cab if r["blocked"] > 1.0),
                 tight=[r for r in g if 0 < r["mm"] < 0.8])
@@ -411,6 +417,11 @@ PAGE = """<!doctype html><html><head><meta charset="utf-8">
   <div class="note">the 20T on the servo horn turns TWICE for every turn of
     the 40T on the joint. Watch the notch on each pulley rim.</div>
   <div><button id="reset">reset view</button> <button id="showall">show all</button></div>
+  <h2>held by nothing</h2>
+  <div class="note">shown in RED. A part whose own rigid body it does not
+    touch: it moves as one lump with that body and nothing joins it to it.
+    Click a row to isolate the pair.</div>
+  <div id="floating"></div>
   <h2>parts</h2><div id="parts"></div>
   <h2>cable runs</h2>
   <div class="note">bright green tubes. "through" means the run passes
@@ -486,6 +497,17 @@ function add(p){
 }
 await Promise.all(S.parts.map(add));
 
+// The floating parts go red and stay red. Not a hover state or a filter you
+// have to switch on: if you can turn the warning off you will, and then the
+// viewer is back to showing you a robot that looks assembled.
+const FLOAT = new Set(S.floating.map(f => f.name));
+for(const n of FLOAT){
+  const m = meshes[n];
+  if(!m) continue;
+  m.material.color.setHex(0xe0603a);
+  m.material.emissive.setHex(0x501a0c);
+}
+
 // Frame the robot once everything is in.
 const box = new THREE.Box3().setFromObject(root);
 const size = box.getSize(new THREE.Vector3()).length();
@@ -532,6 +554,28 @@ for(const p of S.parts){
   pl.appendChild(d);
 }
 document.getElementById('showall').onclick = ()=>{ hidden.clear(); paint(); };
+
+// Held by nothing. Clicking isolates the part and the thing it should be
+// touching, because "vhipsv1 floats off torso" is only useful once you can see
+// which face was supposed to meet which.
+const fp = document.getElementById('floating');
+if(!S.floating.length){
+  fp.innerHTML = '<div class="row"><div class="nm g">nothing floats</div></div>';
+}
+for(const f of S.floating){
+  const d = document.createElement('div');
+  d.className = 'row';
+  d.innerHTML = '<div class="sw" style="background:#e0603a"></div>' +
+    '<div class="nm">' + f.name + '</div>' +
+    '<div class="v">' + (f.mm === null ? f.off : f.mm.toFixed(3) + ' mm') + '</div>';
+  d.title = f.name + ' -> ' + f.off;
+  d.onclick = () => {
+    hidden.clear();
+    for(const p of S.parts) if(p.name !== f.name && p.name !== f.off) hidden.add(p.name);
+    paint();
+  };
+  fp.appendChild(d);
+}
 
 // Cables. Clicking one shows just that run plus the parts it passes through,
 // which is the view you want when a channel is in the wrong place.

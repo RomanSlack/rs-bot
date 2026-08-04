@@ -42,7 +42,6 @@ def build():
 
       knee  - horn on the knee axis (y) at z = 0, case reaching up into the
               thigh, its output face against the inboard side of the hub
-      ankle - case flat on the +y face of the standoff, spanning the bolts
     """
     part = shin.build()
 
@@ -54,18 +53,16 @@ def build():
     knee += bd.Pos(0, shin.SPINE_Y - shin.SPY - HORN_T / 2, 0) * \
         bd.Rot(90, 0, 0) * bd.Cylinder(HORN_R, HORN_T)
 
-    # Ankle-pitch servo, flat on the standoff face.
-    stand_face = shin.STANDOFF[1][1]
-    az = (shin.STANDOFF[2][0] + shin.STANDOFF[2][1]) / 2
-    ankle = _block(0, stand_face + SERVO_H / 2, az, SERVO_W, SERVO_H, SERVO_L)
+    # No ankle-pitch servo. It is deleted (cad/linkage.py) and the standoff it
+    # was drawn flat against is deleted with it; this file was the last thing
+    # still placing one, which is a viewer showing a robot that does not exist.
 
     # Thigh sits above, in the same frame: its knee is this shin's origin.
     th = bd.Pos(0, 0, -thigh.KNEE_Z) * thigh.build()
 
     return [(part, "0.88 0.45 0.13 1", "shin"),
             (th, "0.72 0.36 0.10 1", "thigh"),
-            (knee, "0.13 0.13 0.15 1", "knee servo"),
-            (ankle, "0.22 0.22 0.26 1", "ankle-pitch servo")]
+            (knee, "0.13 0.13 0.15 1", "knee servo")]
 
 
 def main():

@@ -257,18 +257,23 @@ caliper can.
 
 ## Mass, for the record
 
-**1.907 kg**, and every line below is `uv run python -m cad.masses`, summed,
+**1.770 kg**, and every line below is `uv run python -m cad.masses`, summed,
 rather than a number carried forward from the last time someone wrote this out:
 
 | | g |
 |---|---|
-| printed structure, all seven parts | 341 |
-| servos, 10 x STS3215 | 550 |
+| printed structure, all nine parts | 380 |
+| servos, 8 x STS3215 | 440 |
 | arm/head ballast + IMU (stage 4 stand-in) | 605 |
 | torso electronics: Pi 5, 3S pack, bus adapter | 235 |
-| wheels, 2 x (printed body + TPU tyre + horn) | 108 |
-| belt drive, 2 x (pulleys, belt, shafts) | 68 |
-| **total** | **1907** |
+| wheels, 2 x (printed body + TPU tyre + horn) | 110 |
+| **total** | **1770** |
+
+1907 to 1770 in two steps, both on real deletions. The ankle-pitch servos and
+their belt drive came out on 2026-08-03 when the parallelogram went in, which
+is 10 servos to 8 and the whole belt line gone; the rods and idler that replace
+them are 34 g of the printed total. Then on 2026-08-04 the shin gave up the
+mount for the servo that had already left - 53.05 cm3 to 45.11, about 9 g a leg.
 
 It said 1.875 kg until 2026-08-02, which was the SIM's number, and the sim had
 not been told about the cradles. The figure above is the CAD's, because the CAD

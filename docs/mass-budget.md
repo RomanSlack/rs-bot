@@ -13,25 +13,38 @@ real CAD mass from `cad/shin.py`.
 | Item | Count | Each | Total |
 |---|---|---|---|
 | Leg servos, STS3215 | 8 | 55 g | 440 g |
-| Printed structure (chassis, thighs, shins, yokes, brackets) | | | 341 g |
-| The parallelogram, printed | 2 | 35 g | 70 g |
+| Printed structure (chassis, thighs, shins, yokes, brackets) | | | 346 g |
+| The parallelogram, printed: rod, idler, rod | 2 | 17 g | 34 g |
 | Arm/head ballast + IMU (stage 4) | | | 605 g |
 | 3S pack | 1 | 180 g | 180 g |
 | Wheels, printed body + TPU tyre + horn | 2 | 55 g | 110 g |
 | Pi 5 | 1 | 45 g | 45 g |
 | Bus adapter | | | 10 g |
-| **Total** | | | **1800 g** |
+| **Total** | | | **1770 g** |
 
 **1907 to 1800 g on 2026-08-03**, and every gram of it is the ankle-pitch
 servos and their belt drive coming out: 2 x 55 g of servo and 2 x 34 g of
 pulleys, belt and shafts, against 2 x 35 g of linkage going in. See
 `docs/deleting-the-ankle-pitch-servo.md`.
 
+The parallelogram row said **2 x 35 g** until 2026-08-04 and the rows did not
+sum to the total, which nobody noticed because the total was written out
+separately. 35 g a leg was right when the fin, the stub and the arm were loose
+solids of their own; they are features of the chassis, the shin and the yoke
+now, so they are inside the row above and the rods and idler alone are 17 g.
+
+**Then 1800 to 1770 g on 2026-08-04**, which is the shin giving up the MOUNT
+for the servo that had already gone: a standoff, two cradle walls, an end wall
+and a clearance pocket, 53.05 cm3 down to 45.11, about 9 g a leg. It sat there
+for a day with a note on it saying it was dead. Nothing failed while it did,
+because dead material is conservative in every check this repo runs - which is
+exactly why nothing was going to remove it on its own.
+
 That 107 g is not just lighter, it is lighter IN THE RIGHT PLACE. It came off
 the far end of the leg, and foot mode now survives 4 degrees of gear lash where
 the same linkage on the old mass failed at 4 ten times out of ten.
 
-The printed structure came in at **341 g against a 400 g estimate**, which is
+The printed structure came in at **380 g against a 400 g estimate**, which is
 much closer than the 165 g this page claimed until 2026-08-02. That 165 was the
 legs only, quoted as if it were the robot: the chassis alone is 135 g and was
 never in the figure. Estimating structure by eye overshoots, but not by the

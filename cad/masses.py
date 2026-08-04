@@ -35,7 +35,7 @@ SERVO = 55.0          # STS3215
 # that would have spun on the rim. `uv run python -m cad.wheel` prints the
 # current figure and this has to be moved to match it by hand; cad/inertia.py's
 # check_masses is what catches it if you forget.
-WHEEL = 54.01
+WHEEL = 54.79
 # PA6-CF, for the parallelogram's links. The printed structure is quoted at
 # PETG x infill above because that is what those parts were costed in; the
 # linkage is small, solid and highly loaded per gram, so it is quoted at the

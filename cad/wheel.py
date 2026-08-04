@@ -73,6 +73,27 @@ SPOKE_T = 5.0
 # that is probably the wrong servo variant, and it is one caliper reading away
 # from being known. It is the only thing that could push this number higher.
 HORN_R = 10.3            # Ø20.6 pocket; clears the 19.93 horn and the ~20 boss
+# The hub reaches out to meet the horn: 0.40 mm to close the gap the servo's
+# position leaves, plus the horn plate's own thickness so the pocket still wraps
+# its outside diameter and locates the wheel concentrically. See build().
+# 0.40 mm, which is exactly how far short of its horn the wheel was sitting.
+#
+# IT IS A FLAT PAD AND NOT A POCKET, and the first attempt here was a pocket:
+# a boss 2.91 mm proud with a Ø20.6 recess 2.51 deep wrapping the horn's
+# outside diameter, on the reasoning that a wrap locates the wheel
+# concentrically. It does not. The four M3 pass through Ø3.2 clearance holes,
+# which is +/-0.35 mm of float, and Ø20.6 over a Ø19.93 horn is +/-0.335. The
+# pocket costs 2.5 mm of reach and buys 15 microns.
+#
+# The reach is not free. At 2.91 mm proud the boss fouled the ROLL BRACKET by
+# 8 mm3, and thinning its rim to clear that ran into the wheel-drive servo
+# instead. A flat pad at 0.40 clears the bracket entirely and stands 1.10 mm
+# off the servo's envelope.
+#
+# BOSS_R is 11.0: it has to cover the Ø19.93 horn it seats on, and it has to
+# stay inside the roll bracket's material at radius 12.3.
+BOSS_PROUD = 0.40
+BOSS_R = 11.0
 # Imported rather than repeated. These were a local copy of the horn pattern
 # and drifted from it: 4.95 x 5.00 with a 2.7 mm hole, against a measured
 # 4.95 x 4.95 with a 3.2 mm one. A second copy of a number is a second place
@@ -174,16 +195,35 @@ def body():
     p += _bead(rim_o + BEAD_R, BEAD_GAP, -HALF_W + BEAD_INSET,
                -HALF_W + BEAD_INSET + BEAD_W, rim_o)
 
-    # Horn pocket and its four screws.
+    # Horn boss, pocket and the four screws.
     #
-    # 4.0 mm deep over a horn plate measured at 2.51, so the pocket floor lands
-    # on the plate and the remaining 1.49 mm is counterbore reaching down past
-    # it toward the servo. That leaves the pocket rim about 0.5 mm clear of the
-    # servo's boss face, which is positive but thin, and it rests on a
-    # HORN_FACE_Z that cad/servo.py flags as unverified. Worth re-checking once
-    # the boss is measured; if that margin goes negative the wheel stands off
-    # the horn and the whole joint loads the bolts in bending.
-    p -= bd.Pos(0, 0, -HALF_W) * bd.Cylinder(HORN_R, 2 * 4.0)
+    # THE WHEEL USED TO STAND 4.40 mm OFF ITS HORN and the comment here said it
+    # seated. It described a 4.0 mm pocket whose floor "lands on the plate"
+    # with 1.49 mm of counterbore past it - but a single cylinder cut has one
+    # floor, not two, so the floor landed 1.49 mm BEHIND the horn and the wheel
+    # rested on nothing. cad.hardware.horn_joints() is what measured it: the
+    # horn's face is at y = 72.40 and this pocket's floor was at 68.00.
+    #
+    # It was also written up as needing a decision about the robot's
+    # proportions - move the wheel and change the track, or move the servo and
+    # change the kinematics. It needs neither. The horn's plate sits entirely
+    # on the SERVO side of the seating face, so what was missing is hub, and
+    # hub grows outboard into space the servo already occupies:
+    #
+    #   the wheel's outboard face      y = 72.00
+    #   the horn's face, where it seats    72.40   <- 0.40 mm short
+    #   the servo's envelope starts at        73.50   <- 1.10 mm clear
+    #
+    # The TYRE does not move, so the track, the stance and the flip envelope
+    # are all untouched, and the sole is the INBOARD face (cad/inertia.py's
+    # WHEEL_CAD2SIM), so nothing here touches the ground.
+    #
+    # BOSS_PROUD is a literal rather than a formula because the 0.40 comes from
+    # where the servo sits, which is not this file's to know. horn_joints() is
+    # what holds it: move the servo and that check fails rather than this
+    # quietly drifting.
+    p += (bd.Pos(0, 0, -(HALF_W + BOSS_PROUD / 2))
+          * bd.Cylinder(BOSS_R, BOSS_PROUD))
     p -= bd.Pos(0, 0, 0) * bd.Cylinder(SHAFT_BORE, 4 * HALF_W)
     for dx in (-HORN_BOLT_DX, HORN_BOLT_DX):
         for dy in (-HORN_BOLT_DY, HORN_BOLT_DY):

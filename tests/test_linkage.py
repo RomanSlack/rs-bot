@@ -261,3 +261,22 @@ def test_every_servo_is_stopped_by_something():
     for free, name, by in capture(verbose=False):
         assert by is not None, f"{name} turns freely"
         assert free < CAPTURE_MAX
+
+
+# --- the horn joints ----------------------------------------------------------
+
+def test_every_horn_joint_seats():
+    """Every joint in this robot that is not a bearing is a part bolted to a
+    servo horn. Eight of them, and the wheel was the last one that did not
+    reach: 4.40 mm of air where it was supposed to be resting.
+
+    Tight, at 0.05 mm. A part that stands off its horn rocks on the horn's rim
+    and puts the whole joint's load through the bolts in bending, and 4.40 mm
+    of it read as a working robot in every interference check in the repo,
+    because the thing in between was not modelled until 2026-08-02.
+    """
+    from cad.hardware import horn_joints
+    rows = horn_joints(verbose=False)
+    assert len(rows) == 8
+    for servo, part, clear in rows:
+        assert abs(clear) < 0.05, f"{servo} -> {part} is {clear:+.2f} mm out"

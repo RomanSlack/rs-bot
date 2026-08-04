@@ -289,6 +289,14 @@ def yoke():
     # one fillet it needs, on the re-entrant corner the FEA found hottest.
     part, yoke.corner_r = soften(part, long_edges(part, "x", 30.0),
                                  what="yoke edges")
+    # STAGE 2 OF THE PARALLELOGRAM ENDS HERE. The arm is this yoke's forward
+    # member carried 30 mm further on, at the same y band and the same z, and
+    # it is part of the yoke rather than a separate solid for the reason
+    # cad/linkage_mounts.py gives: a pin fixed to this body needs something on
+    # this body to press into.
+    from cad.linkage_mounts import yoke_arm
+    part += yoke_arm()
+
     return part
 
 

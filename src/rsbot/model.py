@@ -95,6 +95,7 @@ def make_ctrl(hip, knee, aroll, wheel, wheel_r=None):
 # robot is positioned from. Visible in the twin as a servo floating off the
 # plate it bolts to.
 from cad.servo_dims import LENGTH as _SL, WIDTH as _SW, HEIGHT as _SH
+from cad.servo_dims import CRADLE_CLEAR  # the 0.4 mm the thigh's cradle is cut with
 SERVO = (_SL / 1000.0, _SW / 1000.0, _SH / 1000.0)
 SERVO_HORN_R = 0.0100                 # 25T output horn
 # The output shaft is NOT at the centre of the case: it sits 12.5 mm off along
@@ -206,20 +207,20 @@ SEG_MASS = {"thigh": 0.0894, "shin": 0.0889, "ankle": 0.0693,
 SEG_INERTIA = {
     "thigh": (0.096075, (-0.000001, -0.001186, -0.082131),
               (1.151560e-04, 9.302291e-05, 3.237157e-05, -9.038478e-10, 1.720578e-09, -2.839567e-05)),
-    "shin": (0.043481, (+0.016436, +0.035565, -0.042533),
-              (5.806681e-05, 5.949586e-05, 3.085102e-05, -5.948093e-06, 1.628903e-05, 1.824890e-05)),
-    "ankle": (0.070842, (-0.066127, +0.009153, +0.010247),
-              (4.622563e-05, 5.376683e-05, 7.756610e-05, -3.000482e-05, 5.910038e-06, 6.176137e-06)),
+    "shin": (0.043138, (+0.016566, +0.035383, -0.042868),
+              (5.744608e-05, 5.877426e-05, 3.075540e-05, -6.078254e-06, 1.604900e-05, 1.858545e-05)),
+    "ankle": (0.069571, (-0.067645, +0.008224, +0.010396),
+              (4.277212e-05, 4.459982e-05, 6.513480e-05, -2.456065e-05, 5.072140e-06, 5.636587e-06)),
     "rollbracket": (0.062637, (-0.014798, +0.029617, +0.001139),
               (1.292240e-05, 1.785285e-05, 2.230819e-05, -2.779284e-06, 8.089292e-07, 8.200901e-07)),
-    "torso": (1.109891, (+0.008360, +0.000000, +0.081869),
-              (4.254341e-03, 3.943869e-03, 1.488176e-03, 1.732533e-23, -2.013142e-05, 5.921539e-20)),
+    "torso": (1.100703, (+0.008180, +0.000000, +0.082687),
+              (4.123392e-03, 3.851683e-03, 1.440641e-03, -1.810980e-20, -3.976111e-05, -2.727584e-20)),
     "wheel": (0.054782, (+0.000000, -0.000683, -0.000000),
               (3.247476e-05, 5.851804e-05, 3.247476e-05, -5.598628e-17, 1.773249e-16, 3.053642e-15)),
     "lkrod1": (0.006801, (-0.000000, -0.000000, -0.055000),
               (8.050659e-06, 8.068349e-06, 5.849861e-08, -2.630324e-22, 7.188831e-23, -2.851857e-22)),
-    "lkidler": (0.004143, (+0.017786, -0.000000, -0.000000),
-              (1.570929e-07, 6.740512e-07, 6.054071e-07, -4.579281e-23, -1.816712e-22, -1.589795e-08)),
+    "lkidler": (0.003790, (+0.016648, -0.000000, -0.000000),
+              (1.113201e-07, 6.033217e-07, 5.147389e-07, -2.432764e-23, -1.573994e-22, 7.514599e-24)),
     "lkrod2": (0.006510, (-0.000000, -0.000000, -0.055000),
               (8.036603e-06, 8.054887e-06, 5.734404e-08, -2.659411e-22, 1.327761e-22, -2.824800e-22)),
 }
@@ -396,13 +397,56 @@ def _link_geoms(link, side, sgn, meshes=False):
     if link == "thigh":
         col.append(f'<geom class="leg" name="thigh_{side}" fromto="0 0 0  0 0 -0.110" '
                    f'group="4"/>')
-        # Stops short of the knee: the shin swings 40 deg there and would
-        # otherwise scissor into it. The knee servo bridges the gap.
+        # FIVE BOXES, and it used to be one. The thigh does not run straight
+        # down: it reaches AROUND the knee servo to a plate on the INBOARD
+        # side, because the outboard band is where the shin's hub has to be.
+        # One box could not say that, so it said the outboard spine ran to
+        # z = -102 - and the real part's outboard material stops at -74.
+        # cad.twin measured the box at 71.4% backed and passed it; what finally
+        # showed it was the idler's stub, a boss at the knee that the box model
+        # had colliding with a thigh 22 mm away on the real solids.
+        #
         # 16 mm wide in y, not 12: with no hip roll joint, the STRUCTURE
         # carries the whole lateral moment at the hip (9.5 N.m at the design
         # load), and at 12 mm that is only a 2.0x margin. See cad/thigh.py.
-        vis.append(_v(f"vthigh_{side}", "box", f"0.010 0.008 0.049",
-                      f"0 {sgn*0.023:.6f} -0.053", C_PRINT))
+        vis.append(_v(f"vthigh_{side}", "box", f"0.010 0.008 0.035",
+                      f"0 {sgn*0.023:.6f} -0.039", C_PRINT))
+        # The inboard end, which is the half the single box had on the wrong
+        # side of the leg. It is a FORK, not a plate: a back wall with two
+        # cheeks that the knee servo sits between. Drawn as a plate first, and
+        # that plate reported 10 mm inside the servo while the real solids
+        # intersect at 0 mm3 - the y profile is continuous across the pocket, so
+        # a slice's bounding box cannot tell a fork from a slab. The x profile
+        # can, and does: material at |x| = 12.5..15.3 with air between.
+        # Both are hung off the servo's own inboard face rather than measured,
+        # so they abut it by construction. Probing the solid put that face at
+        # -21.0 and the wall 0.5 mm inside the servo; cad/thigh.py says
+        # SERVO_Y_LO = SERVO_Y_HI - SERVO_H with the comment "y = -20.4", and
+        # that comment is stale - cad/servo.py re-exports servo_dims, whose
+        # HEIGHT was corrected to 36.50, so the face has been at -21.5 since.
+        wall = SPINE_Y - SPY - 2 * HH          # -0.0215, the servo's inboard face
+        # The cross-member OVER the servo, which is what ties the two sides
+        # together. Left out of the first version, and tests/test_foot.py's
+        # test_every_body_is_one_rigid_piece came straight back with "thigh_l is
+        # 2 loose pieces": the spine stops at z = -74 and the fork starts at
+        # -63, so without this they are a leg in two halves. It is the one check
+        # that asks whether the parts on a body touch EACH OTHER rather than
+        # whether the robot is connected overall, and it is why it exists.
+        z_hi = -0.110 + off + HL               # -0.07497, the servo's top
+        vis.append(_v(f"vthighcross_{side}", "box", "0.010 0.03075 0.006",
+                      f"0 {sgn*0.00025:.6f} {z_hi + 0.006:.6f}", C_PRINT))
+        vis.append(_v(f"vthighfork_{side}", "box", "0.0153 0.0045 0.03025",
+                      f"0 {sgn*(wall - 0.0045):.6f} -0.09325", C_PRINT))
+        # The cheeks, reaching past the servo to the knee axis, so they have to
+        # hug it: inner face at HW + CRADLE_CLEAR, which is the same 0.4 mm the
+        # cradle is drawn with.
+        c_in = HW + CRADLE_CLEAR / 1000.0            # 0.012765
+        c_out = c_in + 0.0025                        # cad/thigh.py CRADLE_WALL
+        for k, s in ((0, -1), (1, 1)):
+            vis.append(_v(f"vthighcheek{k}_{side}", "box",
+                          f"{(c_out - c_in)/2:.6f} 0.00525 0.0245",
+                          f"{s*(c_in + c_out)/2:.6f} "
+                          f"{sgn*(wall + 0.00525):.6f} -0.099", C_PRINT))
         # INBOARD. The thigh wraps over and down the inboard side to reach it,
         # because the outboard band is where the shin's hub has to be.
         vis.append(_v(f"vkneesv_{side}", "box", f"{HW:.6f} {HH:.6f} {HL:.6f}",
@@ -578,12 +622,14 @@ def _linkage_bodies(side, meshes, parent):
         x, y, z = [v / 1000.0 for v in offset(LEG_Y * 1000.0, sgn)]
         mass, com, I = SEG_INERTIA[name]
         ixx, iyy, izz, ixy, ixz, iyz = I
-        geom = ""
+        geom = _linkage_bought(side, name)
         if meshes:
             stem = lk.SIM_MESH[name]
-            geom = (f'<geom name="{stem}_{side}" type="mesh" '
-                    f'mesh="{stem}_{side}" rgba="{C_LINK}" contype="0" '
-                    f'conaffinity="0" mass="0" group="0"/>')
+            geom += (f'<geom name="{stem}_{side}" type="mesh" '
+                     f'mesh="{stem}_{side}" rgba="{C_LINK}" contype="0" '
+                     f'conaffinity="0" mass="0" group="0"/>')
+        else:
+            geom += _linkage_prims(name, side)
         out += (f'<body name="{name}_{side}" pos="{x:.6f} {y:.6f} {z:.6f}">'
                 f'<joint name="{name}_{side}" axis="0 1 0" limited="false" '
                 f'damping="{LINKAGE_DAMPING}"/>'
@@ -594,6 +640,95 @@ def _linkage_bodies(side, meshes, parent):
         out += _linkage_bodies(side, meshes, name)
         close += "</body>"
     return out + close
+
+
+def _linkage_prims(name, side):
+    """The rods and the idler as BOXES, for the plain build.
+
+    Every other part in this robot has a primitive stand-in as well as a mesh,
+    and the linkage did not: with meshes off, rod 1 and rod 2 had no geometry at
+    all and the idler was two pins hanging in space. The sim's own
+    `test_robot_is_one_assembly_not_a_cloud_of_parts` counted NINE groups.
+
+    They are also what cad/twin.py checks - every group-0 box has to have CAD
+    material behind it - so a stand-in is not decoration, it is the thing that
+    gets compared.
+    """
+    import cad.linkage_dims as lk
+
+    half = {"lkrod1": (lk.ROD_T, lk.ROD_W, THIGH_L * 1000.0),
+            "lkrod2": (lk.ROD_T, lk.ROD_W, SHIN_L * 1000.0)}
+    if name in half:
+        t, w, L = half[name]
+        return _v(f"vlk{name[2:]}_{side}", "box",
+                  f"{t/2000.0:.6f} {w/2000.0:.6f} {L/2000.0:.6f}",
+                  f"0 0 {-L/2000.0:.6f}", C_LINK)
+    # The idler is a vee, so it gets one box per arm, each turned to lie along
+    # it. A single bounding box would be mostly air, and air is exactly what
+    # cad/twin.py measures a box against.
+    out = ""
+    for i, u in enumerate((lk.U1, lk.U2)):
+        L = math.hypot(u[0], u[1])
+        ang = math.atan2(u[1], u[0])
+        out += _v(f"vlkidler{i}_{side}", "box",
+                  f"{L/2000.0:.6f} {lk.IDLER_W/2000.0:.6f} "
+                  f"{lk.IDLER_T/2000.0:.6f}",
+                  f"{u[0]/2000.0:.6f} 0 {u[1]/2000.0:.6f}", C_LINK,
+                  euler=f"0 {-ang:.6f} 0")
+    return out
+
+
+def _linkage_host_prims(link, side, sgn):
+    """The linkage's MOUNT features, as primitives, for the plain build.
+
+    The stub on the shin and the arm on the yoke are real material on those
+    parts (cad/linkage_mounts.py, built in by cad/shin.py and cad/ankle.py), and
+    the pins that press into them are geoms here. Without stand-ins the sim's
+    own `test_every_body_is_one_rigid_piece` reports "shin_l is 2 pieces": the
+    bearing and the pin, floating beside a part that is really there.
+    """
+    import cad.linkage_dims as lk
+
+    if link == "shin":
+        lo, hi = lk.stub_span()
+        return _v(f"vlkstub_{side}", "cylinder",
+                  f"{lk.STUB_R/1000.0:.6f} {(hi-lo)/2000.0:.6f}",
+                  f"0 {sgn*(lo+hi)/2000.0:.6f} 0", C_LINK,
+                  euler="1.5708 0 0")
+    if link == "ankle":
+        L = math.hypot(lk.U2[0], lk.U2[1])
+        ang = math.atan2(lk.U2[1], lk.U2[0])
+        return _v(f"vlkarm_{side}", "box",
+                  f"{L/2000.0:.6f} {lk.ARM_W/2000.0:.6f} "
+                  f"{lk.ARM_T/2000.0:.6f}",
+                  f"{lk.U2[0]/2000.0:.6f} {sgn*lk.Y_ARM/1000.0:.6f} "
+                  f"{lk.U2[1]/2000.0:.6f}", C_LINK,
+                  euler=f"0 {-ang:.6f} 0")
+    return ""
+
+
+def _linkage_bought(side, link):
+    """The linkage's pins and its idler bearing, as geoms on `link`.
+
+    Bought parts, drawn as the cylinders they are. Without them the sim shows
+    rods and an idler held by nothing: not floating - the bodies are parented
+    and constrained - but the same picture, and the same fault
+    docs/how-checks-fail.md #13 is about.
+    """
+    import cad.linkage_dims as lk
+
+    sgn = 1 if side == "l" else -1
+    out = ""
+    for name, host, pos, half, r in lk.sim_bought(LEG_Y * 1000.0, sgn):
+        if host != link:
+            continue
+        x, y, z = [v / 1000.0 for v in pos]
+        out += (f'<geom name="{name}_{side}" type="cylinder" '
+                f'size="{r/1000.0:.6f} {half/1000.0:.6f}" '
+                f'pos="{x:.6f} {y:.6f} {z:.6f}" euler="1.5708 0 0" '
+                f'rgba="{C_STEEL}" contype="0" conaffinity="0" mass="0" '
+                f'group="0"/>')
+    return out
 
 
 def _linkage_tendons(side):
@@ -663,9 +798,15 @@ def _leg(side, backlash, meshes=False):
         # The idler rides on the knee, so it is a child of the SHIN, and rod 2
         # is a child of the idler. They go in here rather than at the torso
         # level because that is where they physically hang.
+        opens[-1] += _linkage_bought(side, link)
+        if not meshes:
+            opens[-1] += _linkage_host_prims(link, side, sgn)
         opens[-1] += _linkage_bodies(side, meshes, link)
 
+    # rod 1 hangs off the TORSO, and so does the pin it hangs on. _leg's return
+    # is substituted inside the torso body, so both land in the right frame.
     return ("".join(opens) + "".join(reversed(closes))
+            + _linkage_bought(side, "torso")
             + _linkage_bodies(side, meshes, "torso"))
 
 
@@ -697,6 +838,19 @@ def _torso_visual(meshes=False):
     # out through the plate to reach the thigh hub, so there is a notch there.
     # Modelled as one slab it reads as a 4.2 mm interpenetration, which is not
     # a fault - it is a hole nobody had drawn.
+    # The parallelogram's ground fin, one per leg. Real material on the
+    # chassis (cad/chassis.py builds it in), so it needs a stand-in here or the
+    # pin that presses into it is a cylinder floating beside the side plate -
+    # which is what "torso is 3 loose pieces" was.
+    import cad.linkage_dims as _lk
+    fin_y0, fin_y1 = 0.0396, (_lk.Y_FIN + LEG_Y * 1000.0) / 1000.0
+    for sgn in (1, -1):
+        g.append(_v(f"vlinkfin{sgn}", "box",
+                    f"{_lk.FIN_T/2000.0:.6f} {(fin_y1-fin_y0)/2:.6f} "
+                    f"{_lk.FIN_H/2000.0:.6f}",
+                    f"{_lk.U1[0]/1000.0:.6f} {sgn*(fin_y0+fin_y1)/2:.6f} "
+                    f"{_lk.U1[1]/1000.0:.6f}", C_LINK))
+
     notch_x, notch_z = 0.0124, 0.0454
     for sgn in (1, -1):
         for x0, x1 in ((-0.0365, -notch_x), (notch_x, 0.0535)):

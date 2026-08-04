@@ -238,6 +238,92 @@ and not an orientation.
 **A constraint is not a fact about the model, it is a thing the solver does.**
 If you did not run the solver, it has not happened.
 
+## 18. "One connected group" is not "assembled"
+
+Two parts count as joined when the gap between them is zero. A gap of zero is
+also what you get when they are twenty-five millimetres INSIDE each other, so a
+connectivity check happily reports one object for a robot that is
+interpenetrating. It was the control test for `connected()` that showed this:
+shoving a rod deep into its neighbours did not disconnect it, and only moving
+it 250 mm clear did.
+
+Connectivity is also only REACHABILITY. A part hanging on by a single 0.04 mm
+graze passes, and so does a pin that enters one of the two parts it joins and
+misses the other - which is exactly what this repo's linkage pins were doing,
+engaging 3 mm of a 6 mm idler and none at all of the chassis fin, while every
+check reported one connected group.
+
+**Three questions, and they need three checks:** does it touch (connectivity),
+does it touch without overlapping (interference), and is it HELD - how much of
+the pin is actually inside the bore. `cad.linkage.assembled()` is the third
+one, and it is the only one that found anything.
+
+## 19. A bounding box cannot tell a fork from a slab
+
+The thigh was one box in the physics model, 20 x 16 x 98, and it had been that
+box for the whole life of the project. `cad.twin` measured it at **71.4% backed
+by CAD material** and passed it, because the threshold for "ok" is lower than
+that and 71% reads like a rounded-off part.
+
+It was not a rounded-off part. The real thigh does not run straight down: it
+reaches AROUND the knee servo to a fork on the INBOARD side, because the
+outboard band is where the shin's hub has to be. The box described the outboard
+spine running down to z = -102, and the real outboard material stops at -74.
+The missing 28 mm out of 98 is the 28.6% - the box was describing material on
+the wrong side of the leg.
+
+**What finally showed it** was not twin. It was a new part: the idler's stub, a
+boss on the knee axis. `fitcheck.py` had it 3.3 mm inside the thigh. On the
+real solids the two are **22.11 mm apart** at every pose, so the collision was
+entirely against material that does not exist.
+
+Then the fix went wrong the same way twice more, and both are worth keeping:
+
+- Replacing the one box with an inboard **plate** put it 10 mm inside the knee
+  servo, while the real solids intersect at 0 mm3. The plate came from probing
+  the solid and reading each slice's **bounding box**, and the y profile is
+  continuous straight across the servo pocket - a fork and a slab have the same
+  bounding box. The x profile is what distinguishes them: material at
+  |x| = 12.5..15.3 with air between. Three boxes, not one.
+- The fork wall then sat 0.5 mm inside the servo. `cad/thigh.py` says
+  `SERVO_Y_LO = SERVO_Y_HI - SERVO_H  # inboard face, y = -20.4` and that
+  comment has been wrong since `servo_dims.HEIGHT` was corrected to 36.50: the
+  face is at -21.5. The comment was not load-bearing on its own. It became
+  load-bearing the moment a second file was written off it.
+
+**The lesson is not "raise twin's threshold".** It is that a percentage-backed
+number says how MUCH of a box is wrong and says nothing about WHERE, and
+"where" is the whole question when a part reaches around something. A box that
+is 71% backed and 29% on the wrong side of the leg scores the same as a box
+with a chamfer it does not model.
+
+## 20. A check that got greener because its subject left the set
+
+`cad.linkage.ground()` measures how close the linkage comes to the floor in
+foot mode. It walks `placed()`, which walks `SOLIDS`. When the yoke arm stopped
+being a linkage part and became a feature the yoke prints, it left `SOLIDS` -
+correctly - and the check went from **8.1 mm to 13.0 mm**.
+
+Both numbers were true and neither was the point. The arm really did rise, from
+its section going 8 to 6 and its root moving off the ankle-pitch shaft bore. But
+about half that move was the check no longer looking at the lowest thing the
+linkage puts near the floor. The arm is the entire reason the function exists:
+its docstring says so, and says the inboard route for stage 2 was ruled out
+because the only arm that cleared the roll bracket dropped to 1 mm.
+
+**The tell is the direction.** A refactor that moves a part from one owner to
+another should not change a measurement. When a number improves on a change
+that was supposed to be neutral, the question is not "what got better" but
+"what is no longer in the loop". `mounts_placed()` puts the three mount
+features back in front of `ground()`, for measurement only, and the lowest part
+it reports is the arm again.
+
+The same session had the mirror image of this: the whole-robot mass assertion in
+`tests/test_foot.py` went stale for the third time on a change that was correct,
+because it was a literal. It now derives from `cad.masses.table()`. A number
+that goes stale every time something legitimate happens is not a tight check, it
+is a second copy.
+
 ## The shape of all of them
 
 Every entry here is the same mistake in different clothes: **something was

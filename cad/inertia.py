@@ -132,54 +132,12 @@ def _pieces(m, body):
 
 
 # Which body carries each linkage part's MASS.
-# THREE OF THEM ARE BODIES NOW, so they are not lumped anywhere: the rods and
-# the idler are in the sim in their own right (cad/linkage.py's SIM_BODIES),
-# carrying their own mass in their own frames. The approximation this table
-# used to make for them - "assign each rod to the link it shadows" - is gone,
-# and with it the paragraph excusing it.
-#
-# What stays lumped is the three that are FEATURES of a part: the fin is
-# chassis, the stub is shin, the arm is yoke. Those are not approximations, they
-# are the part.
-LINKAGE_HOST = {"lk_boss": "torso", "lk_stub": "shin", "lk_arm": "ankle"}
-
-
-def _linkage_pieces(m, link):
-    """[(mass_g, com_mm, I)] for the parallelogram parts `link` carries.
-
-    Resolved at the STANCE pose: each part is placed in world by
-    cad.linkage.placed(), then pulled back into its host body's frame. Exact
-    there and approximate elsewhere, for the three that are not rigidly bolted
-    to their host. See LINKAGE_HOST.
-    """
-    import cad.linkage as linkage
-    from fitcheck import pose
-
-    m2, d2 = load()
-    pose(m2, d2, "wheel")
-    bid = mujoco.mj_name2id(m2, mujoco.mjtObj.mjOBJ_BODY,
-                            link if link == "torso" else f"{link}_l")
-    R = np.array(d2.xmat[bid]).reshape(3, 3)
-    origin = np.array(d2.xpos[bid]) * 1000.0
-
-    # BOTH sides for the torso, one for a leg. body_inertials() builds the left
-    # leg and lets the sim mirror it, but the torso is a single body and
-    # carries both legs' worth: it already gets both hip servos from _pieces(),
-    # and it has to get both chassis fins the same way. Counting one is 12 g
-    # missing from the body every clearance and balance number hangs off.
-    sides = ("l", "r") if link == "torso" else ("l",)
-    out = []
-    for name, solid in [q for sd in sides for q in linkage.placed(m2, d2, sd)]:
-        stem = name.rsplit("_", 1)[0]
-        # The rods and the idler are BODIES now, not lumps: they are absent
-        # from LINKAGE_HOST on purpose, and skipping them here is what stops
-        # their mass being counted twice.
-        if LINKAGE_HOST.get(stem) != link:
-            continue
-        g = solid.volume / 1000.0 * masses.PA6CF
-        com_w, I_w = solid_inertia(solid, g)
-        out.append((g, R.T @ (com_w - origin), R.T @ I_w @ R))
-    return out
+# THE LUMPING IS GONE, all of it. Three of the linkage's parts became sim
+# BODIES with their own inertials, and the other three - the fin, the stub and
+# the arm - are built into the chassis, the shin and the yoke, so they arrive
+# in the printed volume like any other feature. There is nothing left to assign
+# by hand, which is the right end state: every assignment was an approximation
+# with a paragraph excusing it.
 
 
 def compose(pieces):
@@ -207,8 +165,7 @@ def body_inertials():
         vol = part.volume
         printed_g = vol * PETG_G_MM3 * INFILL
         com, I = solid_inertia(part, printed_g)
-        pieces = ([(printed_g, com, I)] + _pieces(m, body)
-                  + _linkage_pieces(m, link))
+        pieces = [(printed_g, com, I)] + _pieces(m, body)
         # THE BELT DRIVE USED TO BE LUMPED HERE, 34 g out at y = 84.5 in the
         # belt plane, which is 84 mm off the leg's centreline. It has gone with
         # the ankle servo it drove.

@@ -50,26 +50,12 @@ PRINTED = ("vthigh", "vshin", "vankstand", "vankpost", "vankface",
 SERVOS = ("vhipsv", "vkneesv", "vrollsv", "vwhlsv")
 
 
-# The parallelogram, per leg, from cad/linkage.py's own solids at PA6CF. Keyed
-# by the body that carries each part's mass, the same split cad/inertia.py
-# uses, because two tables of "which body owns which link" would drift.
-def _linkage_g():
-    import cad.inertia as inertia
-    import cad.linkage as linkage
-    out = {}
-    for stem, host in inertia.LINKAGE_HOST.items():
-        g = linkage.SOLIDS[stem.replace("lk_boss", "lk_fin")]().volume
-        # The torso is ONE body carrying BOTH legs' fins; a leg body is one
-        # leg's. Same asymmetry cad/inertia.py has to handle.
-        n = 2 if host == "torso" else 1
-        out[host] = out.get(host, 0.0) + n * g / 1000.0 * PA6CF
-    return out
-
-
 # The three linkage parts that are sim BODIES rather than features of one.
 # They have no group-0 geoms in the plain build, so they never appear in the
 # geom sweep below and have to be added by name - which is also the only reason
-# cad/twin.py can weigh them.
+# cad/twin.py can weigh them. The other three, the fin and the stub and the
+# arm, need nothing here: they are chassis, shin and yoke now, and the printed
+# volume already has them.
 def _linkage_bodies_g():
     import cad.linkage as linkage
     import cad.linkage_dims as ld
@@ -78,7 +64,6 @@ def _linkage_bodies_g():
 
 
 def table():
-    LINKAGE_G = _linkage_g()
     m, d = load()
     gname = lambda i: mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i) or ""
     bname = lambda i: mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, i)
@@ -125,7 +110,6 @@ def table():
         total = printed + r["servos"] * SERVO + r["bought"]
         if b == "torso":
             total += IMU + BALLAST
-        total += LINKAGE_G.get(link, 0.0)
         out[b] = (printed, r["servos"], r["bought"], total)
     for name, g in _linkage_bodies_g().items():
         for side in ("l", "r"):

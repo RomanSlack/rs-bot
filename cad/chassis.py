@@ -200,7 +200,34 @@ def build():
                                 at=[(X0, sy), (X0, -sy), (X1, sy), (X1, -sy)]),
                      what="chassis corners")
     build.corner_r = r
-    return part
+
+    # THE PARALLELOGRAM'S GROUND PIN LIVES ON THIS PART. Stage 1 of the linkage
+    # is a rod from a pin on the chassis to a pin on the idler, and that first
+    # pin needs a fin to press into: see cad/linkage_mounts.py, and
+    # cad/linkage.py for what the mechanism is. One per leg.
+    #
+    # It is HERE and not a separate STEP file, which it was for a day. A fin
+    # drawn on its own reads fine in a picture and is not fine: the sim's own
+    # `test_every_body_is_one_rigid_piece` came back "torso is 3 loose pieces",
+    # because the pin is fixed to the torso and the thing it presses into was
+    # not part of the chassis.
+    #
+    # AFTER the fillet, deliberately. soften() picks the four full-height
+    # outside corners by position, and a fin standing off the side plate adds
+    # edges it would have to be taught to ignore.
+    # IN THIS PART'S FRAME, which is not the frame torso_boss draws in.
+    # cad/linkage_mounts.py works in LEG-LOCAL y, where zero is the leg's own
+    # plane; the chassis's zero is the centreline, 60 mm inboard of that. Added
+    # without the shift the fin lands on the robot's midline and its pin
+    # engages nothing, which is what `assembled()` reported: 0.00 mm in torso.
+    from cad.linkage_mounts import torso_boss
+    from src.rsbot.model import LEG_Y
+
+    leg_y = LEG_Y * 1000.0
+    fin = torso_boss(leg_y, SIDE_Y + SIDE_T / 2, SIDE_Z0)
+    part += bd.Pos(0, leg_y, 0) * fin
+    part += bd.Pos(0, -leg_y, 0) * bd.mirror(fin, bd.Plane.XZ)
+    return part.clean()
 
 
 def main(export=True):

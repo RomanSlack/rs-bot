@@ -264,23 +264,33 @@ def test_the_flip_still_has_a_cliff_and_it_is_past_the_design_point():
     Ten real trials, varying the moment the flip is triggered, which is the
     thing that changes what the robot carries into the manoeuvre.
 
-    TEN DEGREES, and it used to be six. Putting the linkage into the sim as
-    real bodies moved the cliff a long way out - 10.6 g came off the shin into
-    bodies of their own, and that is the same mechanism that made deleting the
-    ankle servo worth a degree. But it is not all mass: between about 5 and 8
-    degrees the answer is sensitive to LINKAGE_DAMPING, a modelling constant,
-    so nothing in that band is a measurement. 10 comes back 0 out of 8 at both
-    zero damping and the value the model ships, which makes it the honest place
-    to put a guard.
+    TWELVE DEGREES. It was six, then ten, and the moves have been real each
+    time: mass leaving the shin into bodies of its own, the ankle servo coming
+    out, and now the linkage's fin, stub and arm becoming features of the
+    chassis, shin and yoke, which is 12 g and a different distribution.
+
+    Measured rather than nudged, over the same ten trigger times:
+
+        4.3 deg  6/6      10 deg  4/10
+        6   deg  5/6      12 deg  0/10
+        8   deg  3/6      14 deg  0/10   16 deg  0/10
+
+    Ten is NOT the cliff and had stopped being one: a six-trial sweep reads
+    0/6 there and the full ten reads 4/10, because the last four trigger times
+    survive. Between about 5 and 8 degrees the answer is also sensitive to
+    LINKAGE_DAMPING, a modelling constant, so nothing in that band is a
+    measurement. 12 comes back 0/10 at both zero damping and the value the
+    model ships, which makes it the honest place to put a guard - and it is
+    2.8x the 4.3 deg the robot is actually built to.
     """
     from src.rsbot.sim import rollout_deploy
     stood = 0
     for i in range(10):
         t = 2.0 + 0.1 * i
-        r = rollout_deploy(backlash=math.radians(10.0), trigger=t,
+        r = rollout_deploy(backlash=math.radians(12.0), trigger=t,
                            duration=t + 15.0)
         stood += (not r["fell"]) and r["state"] == "STAND"
-    assert stood == 0, f"10 deg of lash flipped {stood}/10, so where is the cliff?"
+    assert stood == 0, f"12 deg of lash flipped {stood}/10, so where is the cliff?"
 
 
 def test_round_trip_survives_backlash():
@@ -303,7 +313,13 @@ def test_visual_parts_carry_no_mass_or_collision():
                 and not name.startswith("h_"):   # visual build
             assert m.geom_contype[i] == 0 and m.geom_conaffinity[i] == 0, name
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    # 1.799 kg, regenerated rather than trailing the geometry. It has moved
+    # AGAINST THE CAD, not against a literal. It was 1.799 here and the CAD now
+    # builds 1.787, because the linkage's fin, stub and arm stopped being loose
+    # solids and became features of the chassis, shin and yoke. That is the
+    # third time this line has gone stale on a change that was correct, which is
+    # the definition of a number that should not have had a second copy.
+    #
+    # The tolerance stays tight, because tightness is the point: it has moved
     # for real reasons every time: tread cut into the wheel, the press fit and
     # retaining bead that stop the tyre spinning on the rim, every horn hole
     # growing 0.7 mm when the pattern turned out to be M3, +17 g of chassis end
@@ -315,7 +331,9 @@ def test_visual_parts_carry_no_mass_or_collision():
     # SEG_INERTIA is pasted from `cad.inertia --emit` and nobody re-ran it after
     # the cradles landed. This assertion was RIGHT to be tight - it is the one
     # that would have caught it, if the value had been regenerated alongside.
-    assert m.body_subtreemass[t] == pytest.approx(1.799, abs=3e-3)
+    import cad.masses as masses
+    built = sum(v[3] for v in masses.table().values()) / 1000.0
+    assert m.body_subtreemass[t] == pytest.approx(built, abs=3e-3)
 
 
 def test_no_real_part_hits_the_floor_in_either_mode():

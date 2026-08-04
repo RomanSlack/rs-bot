@@ -251,8 +251,19 @@ def test_the_pivots_meet():
 def test_the_linkage_stays_off_the_floor_in_foot_mode():
     """The sole is at 0 and the axle at 12, so there is not much room under the
     linkage's lowest part. This is what ruled out routing stage 2 inboard: the
-    only arm that cleared the roll bracket that way ended up 1 mm up."""
-    assert lk.ground(verbose=False) == pytest.approx(8.1, abs=0.3)
+    only arm that cleared the roll bracket that way ended up 1 mm up.
+
+    13.0 mm and it was 8.1, and BOTH halves of that move are worth knowing:
+
+    - the yoke arm really did rise, from ARM_T 8 -> 6 and its root moving off
+      the ankle-pitch shaft bore to z = +5, which is the seating fix.
+    - and ground() had stopped measuring the arm at all. It walks placed(), the
+      arm stopped being a linkage part when the yoke started printing it, and
+      the check got 5 mm greener on its own. cad/linkage.py's mounts_placed()
+      exists to put that back; the lowest part it reports is lk_arm again.
+
+    Control-tested by dropping the arm root 19 mm, which reads -4.5 mm."""
+    assert lk.ground(verbose=False) == pytest.approx(13.0, abs=0.3)
 
 
 def test_nothing_collides_over_squat_and_flip():
@@ -308,3 +319,62 @@ def test_every_horn_joint_seats():
     assert len(rows) == 8
     for servo, part, clear in rows:
         assert abs(clear) < 0.05, f"{servo} -> {part} is {clear:+.2f} mm out"
+
+
+# --- is it actually held together? --------------------------------------------
+
+def test_every_pivot_is_actually_made():
+    """Not "does it touch something" - how much of each pin is INSIDE the two
+    parts it joins.
+
+    This caught two faults that a connectivity check cannot. The pins were
+    drawn as printed plastic spigots fused to their carriers, while the order
+    sheet listed eight 3 mm steel pins; and once they became separate parts
+    they turned out to be the wrong length, engaging 3 mm of a 6 mm idler and
+    ZERO of the chassis fin, whose material stopped exactly where the pin
+    began. Both read as one connected group throughout.
+    """
+    assert lk.assembled(verbose=False) == []
+
+
+def test_the_idler_has_a_bearing_to_turn_on():
+    """It sat 0.50 mm off its stub with nothing in between: the 623ZZ was on
+    the order sheet and drawn nowhere, which is docs/how-checks-fail.md #13
+    exactly - the parts that do the assembling are the ones nobody checks."""
+    import mujoco
+
+    from src.rsbot.model import load
+    m, _ = load()
+    for side in ("l", "r"):
+        assert mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM,
+                                 f"lkbrg_idler_{side}") >= 0
+
+
+@pytest.mark.parametrize("mode", ["wheel", "foot"])
+def test_the_whole_robot_is_one_object(mode):
+    """63 solids, on the real geometry, at 0.05 mm. Not the sim's boxes at
+    4 mm, which is a much easier question."""
+    from cad.assemble_check import connected
+    assert connected(mode, verbose=False) == []
+
+
+def test_each_mount_feature_is_seated_on_its_host():
+    """Not "does it touch" - how much of each root's face is ON material.
+
+    Two solids meeting on a plane intersect in NOTHING, so a face butt has no
+    overlap volume and neither an interference check nor a connectivity check
+    can tell it from a graze. That is not hypothetical: the stub axle was
+    attached to the shin through 13 mm3 of the ankle servo's CRADLE WALL, four
+    millimetres off the knee axis, because its face had been measured against
+    that wall instead of against the hub. One connected group throughout, and it
+    would have stayed true until the cradle came out - which is already on the
+    list, because it holds a servo that no longer exists.
+
+    Asserted per feature and tightly. The stub's 61% is the hub's horn bore and
+    screw holes, which have to be open; the other two are the whole face.
+    """
+    got = {what: round(area / full, 3) for what, area, full in
+           lk.mounts(verbose=False)}
+    assert got == pytest.approx({"stub on the shin hub": 0.613,
+                                 "arm on YOKE_FWD": 1.0,
+                                 "fin on the side plate": 1.0}, abs=0.02)

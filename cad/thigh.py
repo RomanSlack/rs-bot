@@ -63,7 +63,12 @@ HUB_R, HORN_BORE = 13.0, 4.0
 from cad.servo import LENGTH as SERVO_L, WIDTH as SERVO_W, HEIGHT as SERVO_H
 from cad.servo import SHAFT_INSET, HORN_DX, HORN_DY, HORN_SCREW_R
 SERVO_Y_HI = SPINE_Y - 6.0                    # servo's outboard face, y = 15
-SERVO_Y_LO = SERVO_Y_HI - SERVO_H             # inboard face, y = -20.4
+SERVO_Y_LO = SERVO_Y_HI - SERVO_H             # inboard face, y = -21.5
+# That comment said -20.4 for as long as SERVO_H was 35.4. cad/servo.py
+# re-exports cad/servo_dims.py, HEIGHT there was corrected to 36.50, and the
+# face moved 1.1 mm without the comment following it. Nothing read the comment,
+# so nothing broke - but src/rsbot/model.py's thigh boxes were being written off
+# it, which put a box 0.5 mm inside the knee servo that the solids never had.
 SERVO_Z_LO = KNEE_Z - SHAFT_INSET             # -120.0
 SERVO_Z_HI = SERVO_Z_LO + SERVO_L             # -74.8
 

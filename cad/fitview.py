@@ -134,6 +134,7 @@ def solids(mode="wheel"):
     import cad.linkage as linkage
     for side in ("l", "r"):
         out.extend(linkage.placed(m, d, side))
+        out.extend(linkage.bought(m, d, side))
 
     # The bought hardware: shafts, bearings, belts. Without these there is
     # literally nothing between the shin and the ankle yoke on screen, because

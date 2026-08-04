@@ -78,9 +78,10 @@ import numpy as np
 from cad.hardware import BEARING_ID, BEARING_OD
 # Every dimension of the mechanism lives in cad/linkage_dims.py, which carries
 # no build123d so the physics can import it too. One copy.
-from cad.linkage_dims import (DZ, R, SIM_BODIES, SIM_MESH,  # noqa: F401
-                              U1, U2, Y_ARM, Y_FIN, Y_IDLER, Y_ROD1, Y_ROD2,
-                              sim_stance)
+from cad.linkage_dims import (ARM_T, ARM_W, DZ, EYE_R, IDLER_HUB_R,  # noqa: F401
+                              IDLER_T, IDLER_W, PINS, PIN_D, R, ROD_T, ROD_W,
+                              SIM_BODIES, SIM_MESH, U1, U2, Y_ARM, Y_FIN,
+                              Y_IDLER, Y_ROD1, Y_ROD2, sim_bought, sim_stance)
 from cad.wheel_dims import HALF_W as WHEEL_HALF_W, R as WHEEL_R
 
 # linkage_dims keeps them as plain tuples so it can stay free of numpy as well
@@ -140,13 +141,6 @@ FLAT_WHEEL_R = float(np.hypot(WHEEL_R, WHEEL_HALF_W))
 # anything else), at 38.7 N. They are sized by buckling, not by stress, and by a
 # long way - 18x, see loads() - so 8 x 6 is the smallest section that still
 # prints with four perimeters and does not look like a wire.
-ROD_W = 6.0                   # along y
-ROD_T = 8.0                   # in the plane of motion
-PIN_D = 3.0                   # the 3 mm shaft everything else in this robot uses
-EYE_R = 5.0                   # rod eye outer radius, 3.5 mm of wall on the pin
-IDLER_T = 8.0                 # the idler bar's in-plane depth
-IDLER_W = 6.0
-IDLER_HUB_R = 8.0             # over a 623ZZ, 10 mm outside
 PIN_REACH = 18.0              # pin: its own slice, across the gap, through
                               # the eye and 2 past. Sized on the widest gap
 
@@ -513,16 +507,39 @@ def adjust_range_deg():
     return per_mm * ADJUST_MM
 
 
-def _pin_at(x, z, out=+1):
-    """A pin in the local frame of the part that CARRIES it.
+def _pin(x, z, carrier_y, rod_y, seat, at_carrier=True):
+    """A pin, spanning from inside its CARRIER to just past its ROD.
 
-    It starts at that part's own plane and runs toward the rod plane, through
-    the eye and 2 mm past so there is something to retain it against. `out` is
-    which way that is: +1 for a part sitting inboard of the rods, -1 for one
-    sitting outboard. Every pin in the linkage is this pin.
+    IT IS A BOUGHT PART. The first version of this file ADDED it to whichever
+    printed part carried it, so the fin, the idler and the yoke arm each came
+    out of the printer with a 3 mm plastic spigot on them - while the order
+    sheet listed eight 3 mm steel pins a robot. Two descriptions of the same
+    joint, one of which you cannot print at that diameter and would shear
+    anyway.
+
+    AND IT WAS THE WRONG LENGTH, which only showed up once it stopped being
+    fused to its carrier. It used to start AT the carrier's plane and run
+    outward, which is what a boss growing off a part does; as a separate pin
+    that leaves it engaging 3 mm of a 6 mm idler and ZERO of the fin, whose
+    material stops exactly where the pin began. assembled() measures it.
+
+    So both ends are derived: `seat` deep into the carrier at one end, and
+    2 mm past the rod's eye at the other. `at_carrier` picks whose frame the
+    result is in - the carrier's own plane, or leg-local y.
     """
-    return (bd.Pos(x, out * PIN_REACH / 2, z) * bd.Rot(90, 0, 0)
-            * bd.Cylinder(PIN_D / 2, PIN_REACH))
+    out = 1.0 if rod_y > carrier_y else -1.0
+    near = carrier_y - out * seat
+    far = rod_y + out * (ROD_W / 2 + 2.0)
+    lo, hi = min(near, far), max(near, far)
+    if at_carrier:
+        lo, hi = lo - carrier_y, hi - carrier_y
+    return (bd.Pos(x, (lo + hi) / 2, z) * bd.Rot(90, 0, 0)
+            * bd.Cylinder(PIN_D / 2, hi - lo))
+
+
+def _pin_bore(x, z, carrier_y, rod_y, seat):
+    """The hole a pin is pressed into, in its carrier. Same axis, same span."""
+    return _pin(x, z, carrier_y, rod_y, seat)
 
 
 def idler():
@@ -547,7 +564,8 @@ def idler():
                 * bd.Box(L, IDLER_W, IDLER_T))
         bar += (bd.Pos(float(u[0]), 0, float(u[1])) * bd.Rot(90, 0, 0)
                 * bd.Cylinder(EYE_R, IDLER_W))
-        bar += _pin_at(float(u[0]), float(u[1]), out)
+        bar -= _pin_bore(float(u[0]), float(u[1]), Y_IDLER,
+                         Y_ROD1 if out < 0 else Y_ROD2, IDLER_W / 2 + 1.0)
     # The 623ZZ's outer race sits in this bore; the inner race is on the stub
     # axle the shin carries. See knee_stub().
     bar -= bd.Rot(90, 0, 0) * bd.Cylinder(BEARING_OD / 2, IDLER_W * 4)
@@ -593,8 +611,6 @@ def knee_stub(face_y=SHIN_FACE_Y):
 # band, which is the reason Y_ARM is 59 and not some other number.
 YOKE_ROOT = np.array([0.0, Y_ARM, 0.0])
 
-ARM_T = 8.0
-ARM_W = 6.0
 
 
 def yoke_arm():
@@ -617,7 +633,9 @@ def yoke_arm():
                   x_dir=x_dir, z_dir=z_dir)
     arm = pl * bd.Box(ARM_T, ARM_W, length)
     arm += (bd.Pos(*tip) * bd.Rot(90, 0, 0) * bd.Cylinder(EYE_R, ARM_W))
-    arm += bd.Pos(0, tip[1], 0) * _pin_at(float(tip[0]), float(tip[2]), -1)
+    arm -= (bd.Pos(0, tip[1], 0)
+            * _pin_bore(float(tip[0]), float(tip[2]), Y_ARM, Y_ROD2,
+                        ARM_W / 2 + 1.0))
     return arm.clean()
 
 
@@ -652,16 +670,16 @@ def torso_boss(leg_y):
            * bd.Box(FIN_T, abs(y1 - y0), FIN_H))
     fin += (bd.Pos(float(U1[0]), (y0 + y1) / 2, float(U1[1]))
             * bd.Rot(90, 0, 0) * bd.Cylinder(FIN_T / 2, abs(y1 - y0)))
-    pin = bd.Pos(0, Y_FIN, 0) * _pin_at(float(U1[0]), float(U1[1]), +1)
-    return (fin + pin).clean()
+    fin -= (bd.Pos(0, Y_FIN, 0)
+            * _pin_bore(float(U1[0]), float(U1[1]), Y_FIN, Y_ROD1, 8.0))
+    return fin.clean()
 
 
 # Print orientation, per part: the layer normal each one is laid down along.
 # The rods and the idler go flat, y up, because every hole in them is a pin bore
 # on the y axis and a bore printed on its side needs support through it. The fin
 # stands on the face that bolts to the plate.
-LAYER = {"lk_rod1": (0, 1, 0), "lk_rod2": (0, 1, 0), "lk_idler": (0, 1, 0),
-         "lk_arm": (0, 1, 0), "lk_fin": (1, 0, 0), "lk_stub": (0, 1, 0)}
+LAYER = {"lk_rod1": (0, 1, 0), "lk_rod2": (0, 1, 0), "lk_idler": (0, 1, 0)}
 
 OUT = __import__("pathlib").Path(__file__).parent / "out"
 
@@ -669,11 +687,9 @@ OUT = __import__("pathlib").Path(__file__).parent / "out"
 def export_stls(out_dir=None):
     """The linkage's own printed parts, each in its own frame.
 
-    Only the three that are parts in their own right plus the two mount
-    features, so cad/printability.py can be pointed at them. The features are
-    exported separately on purpose: they will end up fused into the chassis and
-    the yoke, and until they are, a check that says the ROD prints fine has
-    said nothing about the fin.
+    Three, so cad/printability.py can be pointed at them. The mount features
+    are not here: they are printed as part of the chassis, the shin and the
+    yoke, and are checked with those.
     """
     d = out_dir or OUT
     d.mkdir(parents=True, exist_ok=True)
@@ -682,12 +698,15 @@ def export_stls(out_dir=None):
     return d
 
 
-def mass_g(leg_y=60.0, density=1.19, infill=1.0):
-    """PA6-CF at 1.19 g/cm3, one leg's worth. The rods and the idler are small
-    enough to print solid, and at this size infill would cost more in wall than
-    it saves."""
-    v = sum(s.volume for s in (rod1(), rod2(), idler(), yoke_arm(),
-                               torso_boss(leg_y)))
+def mass_g(density=1.19, infill=1.0):
+    """PA6-CF at 1.19 g/cm3, one leg's worth of the linkage's OWN parts.
+
+    The three that are parts. The fin, the stub and the arm are not counted
+    here because they are not separate any more: they are chassis, shin and
+    yoke, and cad/masses.py weighs them with those. Counting them twice was
+    available and would have been silent.
+    """
+    v = sum(make().volume for make in SOLIDS.values())
     return v / 1000.0 * density * infill
 
 
@@ -732,21 +751,21 @@ def placements(m, d, side="l"):
         return origin + torso_R @ np.array([u[0], plane * sgn, u[1]])
 
     return [
-        (f"lk_boss_{side}", "lk_fin", sgn, thigh_p, torso_R),
-        (f"lk_stub_{side}", "lk_stub", sgn, shin_p, shin_R),
         (f"lk_rod1_{side}", "lk_rod1", sgn,
          pin(thigh_p, U1, Y_ROD1), thigh_R),
         (f"lk_idler_{side}", "lk_idler", sgn,
          shin_p + torso_R @ np.array([0.0, Y_IDLER * sgn, 0.0]), torso_R),
         (f"lk_rod2_{side}", "lk_rod2", sgn,
          pin(shin_p, U2, Y_ROD2), shin_R),
-        (f"lk_arm_{side}", "lk_arm", sgn, ankle_p, ankle_R),
     ]
 
 
-SOLIDS = {"lk_fin": lambda: torso_boss(60.0), "lk_stub": knee_stub,
-          "lk_rod1": rod1, "lk_idler": idler, "lk_rod2": rod2,
-          "lk_arm": yoke_arm}
+# THE LINKAGE'S OWN PRINTED PARTS, and there are three, not six. The fin, the
+# stub and the arm were here for a day as separate solids and are features of
+# the chassis, the shin and the yoke: cad/linkage_mounts.py draws them and
+# those three modules build them in. See cad/linkage_mounts.py for why a
+# separate fin is not a smaller version of a fitted one, it is a loose piece.
+SOLIDS = {"lk_rod1": rod1, "lk_idler": idler, "lk_rod2": rod2}
 
 
 def placed(m, d, side="l"):
@@ -760,11 +779,43 @@ def placed(m, d, side="l"):
 
     out = []
     for name, stem, sgn, pos, R in placements(m, d, side):
-        solid = (torso_boss(_leg_y(m, d, side)) if stem == "lk_fin"
-                 else SOLIDS[stem]())
+        solid = SOLIDS[stem]()
         if sgn < 0:
             solid = bd.mirror(solid, bd.Plane.XZ)
         out.append((name, _loc(pos / 1000.0, R.flatten()) * solid))
+    return out
+
+
+def mounts_placed(m, d, side="l"):
+    """[(name, solid)] the three MOUNT FEATURES in world, for measurement only.
+
+    They are not parts any more - the chassis, the shin and the yoke print them
+    - so they are correctly absent from SOLIDS and from placed(). But ground()
+    still has to see them, and the yoke arm is exactly why: it is the lowest
+    thing the linkage puts anywhere near the floor, and the moment it became a
+    yoke feature ground() stopped measuring it and got 5 mm greener without
+    anything moving. A check that improves because it stopped looking is the
+    fault this repo keeps finding, so this puts the coverage back.
+    """
+    from cad.assemble_check import _loc
+    from cad.linkage_mounts import knee_stub, torso_boss, yoke_arm
+
+    sgn = 1 if side == "l" else -1
+
+    def body(n):
+        i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, n)
+        return np.array(d.xpos[i]), np.array(d.xmat[i]).flatten()
+
+    torso_R = body("torso")[1]
+    out = []
+    for name, solid, (pos, R) in (
+            (f"lk_fin_{side}", torso_boss(_leg_y(m, d, side)),
+             (body(f"thigh_{side}")[0], torso_R)),
+            (f"lk_stub_{side}", knee_stub(), body(f"shin_{side}")),
+            (f"lk_arm_{side}", yoke_arm(), body(f"ankle_{side}"))):
+        if sgn < 0:
+            solid = bd.mirror(solid, bd.Plane.XZ)
+        out.append((name, _loc(pos, R) * solid))
     return out
 
 
@@ -774,6 +825,239 @@ def _leg_y(m, d, side):
     t = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
     h = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f"thigh_{side}")
     return abs(float(d.xpos[h][1] - d.xpos[t][1])) * 1000.0
+
+
+# Where each pin lives: (x, z) offset, the plane its CARRIER sits in, which way
+# it reaches, and the body it is fixed to. Four a leg, plus the idler's bearing.
+def bought(m, d, side="l"):
+    """[(name, solid)] the linkage's BOUGHT hardware, in world.
+
+    Four 3 mm pins and one 623ZZ a leg. They exist here because of
+    docs/how-checks-fail.md #13 - the parts that do the assembling are the ones
+    nobody checks - and because this file had just repeated that fault twice at
+    once: the pins were drawn as printed spigots on their carriers, and the
+    idler's bearing was on the order sheet and drawn nowhere at all. The idler
+    sat 0.50 mm off its stub with nothing in between, which is what a joint
+    made of two holes looks like.
+    """
+    from cad.assemble_check import _loc
+    from cad.hardware import bearing
+
+    sgn = 1 if side == "l" else -1
+
+    def body(n):
+        i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, n)
+        return _loc(d.xpos[i], d.xmat[i])
+
+    torso, thigh = body("torso"), body(f"thigh_{side}")
+    shin, ankle = body(f"shin_{side}"), body(f"ankle_{side}")
+    idler = body(f"lkidler_{side}")
+
+    def level(at):
+        return bd.Location(at.position, torso.orientation)
+
+    host = {"thigh": level(thigh), "idler": idler, "ankle": ankle}
+    out = []
+    for name, u, plane, rod, seat, where in PINS:
+        pin = _pin(float(u[0]), float(u[1]), plane * sgn, rod * sgn, seat)
+        # The idler carries its pins in its OWN frame, where the plane offset is
+        # already baked into the body's position; the others are placed from a
+        # joint, so the plane is part of the offset.
+        at = (bd.Pos(0, 0, 0) if where == "idler"
+              else bd.Pos(0, plane * sgn, 0))
+        out.append((f"lkpin_{name}_{side}", host[where] * at * pin))
+    # Inner race on the stub, outer in the idler's bore, on the knee axis.
+    out.append((f"lkbrg_idler_{side}",
+                level(shin) * bd.Pos(0, Y_IDLER * sgn, 0) * bd.Rot(90, 0, 0)
+                * bearing()))
+    return out
+
+
+# What each bought part is supposed to join. Named rather than inferred,
+# because "it touches something" is the question that passes when a pin grazes
+# the wrong part, and this is the question that does not.
+JOINS = {"lkpin_fin": ("torso", "lk_rod1"),
+         "lkpin_idler1": ("lk_idler", "lk_rod1"),
+         "lkpin_idler2": ("lk_idler", "lk_rod2"),
+         "lkpin_arm": ("ankle", "lk_rod2"),
+         "lkbrg_idler": ("shin", "lk_idler")}
+
+# A pivot needs meat around it. 4 mm on a 3 mm pin is a length-to-diameter of
+# 1.3, which is the least you would accept before the pin starts working the
+# bore oval.
+MIN_ENGAGE = 4.0
+
+
+def assembled(verbose=True):
+    """Is every pivot actually made, or does something just pass nearby?
+
+    For each pin, how much of it is INSIDE each of the two parts it joins,
+    measured by intersecting an oversized pin with the part and dividing by the
+    annulus area. A pin that misses gives zero; a pin that grazes gives a
+    millimetre; a pin properly through a 6 mm eye gives 6.
+
+    This is the check that "1 connected group" cannot be. Union-find says every
+    part is REACHABLE from every other, which a single 0.04 mm graze anywhere
+    satisfies - and this robot has had exactly that: a wheel-drive servo
+    floating 0.5 mm off the bracket it bolts to, found only because a boolean
+    union came back as two solids instead of one.
+
+    Control-tested by shortening the fin's pin so it stops 1 mm short of rod 1,
+    which drops that pivot to 2.00 mm engaged and fails.
+    """
+    from fitcheck import pose as set_pose
+    from src.rsbot.model import load
+
+    m, d = load()
+    over = PIN_D / 2 + 0.1
+    area = np.pi * (over ** 2 - (PIN_D / 2) ** 2)
+    rows = []
+    for mode in ("wheel", "foot"):
+        set_pose(m, d, mode)
+        for side in ("l", "r"):
+            parts = dict(placed(m, d, side))
+            # The carriers are the HOST parts now - the chassis, the shin and
+            # the yoke - so the assembly they come from is the whole robot's,
+            # not the linkage's own.
+            from cad.assemble_check import parts as robot_parts
+            parts.update({("torso" if n == "torso" else n): sol
+                          for n, sol in robot_parts(mode, md=(m, d))})
+            for name, sol in bought(m, d, side):
+                stem = name.rsplit("_", 1)[0]
+                if stem == "lkbrg_idler":
+                    for want in JOINS[stem]:
+                        g = _gap(sol, parts[_host(want, side)])
+                        rows.append((0.0 if g < 0.01 else -1.0, name, want, g,
+                                     mode, side))
+                    continue
+                fat = _fatten(sol, over)
+                for want in JOINS[stem]:
+                    v = (fat & parts[_host(want, side)]).volume
+                    rows.append((v / area, name, want, 0.0, mode, side))
+    if verbose:
+        print("--- is every pivot actually made?")
+        seen = set()
+        for eng, name, want, g, mode, side in sorted(rows):
+            key = (name.rsplit("_", 1)[0], want)
+            if key in seen:
+                continue
+            seen.add(key)
+            if name.startswith("lkbrg"):
+                print(f"   {key[0]:<14} in {want:<10} "
+                      f"{'seated' if g < 0.01 else f'{g:.2f} mm OFF IT'}")
+            else:
+                flag = "ok" if eng >= MIN_ENGAGE else "NOT ENGAGED"
+                print(f"   {key[0]:<14} in {want:<10} {eng:5.2f} mm "
+                      f"engaged   {flag}")
+    bad = [r for r in rows if r[0] < MIN_ENGAGE and not r[1].startswith("lkbrg")]
+    bad += [r for r in rows if r[1].startswith("lkbrg") and r[3] > 0.01]
+    return bad
+
+
+# How much of each mount feature's root face is actually ON its host, as a
+# fraction. A face butt has NO overlap volume - two solids meeting on a plane
+# intersect in nothing - so neither an interference check nor a connectivity
+# check can tell it from a graze. This measures the contact AREA instead, by
+# taking a thin slab of the host immediately behind the root and comparing it
+# to the root's own cross-section.
+#
+# It exists because of what it found. The stub axle was touching the shin
+# through THIRTEEN cubic millimetres of the ankle servo's cradle wall, four
+# millimetres off the knee axis, because SHIN_FACE_Y had been measured against
+# that wall instead of against the hub. Every check in the repo said one solid.
+# It would have stayed true until the cradle came out - and the cradle is
+# already on the list for removal, since it holds a servo that no longer
+# exists.
+SLAB = 0.5
+# 0.60, and the reason is the shin's hub rather than a comfortable bound. A root
+# cannot seat on a hole that has to be open, and the hub carries the knee horn's
+# Ø8 bore plus four M3 screw holes right under the stub's footprint: 123 mm2 of
+# a gross 201 is material, and 123 is all there is. The other two come out at
+# 100%, and tests/test_linkage.py asserts all three to a percent, which is the
+# guard that actually catches drift. This bound only has to catch a root that is
+# half on air, which is what the arm was.
+MIN_SEATED = 0.60
+
+
+def mounts(verbose=True):
+    """Is each mount feature seated on its host, or just touching it?
+
+    Returns every measurement, not only the failures: a check that hands back
+    an empty list on success gives a test nothing to assert tightly, and a
+    tight assertion is what catches drift.
+    """
+    import cad.ankle as ankle
+    import cad.chassis as chassis
+    import cad.linkage_mounts as lm
+    import cad.shin as shin
+
+    rows = []
+
+    # The stub, on the shin's hub: a disc of the root's own radius.
+    host = _without(shin.build, lm, "knee_stub")
+    probe = (bd.Pos(0, lm.SHIN_FACE_Y - SLAB / 2, 0) * bd.Rot(90, 0, 0)
+             * bd.Cylinder(lm.STUB_R, SLAB))
+    rows.append(("stub on the shin hub", (probe & host).volume / SLAB,
+                 np.pi * lm.STUB_R ** 2))
+
+    # The arm, on the yoke's forward member: a rectangle normal to x.
+    host = _without(ankle.yoke, lm, "yoke_arm")
+    probe = (bd.Pos(-SLAB / 2, float(lm.YOKE_ROOT[1]), float(lm.YOKE_ROOT[2]))
+             * bd.Box(SLAB, lm.ARM_W, lm.ARM_T))
+    rows.append(("arm on YOKE_FWD", (probe & host).volume / SLAB,
+                 lm.ARM_W * lm.ARM_T))
+
+    # The fin, on the chassis side plate.
+    host = _without(chassis.build, lm, "torso_boss")
+    plate = chassis.SIDE_Y + chassis.SIDE_T / 2
+    probe = (bd.Pos(float(U1[0]), plate - SLAB / 2,
+                    lm.fin_z(chassis.SIDE_Z0))
+             * bd.Box(lm.FIN_T, SLAB, lm.FIN_H))
+    rows.append(("fin on the side plate", (probe & host).volume / SLAB,
+                 lm.FIN_T * lm.FIN_H))
+
+    if verbose:
+        print("--- is each mount feature seated on its host?")
+        for what, area, full in rows:
+            f = area / full
+            print(f"   {what:<24}{area:7.1f} of {full:6.1f} mm2  "
+                  f"{f*100:5.1f}%   {'ok' if f >= MIN_SEATED else 'NOT SEATED'}")
+    return rows          # [(what, seated mm2, root mm2)], callers judge
+
+
+def _without(build, module, name):
+    """`build()` with one of its features neutered, so the host can be measured
+    on its own. Put somewhere harmless rather than made zero-size: a degenerate
+    solid at the origin is a second solid in the middle of the part."""
+    orig = getattr(module, name)
+    setattr(module, name, lambda *a, **k: bd.Pos(0, 900, 0) * bd.Box(1, 1, 1))
+    try:
+        return max(build().solids(), key=lambda s: s.volume)
+    finally:
+        setattr(module, name, orig)
+
+
+def _host(name, side):
+    """A part key: the torso has no side, everything else does."""
+    return name if name == "torso" else f"{name}_{side}"
+
+
+def _fatten(pin, r):
+    """The pin at radius `r`, same axis and length. Its intersection with a
+    bored part is the annulus between pin and bore, whose length is the
+    engagement."""
+    b = pin.bounding_box()
+    axis = int(np.argmax([b.size.X, b.size.Y, b.size.Z]))
+    c = ((b.min.X + b.max.X) / 2, (b.min.Y + b.max.Y) / 2,
+         (b.min.Z + b.max.Z) / 2)
+    length = [b.size.X, b.size.Y, b.size.Z][axis]
+    rot = {0: bd.Rot(0, 90, 0), 1: bd.Rot(90, 0, 0), 2: bd.Rot(0, 0, 0)}[axis]
+    return bd.Pos(*c) * rot * bd.Cylinder(r, length)
+
+
+def _gap(a, b):
+    from cad.assemble_check import gap
+    return gap(a, b)
 
 
 def pivots(m, d, side="l"):
@@ -936,21 +1220,16 @@ def seats(verbose=True):
 # assertion (docs/how-checks-fail.md #8).
 REPLACED = {"vanksv_l", "vanksv_r"}
 
-# Three of the six linkage parts are FEATURES of a part that already exists:
-# the fin is chassis, the stub is shin, the arm is yoke. They are drawn
-# separately here so this file can be read and checked on its own, and they
-# overlap their host on purpose, because that is what being fused to it means.
-# Nothing else is excused: the three of them are still checked against every
-# other part in the robot, and against each other.
-HOST = {"lk_boss": "torso", "lk_stub": "shin", "lk_arm": "ankle"}
+# NOTHING IS EXCUSED HERE ANY MORE. There used to be a HOST table saying which
+# linkage parts were allowed to overlap which host, because the fin, the stub
+# and the arm were drawn separately and fused to their hosts only in principle.
+# They are built into the chassis, the shin and the yoke now, so there is no
+# overlap to excuse and no exclusion to argue with. An exclusion deserves the
+# same suspicion as an assertion (docs/how-checks-fail.md #8); the best thing to
+# do with one is remove the reason for it.
 
 
 def _fused(na, nb):
-    """True if these two are the same part once the features are cut in."""
-    for a, b in ((na, nb), (nb, na)):
-        stem = a.rsplit("_", 1)[0] if a.startswith("lk_") else None
-        if stem and HOST.get(stem) and b.startswith(HOST[stem]):
-            return a.endswith(b.rsplit("_", 1)[-1]) or b == "torso"
     return False
 
 
@@ -987,7 +1266,7 @@ def ground(verbose=True):
     for h in (0.185, 0.195, 0.215):
         set_pose(m, d, "foot", None, h)
         for side in ("l", "r"):
-            for n, solid in placed(m, d, side):
+            for n, solid in placed(m, d, side) + mounts_placed(m, d, side):
                 z = float(solid.bounding_box().min.Z)
                 if worst is None or z < worst[0]:
                     worst = (z, n, h)
@@ -1118,7 +1397,10 @@ def clearance(verbose=True):
     for mode, frac, height in poses:
         others = [(n, s) for n, s in parts(mode, frac, height, md=md)
                   if n not in REPLACED]
-        mine = [p for side in ("l", "r") for p in placed(m, d, side)]
+        # The BOUGHT parts are in the sweep too. They were not, and fitcheck's
+        # box model found a pin overlapping a rod that the solids never checked.
+        mine = [q for side in ("l", "r")
+                for q in placed(m, d, side) + bought(m, d, side)]
         # EVERY linkage part against every other part, plus the linkage against
         # itself once. The first version wrote this as one product with an
         # `if na >= nb: continue` to dedupe the self-pairs, and that name
@@ -1176,6 +1458,10 @@ def main():
     corridor()
     print()
     bad += sim_matches_cad() > 0.01
+    print()
+    bad += len(assembled())
+    print()
+    bad += sum(1 for _, a, f in mounts() if a / f < MIN_SEATED)
     print()
     bad += ground() <= 5.0
     print()

@@ -406,7 +406,15 @@ def test_no_running_clearance_closes_under_a_worst_case_tolerance_stack():
 
 
 @pytest.mark.parametrize("part,sizes", [("roll_bracket", (3.0, 2.2)),
-                                        ("shin", (3.0, 2.2)),
+                                        # 2.25 and not 2.2: the knee stub put
+                                        # the shin at 56 198 nodes, past
+                                        # fea.MAX_NODES, and 2.15 is worse at
+                                        # 59 610. 2.3 meshes but comes back
+                                        # with an inverted element, which the
+                                        # mesher rejects rather than solving.
+                                        # 2.25 is 52 622 and the same
+                                        # refinement in every way that matters.
+                                        ("shin", (3.0, 2.25)),
                                         ("thigh", (2.6, 2.2))])
 def test_the_reported_peak_is_a_number_and_not_a_mesh_artifact(part, sizes):
     """A peak that moves under refinement is not the part's stress.

@@ -317,6 +317,14 @@ def build():
     part -= _box(((-SERVO_W / 2 - CRADLE_CLEAR, SERVO_W / 2 + CRADLE_CLEAR),
                   (SPINE_Y + SPY + 7.0, SPINE_Y + SPY + 7.0 + 2 * CRADLE_DEPTH),
                   (sz0 - CRADLE_CLEAR, sz1 + CRADLE_CLEAR)))
+    # THE IDLER TURNS ON THIS PART. cad/linkage.py's bar rides on a stub axle
+    # coaxial with the knee, and the shin is what is out there: probing the
+    # knee axis finds the knee servo to y = 15, this part to y = 32, and air
+    # past that. A fat printed boss rather than a 3 mm shaft, because 0.03 mm
+    # of deflection here is 0.06 deg at the foot.
+    from cad.linkage_mounts import knee_stub
+    part += knee_stub()
+
     return part
 
 

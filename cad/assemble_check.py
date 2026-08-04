@@ -291,6 +291,85 @@ def main(mode="wheel"):
     return worst + tight
 
 
+# Two parts count as joined if they are this close. 0.05 mm is well under the
+# 0.3 mm the print services quote, so nothing real hides beneath it, and it is
+# tight enough that a part "connected" by a coincidental graze still shows up as
+# the single 0.04 mm link holding it on.
+JOIN_MM = 0.05
+
+
+def connected(mode="wheel", verbose=True):
+    """Is this one object, or a cloud of parts that happen not to overlap?
+
+    fitcheck.py asks this already and asks it of the sim's BOXES, at a 4 mm
+    threshold, which is a different and much easier question: a box is bigger
+    than the part it stands for and 4 mm of slack joins things that are not
+    touching. This asks it of the real solids at 0.05 mm, over the full
+    assembly - printed parts, real servos, bought hardware, the cables and the
+    parallelogram - which is 63 solids rather than 21.
+
+    NOT OVERLAPPING IS NOT ASSEMBLED. Two parts 30 mm apart pass every
+    interference check in this repo. The wheel-drive servo floated 0.5 mm off
+    the bracket it bolts to for weeks, and what found it was a boolean union
+    coming back as two solids instead of one.
+
+    Reporting is by exception and it names the nearest neighbour of anything
+    adrift, because "3 groups" on its own tells you nothing about which part to
+    look at.
+
+    WHAT THIS CANNOT SEE, and the control test is how it was learned: an
+    overlapping part reads as CONNECTED. Shoving rod 2 twenty-five millimetres
+    into its neighbours still came back "1 connected group", because a gap of
+    zero is a gap of zero whether the parts are kissing or interpenetrating.
+    So this is a necessary condition and not a sufficient one; main() above is
+    the other half, and only the two together mean "touching, and not through
+    each other". Detaching the same rod by 250 mm does fail it.
+
+    And connectivity says REACHABLE, not held. A part hanging on by one 0.04 mm
+    graze passes. cad.linkage.assembled() is the version of this question that
+    measures how much of each pin is actually inside the parts it joins.
+    """
+    import cad.fitview as fv
+
+    sol = dict(fv.solids(mode))
+    names = sorted(sol)
+    parent = {n: n for n in names}
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    nearest = {n: (float("inf"), None) for n in names}
+    for a, b in itertools.combinations(names, 2):
+        try:
+            g = gap(sol[a], sol[b])
+        except Exception:
+            continue
+        for x, y in ((a, b), (b, a)):
+            if g < nearest[x][0]:
+                nearest[x] = (g, y)
+        if g <= JOIN_MM:
+            parent[find(a)] = find(b)
+
+    groups = {}
+    for n in names:
+        groups.setdefault(find(n), []).append(n)
+    adrift = []
+    big = max(groups.values(), key=len)
+    for g in groups.values():
+        if g is not big:
+            adrift.extend(g)
+    if verbose:
+        print(f"--- {mode} mode: {len(sol)} solids, {len(groups)} connected "
+              f"group(s) at {JOIN_MM} mm")
+        for n in sorted(adrift):
+            d, o = nearest[n]
+            print(f"   ADRIFT {n:<22} nearest {o:<22} {d:7.2f} mm")
+    return adrift
+
+
 def run_all(modes=("wheel", "foot")):
     """Everything this module knows how to ask, in one command.
 
@@ -306,6 +385,8 @@ def run_all(modes=("wheel", "foot")):
     """
     bad = 0
     for mo in modes:
+        bad += len(connected(mo))
+        print()
         bad += len(main(mo))
         print()
         bad += sum(1 for r in stack(mo) if r[0] <= 0)

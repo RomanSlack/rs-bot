@@ -194,6 +194,33 @@ def audit(mode, verbose=True, frac=None):
         # is exempted, and no printed part is.
         if "shaft" in na or "shaft" in nb:
             continue
+        # Same reason for the linkage's PINS, which pass through the rod eyes
+        # they turn in. The rod's box has no bore, so a pin properly through it
+        # reads as 2 mm of interference. Narrow on purpose: pin against ROD
+        # only. A pin against anything else in the robot is still checked here,
+        # and it is worth saying that this exemption was earned - before the
+        # pins were in cad/linkage.py's solid sweep, this same box model was the
+        # only thing that saw the idler's pin 3.5 mm3 inside rod 2, which was
+        # real and is fixed.
+        # Same reason for the three things that live inside a linkage BORE: the
+        # pins in the rod eyes, the bearing pressed into the idler, and the knee
+        # stub through that bearing. The carrier's box has no bore, so a part
+        # properly inside it reads as interference.
+        #
+        # Narrow on purpose, and each one measured on the real solids before it
+        # was written here (cad/linkage.py placed() and bought(), foot mode):
+        #   idler & bearing      0.00 mm3, gap 0.000 mm   press fit, touching
+        #   idler & shin+stub    0.00 mm3, gap 0.500 mm   the recess in the stub
+        # cad/linkage.py's clearance() is what actually checks them, on solids,
+        # over every pose and both legs, bought parts included. The exemption
+        # was earned: before the pins were in that sweep, this same box model
+        # was the only thing that saw the idler's pin 3.5 mm3 inside rod 2,
+        # which was real and is fixed.
+        bore = (("lkpin", "vlkrod"), ("lkbrg_idler", "vlkidler"),
+                ("vlkstub", "vlkidler"))
+        if any((na.startswith(i) and nb.startswith(o))
+               or (nb.startswith(i) and na.startswith(o)) for i, o in bore):
+            continue
         # Geoms on the SAME body cannot move relative to each other, so shared
         # material between two PRINTED pieces is a lap joint, and MuJoCo skips
         # these for the same reason.

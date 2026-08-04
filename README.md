@@ -172,7 +172,7 @@ way back into the project.
 **How this project goes wrong**
 
 - [how-checks-fail.md](docs/how-checks-fail.md) - **read this before trusting a
-  green result.** Seventeen ways a check here has lied, all of them things that
+  green result.** Eighteen ways a check here has lied, all of them things that
   happened. The parts are in better shape than the things that verify them
 
 **Questions settled, so they stay settled**

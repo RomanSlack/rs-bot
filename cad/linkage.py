@@ -180,6 +180,39 @@ BEARING_PLAY = 0.01
 # What the print service quotes, the same number cad/assemble_check.py stacks.
 TOL = 0.3
 
+# --- the adjuster ---------------------------------------------------------------
+#
+# ROD 2 IS ADJUSTABLE IN LENGTH, and that is a requirement rather than a
+# convenience. error_budget() puts the worst-case BUILD OFFSET at 4.21 degrees
+# of fixed foot tilt, and with no ankle actuator there is nothing left to trim
+# it with afterwards.
+#
+# What decides it is not that 4.21 sounds large, it is where the cliff is.
+# Injecting the offset into the tendon equality and flipping at 3 degrees of
+# gear lash, 8 triggers each:
+#
+#     offset      both legs the same way      opposite ways
+#     4.5 deg     8/8                         7/8
+#     5.0 deg     8/8                         4/8
+#     5.5 deg     0/8                         1/8
+#
+# So the worst case lands 0.3 to 0.8 degrees inside a cliff, and BOTH numbers
+# bounding that margin are estimates: the 4.21 is a bound with its own
+# assumptions and the 3 degrees of lash has never been measured on hardware.
+# A margin that thin between two estimates is not a margin.
+#
+# The mechanism is a clamped lap: rod 2 is two printed halves overlapping in a
+# joint that is split along y, so the assembled envelope is unchanged and the
+# clearance sweep still sees one 8 x 6 rod. Two M3 screws through slots clamp
+# it. Slip is not the risk it looks like - two M3 at a modest preload hold
+# several hundred newtons by friction against a 39 N rod force - and a screw
+# through a slot is the one adjustment that needs no thread in plastic, which
+# matters while docs/road-to-order.md item 2 is still undecided.
+ADJUST_MM = 3.0               # +/- along the rod, so 6 mm of slot
+CLAMP_D = 3.4                 # M3 clearance
+CLAMP_PITCH = 13.0            # between the two clamp screws
+LAP_MM = 26.0                 # how far the two halves overlap
+
 
 def _rot(a):
     """Rotation by `a` about +y, acting on (x, z). Positive pitches nose-down,
@@ -367,9 +400,12 @@ def error_budget(radial=PLAY, tol=TOL, verbose=True):
               f"          {play_off:5.2f} deg")
         print(f"      compare   gear lash at the ankle servo          "
               f"2-3    deg   (docs/backlash.md)")
+        rng = adjust_range_deg()
         print(f"   build offset print +/-{tol:.2f} mm, fixed per leg   "
-              f"{tol_off:5.2f} deg   "
-              f"{'ADJUSTABLE ROD REQUIRED' if tol_off > 1.0 else 'ok'}")
+              f"{tol_off:5.2f} deg")
+        print(f"      rod 2 adjusts +/-{ADJUST_MM:.1f} mm, worth        "
+              f"{rng:5.2f} deg   "
+              f"{'covers it' if rng >= tol_off else 'NOT ENOUGH TRAVEL'}")
         print(f"   band spread  what one adjustment cannot remove  "
               f"{tol_spread:5.2f} deg")
     return play_off, tol_off, tol_spread
@@ -456,8 +492,37 @@ def rod1():
 
 
 def rod2():
-    """Idler to yoke, parallel to the shin. Origin at the idler pin."""
-    return _beam(SHIN_L, ROD_T, ROD_W)
+    """Idler to yoke, parallel to the shin. Origin at the idler pin.
+
+    TWO PIECES, clamped, so its length can be trimmed at assembly. See
+    ADJUST_MM for why that is not optional. Drawn assembled, because that is
+    what every clearance check needs to see; the split is along y, so the
+    envelope is the same 8 x 6 as rod 1 and the lap adds nothing to sweep.
+    """
+    rod = _beam(SHIN_L, ROD_T, ROD_W)
+    # The clamp slots, through the lap, on the rod's own axis. Slotted in one
+    # half and round in the other; drawn as the slot, which is the envelope
+    # that has to stay inside the rod.
+    mid = -SHIN_L / 2
+    for z in (mid - CLAMP_PITCH / 2, mid + CLAMP_PITCH / 2):
+        slot = (bd.Pos(0, 0, z) * bd.Rot(90, 0, 0)
+                * bd.Cylinder(CLAMP_D / 2, ROD_W * 4))
+        slot += bd.Pos(0, 0, z) * bd.Box(CLAMP_D, ROD_W * 4, 2 * ADJUST_MM)
+        rod -= slot
+    return rod.clean()
+
+
+def adjust_range_deg():
+    """How much foot tilt the adjuster can take out.
+
+    From the SOLVER, not from arithmetic: closes() measures 1 mm of rod-2 error
+    as 2.03 degrees at the foot, so the range is that slope times the travel.
+    Computing it here rather than writing 6 degrees down means it moves when the
+    geometry does.
+    """
+    per_mm = abs(np.degrees(foot_angle(*_band(1)[0],
+                                       {"l2": SHIN_L + 1.0})[0]))
+    return per_mm * ADJUST_MM
 
 
 def _pin_at(x, z, out=+1):

@@ -127,6 +127,68 @@ def test_the_build_tolerance_needs_an_adjustable_rod():
     assert spread == pytest.approx(1.09, abs=0.1)
 
 
+def test_the_adjuster_covers_the_build_offset():
+    """The requirement, in one line: rod 2's travel has to be worth more foot
+    tilt than the print tolerance can put in."""
+    _, offset, _ = lk.error_budget(tol=lk.TOL, verbose=False)
+    assert lk.adjust_range_deg() >= offset
+
+
+def _flip_with_offset(deg, lash=3.0, trials=5, opposite=False):
+    """Flip into foot mode with a deliberate foot-angle build error.
+
+    Injected into the tendon equality's constant, which is exactly what a
+    mis-built linkage does: it still holds hip + knee + ankle rigidly, it just
+    holds it at the wrong number.
+    """
+    import mujoco
+    from src.rsbot.model import load
+    from src.rsbot.sim import CTRL_HZ, obs
+    from src.rsbot.transition import DeployCfg, DeployMachine, STAND
+
+    stood = 0
+    for i in range(trials):
+        trigger = 2.0 + 0.1 * i
+        m, d = load(backlash=np.deg2rad(lash))
+        r = np.deg2rad(deg)
+        m.eq_data[0, 0], m.eq_data[1, 0] = r, -r if opposite else r
+        mujoco.mj_resetDataKeyframe(m, d, 0)
+        mujoco.mj_forward(m, d)
+        mach = DeployMachine(cfg=DeployCfg(flip_rate=2.0))
+        torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
+        decim = int(round(1.0 / (CTRL_HZ * m.opt.timestep)))
+        dt = decim * m.opt.timestep
+        fired = fell = False
+        for k in range(int((trigger + 15.0) / m.opt.timestep)):
+            t = k * m.opt.timestep
+            if not fired and t >= trigger:
+                mach.start_deploy()
+                fired = True
+            if k % decim == 0:
+                d.ctrl[:] = mach(obs(m, d), dt)
+            mujoco.mj_step(m, d)
+            if d.xpos[torso][2] < 0.12:
+                fell = True
+                break
+        stood += (not fell) and mach.state == STAND
+    return stood
+
+
+def test_the_worst_case_build_offset_still_flips():
+    """4.21 degrees of fixed foot tilt, both legs, and it has to survive - this
+    is the state the robot is in if it is built badly and never adjusted."""
+    assert _flip_with_offset(4.21) == 5
+    assert _flip_with_offset(4.21, opposite=True) == 5
+
+
+def test_there_is_a_cliff_just_past_it():
+    """And this is why the adjuster is not optional. 5.5 degrees is a degree
+    and a bit past the worst case and the robot does not get up at all, so the
+    unadjusted margin is 0.3 to 0.8 degrees between two numbers that are both
+    estimates."""
+    assert _flip_with_offset(5.5) == 0
+
+
 def test_the_error_budget_is_zero_when_nothing_is_wrong():
     """Control: with no play and no tolerance there is no error to find."""
     play, offset, spread = lk.error_budget(radial=0.0, tol=0.0, verbose=False)

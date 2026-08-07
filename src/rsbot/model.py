@@ -829,12 +829,15 @@ def _torso_visual(meshes=False):
     # Modelled as one slab it reads as a 4.2 mm interpenetration, which is not
     # a fault - it is a hole nobody had drawn.
     # The parallelogram's ground fin, one per leg. Real material on the
-    # chassis (cad/chassis.py builds it in), so it needs a stand-in here or the
-    # pin that presses into it is a cylinder floating beside the side plate -
-    # which is what "torso is 3 loose pieces" was.
+    # chassis (cad/chassis.py builds it in), so the BOX model needs a stand-in
+    # here or the pin that presses into it is a cylinder floating beside the side
+    # plate - which is what "torso is 3 loose pieces" was. In meshes=True the
+    # cad_torso mesh already carries the fin, so the stand-in is skipped: drawn
+    # over the mesh it is coincident with, it z-fights (blue bleeding through the
+    # chassis, which reads exactly like two parts in the same place).
     import cad.linkage_dims as _lk
     fin_y0, fin_y1 = 0.0396, (_lk.Y_FIN + LEG_Y * 1000.0) / 1000.0
-    for sgn in (1, -1):
+    for sgn in ((1, -1) if not meshes else ()):
         g.append(_v(f"vlinkfin{sgn}", "box",
                     f"{_lk.FIN_T/2000.0:.6f} {(fin_y1-fin_y0)/2:.6f} "
                     f"{_lk.FIN_H/2000.0:.6f}",

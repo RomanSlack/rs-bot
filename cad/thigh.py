@@ -49,7 +49,7 @@ CABLE_CH_R = 3.0
 
 
 OUT = Path(__file__).parent / "out"
-PETG_SOLID, INFILL = 1.270, 0.60
+from cad.material import DENSITY as PRINT_DENSITY, INFILL  # PA6-CF, one source
 
 SPINE_Y = 21.0
 SPY_OUT = 10.0                # half-thickness, 20 mm total
@@ -204,7 +204,7 @@ def build():
 
 def main(export=True):
     p = build()
-    g = p.volume / 1000.0 * PETG_SOLID * INFILL
+    g = p.volume / 1000.0 * PRINT_DENSITY * INFILL
     if export:
         OUT.mkdir(exist_ok=True)
         bd.export_step(p, str(OUT / "thigh.step"))

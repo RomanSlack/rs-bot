@@ -233,10 +233,26 @@ def test_the_rods_never_approach_a_singularity():
 
 
 def test_the_rods_are_nowhere_near_buckling():
-    """Sized on the measured ankle torque, not on cad/belt.py's literal."""
-    force, critical = lk.loads(torque_nm=1.082, verbose=False)
-    assert force == pytest.approx(38.7, abs=0.5)
+    """The buckling margin on the LIVE measured ankle torque, derived and not
+    frozen. This test carried torque_nm=1.082 while its own docstring said
+    "measured, not a literal" - and the survey reads 0.95 N.m since the robot
+    dropped to PA6-CF, so the frozen force was 14% high and going staler with
+    every mass change (how-checks-fail #20). The margin is the claim; the exact
+    force was a second copy of a number cad.loads already owns."""
+    force, critical = lk.loads(verbose=False)   # live survey, factored
     assert critical / force > 10.0
+
+
+def test_the_rod_eye_is_far_below_allowable():
+    """The two-force member's OTHER mode: tension at the pin eye, solved in
+    cad.fea (lk.rod_stress). Buckling governs above; the eye is the number the
+    net-section hand calc cannot give and the reason "cad.stress never solved a
+    linkage rod" sat on the open list. Solved, it is 2% of the knocked PA6-CF
+    allowable - which is what "sized by buckling, not stress" means once
+    something actually solves the eye. A fixed 40 N (over the live 34) keeps
+    this off the torque survey; the eye stress is linear in the load."""
+    peak, allow = lk.rod_stress(force=40.0, verbose=False)
+    assert peak < 0.2 * allow
 
 
 # --- and it fits ---------------------------------------------------------------
@@ -284,11 +300,16 @@ def test_no_servo_can_turn_far_in_its_own_mount():
 
     Asserted per servo and tightly. A single "worst is under X" would pass while
     one mount quietly got worse and another got better.
+
+    The hips and rolls read 1.30 until 2026-08-05, which was the 0.4 mm of float
+    those four servos had for want of a seating face - the same fault measured
+    from the other end (status/2026-08-05, cad/floating.py). Seated, they drop to
+    the 0.1-0.2 the located mounts always had.
     """
     from cad.fasteners import capture
     got = {name: free for free, name, _ in capture(verbose=False)}
-    want = {"vhipsv1": 1.30, "vhipsv-1": 1.30, "vrollsv_l": 1.30,
-            "vrollsv_r": 1.30, "vkneesv_l": 0.70, "vkneesv_r": 0.70,
+    want = {"vhipsv1": 0.20, "vhipsv-1": 0.20, "vrollsv_l": 0.10,
+            "vrollsv_r": 0.10, "vkneesv_l": 0.70, "vkneesv_r": 0.70,
             "vwhlsv_l": 0.10, "vwhlsv_r": 0.10}
     assert got == pytest.approx(want, abs=0.05)
 

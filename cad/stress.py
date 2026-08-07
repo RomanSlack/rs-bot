@@ -34,10 +34,15 @@ from cad import fea, loads
 
 OUT = Path(__file__).parent / "out"
 
-# A print is not solid. The mass model assumes 60% infill and so does this,
-# knocked off both strength and stiffness. It is conservative for bending,
-# where the solid perimeters sit at the extreme fibre and carry most of it.
-# Print a coupon and correct it.
+# A print is not solid. This knocks the ALLOWABLE down for infill - a sparse
+# core tears sooner - and it is conservative even for that, because the solid
+# perimeters sit at the extreme fibre and carry most of the bending. It does NOT
+# knock stiffness: the same perimeters mean bending stiffness is close to solid,
+# so the deflections below are solved at solid E and read as a LOWER bound, the
+# footing docs/assembled-strength.md uses too. The comment here claimed both
+# were knocked until 2026-08-06; only the allowable ever was, and knocking E as
+# well would have doubled every deflection into a number no part has. Print a
+# coupon and correct both the allowable knockdown and this assumption.
 INFILL = 0.60
 
 # name, E MPa, nu, in-plane ultimate MPa, interlayer ultimate MPa, g/cm3, note
@@ -360,6 +365,15 @@ def analyse(name, spec, wrench, size=None, verbose=True):
         k = knockdown(mat)
         # Displacement scales exactly as 1/E, so the reference solve at
         # E = 1000 MPa rescales without re-solving.
+        #
+        # SOLID E, not E * k, and on purpose - see the header. The allowable is
+        # knocked for infill because a print can tear along a sparse core; the
+        # stiffness is NOT, because bending stiffness lives in the solid
+        # perimeters at the extreme fibre, so solid E is close to real and a
+        # LOWER bound on deflection. That is the same footing
+        # docs/assembled-strength.md puts its deflection on. Knocking E by k here
+        # would nearly double every deflection into a number the part does not
+        # have.
         u = u_ref * (1000.0 / E)
         out[mat] = dict(u=u, vm=vm, il=il, nodes=nodes, elems=elems,
                         fixed=fixed, defl=float(np.abs(u).max()),

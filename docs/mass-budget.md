@@ -13,14 +13,14 @@ real CAD mass from `cad/shin.py`.
 | Item | Count | Each | Total |
 |---|---|---|---|
 | Leg servos, STS3215 | 8 | 55 g | 440 g |
-| Printed structure (chassis, thighs, shins, yokes, brackets) | | | 346 g |
+| Printed structure (chassis, thighs, shins, yokes, brackets) | | | 325 g |
 | The parallelogram, printed: rod, idler, rod | 2 | 17 g | 34 g |
 | Arm/head ballast + IMU (stage 4) | | | 605 g |
 | 3S pack | 1 | 180 g | 180 g |
 | Wheels, printed body + TPU tyre + horn | 2 | 55 g | 110 g |
 | Pi 5 | 1 | 45 g | 45 g |
 | Bus adapter | | | 10 g |
-| **Total** | | | **1770 g** |
+| **Total** | | | **1749 g** |
 
 **1907 to 1800 g on 2026-08-03**, and every gram of it is the ankle-pitch
 servos and their belt drive coming out: 2 x 55 g of servo and 2 x 34 g of
@@ -39,6 +39,18 @@ and a clearance pocket, 53.05 cm3 down to 45.11, about 9 g a leg. It sat there
 for a day with a note on it saying it was dead. Nothing failed while it did,
 because dead material is conservative in every check this repo runs - which is
 exactly why nothing was going to remove it on its own.
+
+**Then 1770 to 1771 g on 2026-08-05**, the only ADDITION in the run: a seating
+face on each of the four servos that were held by nothing - an end wall under
+the two hip cases, a datum wall on the two roll cradles. About 1 g total, and it
+buys the load path a face to bear on instead of 0.4 mm of air.
+
+**Then 1771 to 1749 g the same day**, and no part moved: the printed structure
+had been weighed at PETG's 1.270 g/cm3, the density it was COSTED in, while it
+is ordered in PA6-CF at 1.19 (docs/materials.md). That density was in five files
+and is now in one, cad/material.py, imported by the CAD and the sim alike. The
+22 g is the correction. The balancer was re-checked against it, not assumed:
+still stands 60 s and rejects a 1.0 N.s shove (tests/test_stage0.py).
 
 That 107 g is not just lighter, it is lighter IN THE RIGHT PLACE. It came off
 the far end of the leg, and foot mode now survives 4 degrees of gear lash where

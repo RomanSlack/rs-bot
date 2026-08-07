@@ -2,7 +2,7 @@
 
 Replaces hand-assigned numbers. Each body is:
 
-    printed structure (its own volume x PETG x infill)
+    printed structure (its own volume x PA6-CF x infill)
   + the servos whose CASES bolt to it
   + bought parts it carries
 
@@ -25,8 +25,7 @@ import cad.thigh as thigh
 import cad.ankle as ankle
 import cad.chassis as chassis
 
-PETG = 1.270          # g/cm3
-INFILL = 0.60         # a print is not solid; see cad/shin.py
+from cad.material import DENSITY as PA6CF, INFILL  # the structure's material
 SERVO = 55.0          # STS3215
 # 54.0, not 60: the wheel is now a designed part (cad/wheel.py) rather than a
 # bought one, because nothing sold has a usable side face. Body + TPU + horn.
@@ -36,11 +35,10 @@ SERVO = 55.0          # STS3215
 # current figure and this has to be moved to match it by hand; cad/inertia.py's
 # check_masses is what catches it if you forget.
 WHEEL = 54.79
-# PA6-CF, for the parallelogram's links. The printed structure is quoted at
-# PETG x infill above because that is what those parts were costed in; the
-# linkage is small, solid and highly loaded per gram, so it is quoted at the
-# material cad/stress.py actually solves it in.
-PA6CF = 1.19          # g/cm3, solid
+# The whole printed robot is PA6-CF now (cad/material.py, docs/materials.md), so
+# the structure and the linkage share one density. They apply it differently:
+# the structure is quoted at PA6CF x INFILL, the linkage is small, solid and
+# highly loaded per gram, so it is quoted SOLID (no infill) - see _linkage below.
 PI5, BATT, DRIVER, IMU = 45.0, 180.0, 10.0, 5.0
 BALLAST = 600.0       # arms (480) + head (120), stage 4
 
@@ -106,7 +104,7 @@ def table():
     out = {}
     for b, r in rows.items():
         link = b.rsplit("_", 1)[0]
-        printed = cad_g.get(link, r["cm3"] * PETG * INFILL)
+        printed = cad_g.get(link, r["cm3"] * PA6CF * INFILL)
         total = printed + r["servos"] * SERVO + r["bought"]
         if b == "torso":
             total += IMU + BALLAST

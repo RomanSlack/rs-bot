@@ -45,7 +45,7 @@ SOLIDS = {"thigh": thigh.build, "shin": shin.build,
           "ankle": ankle.yoke, "rollbracket": ankle.roll_bracket,
           "torso": chassis.build}
 
-PETG_G_MM3 = masses.PETG / 1000.0        # g/cm3 -> g/mm3
+PRINT_G_MM3 = masses.PA6CF / 1000.0      # g/cm3 -> g/mm3, PA6-CF (cad/material.py)
 ANKLE_Z_MM = -110.0
 INFILL = masses.INFILL
 
@@ -163,7 +163,7 @@ def body_inertials():
         body = link if link == "torso" else f"{link}_l"
         part = build()
         vol = part.volume
-        printed_g = vol * PETG_G_MM3 * INFILL
+        printed_g = vol * PRINT_G_MM3 * INFILL
         com, I = solid_inertia(part, printed_g)
         pieces = [(printed_g, com, I)] + _pieces(m, body)
         # THE BELT DRIVE USED TO BE LUMPED HERE, 34 g out at y = 84.5 in the
@@ -226,9 +226,9 @@ def _wheel_inertia():
     and the spin inertia HALF the real value, because the real tyre is a thin
     band of TPU out at r = 37-40 and almost all of the spin inertia is in it.
 
-    Densities come from cad/wheel.py, not masses.PETG: this is the one part
-    that is not PETG, and the body and the tyre are not the same material as
-    each other.
+    Densities come from cad/wheel.py, not the structure's PA6-CF: this is the
+    one printed part that is a different material, and the body and the tyre are
+    not the same material as each other.
     """
     import cad.wheel as wheel
 

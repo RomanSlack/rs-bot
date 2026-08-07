@@ -130,7 +130,7 @@ uv run python render.py            # render a demo to renders/
 uv run python tune.py              # re-tune balancer gains
 ```
 
-Latest status report: [status/2026-08-03-status.md](status/2026-08-03-status.md).
+Latest status report: [status/2026-08-06-status.md](status/2026-08-06-status.md).
 Each one leads with what turned out to be wrong that day, which is the fastest
 way back into the project.
 
@@ -172,8 +172,8 @@ way back into the project.
 **How this project goes wrong**
 
 - [how-checks-fail.md](docs/how-checks-fail.md) - **read this before trusting a
-  green result.** Eighteen ways a check here has lied, all of them things that
-  happened. The parts are in better shape than the things that verify them
+  green result.** Twenty-three ways a check here has lied, all of them things
+  that happened. The parts are in better shape than the things that verify them
 
 **Questions settled, so they stay settled**
 

@@ -1,5 +1,59 @@
 # The road to ordering
 
+> **2026-08-06: the digital work is nearly done, and the last gap it found is a
+> real one.** State today: **1749 g**, EIGHT servos, the ankle-pitch servos and
+> their belt gone (passive parallelogram), PA6-CF throughout, sim = CAD to the
+> milligram. The verification layer is comprehensive and green - floating parts,
+> servo seating, mass basis, interference through the flip, printability, the
+> linkage rod's buckling AND eye stress are all settled. Most of the body of
+> this file below is history; the numbers in it (1907 g, PETG, ten servos, the
+> belt) are superseded.
+>
+> **The concrete blocker now is a paper-vs-geometry gap in the fasteners, found
+> 2026-08-06.** The bolt list on `order-sheet.md` and in `cad/fasteners.py`'s
+> SCHEDULE calls for **16 M2.5 heat-set inserts** - but the 3.5 mm bores they
+> need are **not modelled in any part**. `M25_INSERT_R` is defined and used
+> nowhere (a dead constant); where the schedule says "insert in chassis" the
+> chassis cuts a 2.7 mm clearance hole straight through. So every PART-TO-PART
+> joint (chassis assembly, Pi mount, ankle-pitch shaft retention) has no thread
+> and nowhere to seat its insert. Print today and it stops at assembly. The
+> order sheet's fastener rows are also stale the other way: 40 M2 case screws
+> that were deleted with the capture cradles, and missing the 8 M3x6 horn centre
+> screws and 4 M3x12 + 4 nuts the rod clamp needs. `fasteners.audit()` only
+> verifies servo-screw ALIGNMENT (the horn holes, which do exist) and `bom()`
+> counts inserts off the hand-written schedule without asking the geometry.
+>
+> **The checks are now in (2026-08-06).** `fasteners.inserts_seated()` asks the
+> geometry for a 3.5 mm bore per scheduled insert and reports the shortfall
+> (chassis 12, yoke 2), pinned in `tests/test_fasteners.py` the way the floating
+> servos were; `fastener_order()` plus a test hold `order-sheet.md`'s fastener
+> table equal to the schedule, so it cannot drift again. Both control-tested: the
+> insert check detects a real blind bore and ignores a clearance hole.
+>
+> **CLOSED 2026-08-06: `inserts_seated` reads empty.** Cutting the bores split
+> three ways. The 4 Pi standoff bores are in (the standoff top now takes an
+> insert instead of the 2.7 mm through-hole that matched no fastener). The 8
+> "side plates -> top" inserts were dropped - the chassis is one fused 193 mm
+> print, so the joint and its 8 inserts + 8 M2.5x10 screws did not exist; the
+> order is 8 inserts, not 16. The 4 yoke inserts are placed: two radial M2.5 set
+> screws per pair retain the ankle-pitch shaft from the boss's exposed +x face.
+> All of it verified - interference clean through the flip, meshes manifold,
+> sim = cad at 1748.9 g.
+>
+> **One check earned an extension doing it.** `toolaccess` flagged the new insert
+> bores as unreachable, because it treated them as screwdriver-driven screws.
+> They are not: a heat-set insert is pressed with an iron before assembly and
+> its screw comes from the mating part - the same bench-operation exclusion the
+> horn screws already had. It now knows that, and its control test (a slab
+> across a real driver path) still fails as it should. NOT covered, and named in
+> the check: the yoke set screws are driven in the assembled robot with a hex
+> key; that access measured ~2 mm clear but is not separately asserted.
+>
+> **Everything left after that is physical, and needs the $30 validation order**
+> below: real PA6-CF strength (the roll bracket sits near its limit on LITERATURE
+> properties), the bore and tyre press fits, and gear backlash. No amount of
+> simulation produces those. The model has taken this as far as a model can.
+
 > **2026-08-03: the ankle-pitch servos and their belt drive are deleted.** A
 > passive parallelogram replaces them (`cad/linkage.py`,
 > `docs/deleting-the-ankle-pitch-servo.md`). Ten servos to eight, 1907 g to

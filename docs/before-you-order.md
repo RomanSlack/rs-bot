@@ -4,6 +4,23 @@ Read this first if you are picking up rs-bot. It says what the project is
 actually trying to prove, what has been verified against reality and how, and
 what is still fiction.
 
+> **Current state, 2026-08-06 (this supersedes stale numbers further down).**
+> The robot is **1749 g**, EIGHT servos, no belt and no ankle-pitch servo - a
+> passive parallelogram replaced them - and PA6-CF throughout. Sim mass = CAD
+> mass to the milligram. The body below still says 1.907 kg, ten servos, a belt,
+> a 39.60 mm servo (it is 36.50 now), and "53 tests"; those are history. The
+> verification suite is ~106 checks and green, and the linkage rod now has a
+> real FEA behind it.
+>
+> **Two things below are no longer true and matter.** "Fasteners are specified"
+> is only half right: the bolt list exists, but the **16 M2.5 heat-set insert
+> bores it calls for are not modelled in any part** (found 2026-08-06), so the
+> part-to-part joints have nowhere to seat an insert. And the order sheet's
+> fastener rows are stale (40 deleted case screws; missing the horn centre screw
+> and rod-clamp bolts). See `road-to-order.md` for both. Everything else still
+> open is physical - material coupon, bore fits, backlash - and wants the $30
+> validation order, not more simulation.
+
 ## The mission
 
 Prove that a simulator plus an agentic AI can do the whole loop - CAD, physics,

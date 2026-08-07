@@ -16,15 +16,14 @@ def scene():
     return fl._scene("wheel")
 
 
-# The four that are currently floating, and they are all the same fault: a
-# cradle cut CRADLE_CLEAR = 0.4 oversize with no seating face, so the servo
-# drops in and touches nothing. The knee and wheel-drive servos seat at 0.000,
-# which is what these should look like.
+# Nothing floats. The four servos that did - both hips 0.4 mm off the chassis,
+# both roll cradles 0.4 mm off the yoke - got a seating face on 2026-08-05, and
+# they are asserted seated in test_the_servos_that_do_seat_still_seat below.
 #
 # PINNED AS A LIST, not as a count. A count would let one fault be swapped for
 # another silently, and the point of this file is that a servo held by nothing
 # is invisible to every other check here.
-KNOWN = {"vhipsv1", "vhipsv-1", "vrollsv_l", "vrollsv_r"}
+KNOWN = set()
 
 
 def test_nothing_new_is_floating(scene):
@@ -35,9 +34,13 @@ def test_nothing_new_is_floating(scene):
 
 
 def test_the_servos_that_do_seat_still_seat(scene):
-    """The two that are right, so this file cannot pass by everything being
-    equally broken."""
-    for servo, host in (("vkneesv_l", "thigh_l"), ("vwhlsv_l", "rollbracket_l")):
+    """Every servo bears on its host at 0.000, so this file cannot pass by
+    everything being equally broken. The first two seated from the start; the
+    four hips and rolls got their face on 2026-08-05 and are pinned here so a
+    regression fails loudly instead of quietly re-floating."""
+    for servo, host in (("vkneesv_l", "thigh_l"), ("vwhlsv_l", "rollbracket_l"),
+                        ("vhipsv1", "torso"), ("vhipsv-1", "torso"),
+                        ("vrollsv_l", "ankle_l"), ("vrollsv_r", "ankle_r")):
         assert fl._gap(scene[servo], scene[host]) == pytest.approx(0.0, abs=1e-6)
 
 

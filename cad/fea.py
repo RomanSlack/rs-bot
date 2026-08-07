@@ -196,6 +196,17 @@ def solve(nodes, elems, E, nu, fixed, loads):
 
     free = np.ones(n, bool)
     free[(np.asarray(fixed)[:, None] * 3 + np.arange(3)).ravel()] = False
+    # Pin ORPHAN nodes: ones the mesher emitted that no element references. They
+    # carry zero stiffness, so a single stray node leaves Kff singular and fails
+    # the whole solve with a rigid-body mode - which is what happened to
+    # leg_assembly, meshing as 34706 connected nodes plus 1 orphan. That is a
+    # mesh artifact, not a structural fact, so pinning it is correct. A genuinely
+    # disconnected CHUNK of the part is a different thing and still trips the
+    # residual check below, so this does not paper over the fault that matters.
+    orphan = np.where(~np.isin(np.arange(len(nodes)),
+                               np.unique(np.asarray(elems))))[0]
+    if orphan.size:
+        free[(orphan[:, None] * 3 + np.arange(3)).ravel()] = False
     Kff = K[free][:, free].tocsc()
     u = np.zeros(n)
     u[free] = _solve_spd(Kff, f[free])

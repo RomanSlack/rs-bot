@@ -15,8 +15,9 @@ from pathlib import Path
 import build123d as bd
 
 OUT = Path(__file__).parent / "out"
-PETG_SOLID, INFILL = 1.270, 0.60
+from cad.material import DENSITY as PRINT_DENSITY, INFILL  # PA6-CF, one source
 M25_CLEAR = 1.35
+from cad.fasteners import M25_INSERT_R, M25_INSERT_DEPTH  # insert bore, one source
 
 X0, X1 = -36.5, 53.5          # 90 mm deep, centred on the sim's 8.5 offset
 SIDE_Y, SIDE_T = 38.1, 3.0    # plate centre-line and thickness
@@ -148,6 +149,23 @@ def build():
         xo = xi + CRADLE_WALL
         for sx in (-1, 1):
             side += _plate(tuple(sorted((sx * xi, sx * xo))), cy, CRADLE_Z)
+        # Seat the case along its length. Two walls with CRADLE_CLEAR each side
+        # LOCATE nothing - the servo drops in and floats 0.4 mm on every face,
+        # so the load path from the torso into the leg runs through two M3 in
+        # air. cad/floating.py found it (status/2026-08-04); the fix is one
+        # flush face, the way cad/thigh.py seats its knee servo on a plate. A
+        # flush WALL cannot be a press fit (print tol is +/-0.3, see
+        # CRADLE_CLEAR), so the datum is a face PERPENDICULAR to the walls: an
+        # end wall at the servo's lower z face, in the 2.5 mm the side plate
+        # already reaches below it (SIDE_Z0). The case bottoms on it at 0.000.
+        #
+        # Runs the full width to +/-xo, not +/-xi. Stopping at xi met the cradle
+        # walls (which start at xi) along a single EDGE at z = HIP_SERVO_Z[0],
+        # and an edge-only join is non-manifold - it left four open edges that a
+        # print service rejects (cad/printability.py). To xo it shares a FACE
+        # with each wall and the outer x = xo face runs continuous, the way the
+        # walls already meet the side plate cleanly.
+        side += _plate((-xo, xo), cy, (SIDE_Z0, HIP_SERVO_Z[0]))
         part = side if part is None else part + side
 
     for z, name in ((TOP_Z, "top"), (SHELF1_Z, "shelf1"), (SHELF2_Z, "shelf2")):
@@ -161,10 +179,18 @@ def build():
                             (z - PLATE_T, z + PLATE_T))
         part += shelf
 
-    # Pi standoffs and clearance holes on the lower shelf.
+    # Pi standoffs with a heat-set insert in each top, NOT a clearance hole
+    # through the shelf. The schedule bolts the Pi DOWN into the chassis
+    # (M2.5 x 6, "insert in chassis"), so the thread lives in the standoff. The
+    # old 2.7 mm through-hole matched no fastener - it was the clearance for a
+    # screw coming the other way, which the bolt list does not have, and it left
+    # cad/fasteners.inserts_seated red. The post is r = 3.0, so a 3.5 mm bore
+    # leaves 1.25 mm of wall, just over INSERT_WALL; 4 mm deep bottoms on the
+    # shelf.
     for px, py in PI_HOLES:
         part += bd.Pos(px + 8.5, py, SHELF1_Z + 3.5) * bd.Cylinder(3.0, 4.0)
-        part -= bd.Pos(px + 8.5, py, SHELF1_Z) * bd.Cylinder(M25_CLEAR, 20)
+        part -= (bd.Pos(px + 8.5, py, SHELF1_Z + 3.5)
+                 * bd.Cylinder(M25_INSERT_R, M25_INSERT_DEPTH))
 
     # Close the two open ends. See the note by PANEL_T for why they start at
     # z = 45.4 and why the front one is a frame.
@@ -232,7 +258,7 @@ def build():
 
 def main(export=True):
     p = build()
-    g = p.volume / 1000.0 * PETG_SOLID * INFILL
+    g = p.volume / 1000.0 * PRINT_DENSITY * INFILL
     if export:
         OUT.mkdir(exist_ok=True)
         bd.export_step(p, str(OUT / "chassis.step"))

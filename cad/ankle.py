@@ -60,7 +60,7 @@ CABLE_CH_R = 3.0
 
 
 OUT = Path(__file__).parent / "out"
-PETG_SOLID, INFILL = 1.270, 0.60
+from cad.material import DENSITY as PRINT_DENSITY, INFILL  # PA6-CF, one source
 
 # From the sim, millimetres, relative to the axle.
 # The roll drive, drawn for the first time. Layout along the roll axis:
@@ -233,6 +233,21 @@ def yoke():
     part -= (bd.Pos(0, (y0 + y1) / 2, 0) * bd.Rot(90, 0, 0)
              * bd.Cylinder(PITCH_SHAFT_R, 2 * (y1 - y0)))
 
+    # Retain the ankle-pitch shaft: two M2.5 set screws in heat-set inserts,
+    # radial from the boss's EXPOSED +x hemisphere (the -x half is buried in
+    # YOKE_FWD) onto the 3 mm shaft. Two along the boss lock it against spinning.
+    # One 3.5 mm bore each, boss surface (x = 7) in to the shaft AXIS (x = 0):
+    # the insert seats in the outer 4 mm, the set-screw tip runs the rest onto
+    # the shaft. It runs to 0, not to the shaft bore's edge at x = 2, because
+    # stopping tangent to that r = 2 bore left the mesh non-manifold (2 open
+    # edges); reaching past it merges the two cleanly. The mouth is tangent to
+    # the r = 7 cylinder, so the insert is fully walled from x = 6.8 inward.
+    # cad/fasteners.inserts_seated wanted these; it read yoke 2/0.
+    from cad.fasteners import M25_INSERT_R
+    for sy in (59.0, 63.0):
+        part -= (bd.Pos(3.5, sy, 0) * bd.Rot(0, 90, 0)
+                 * bd.Cylinder(M25_INSERT_R, 7.0))
+
     # Roll bearing seat and the shaft bore through it.
     part -= bd.Pos(-48, 0, 0) * bd.Rot(0, 90, 0) * bd.Cylinder(ROLL_SHAFT_R, 40)
     part -= (bd.Pos(-49, 0, 0) * bd.Rot(0, 90, 0)
@@ -265,12 +280,26 @@ def yoke():
     # Two opposed walls are enough on their own. The servo's reaction is a
     # couple about its own shaft, which lies along x here, so it is reacted by
     # forces in the y-z plane, and 25.5 mm of separation in y provides them.
+    #
+    # ONE WALL IS THE DATUM, THE OTHER KEEPS ITS CLEARANCE. With CRADLE_CLEAR on
+    # BOTH walls the servo dropped in and located nothing - it floated 0.4 mm
+    # off the yoke on every face, which cad/floating.py found (status/2026-08-04)
+    # and cad/fasteners.capture() had been reporting for weeks as 1.3 deg. The
+    # perpendicular seats the thigh and roll bracket use are shut here: the
+    # bottom face is the one the floor rules out (above), and the shaft face is
+    # buried in the servo's own interference envelope, so a ring on it reads as
+    # 828 mm3 of overlap in cad/assemble_check even though the real spline is
+    # round and clears. That leaves the +y wall as the datum: flush to the case,
+    # so the servo registers against it, while -y keeps CRADLE_CLEAR so it still
+    # drops in. A flush wall is not a press fit - the servo slides in along its
+    # shaft (x), not between the walls - so print tolerance does not jam it.
     (sv_x, sv_y, sv_z) = ROLL_SV
-    yi, yo = sv_y[1] + CRADLE_CLEAR, sv_y[1] + CRADLE_CLEAR + CRADLE_WALL
     cx = (sv_x[1] - CRADLE_DEPTH, sv_x[1])
-    for sgn in (-1, 1):
-        part += _box((cx, tuple(sorted((sgn * yi, sgn * yo))),
-                      (sv_z[0] - CRADLE_CLEAR, CRADLE_Z_TOP)))
+    cz = (sv_z[0] - CRADLE_CLEAR, CRADLE_Z_TOP)
+    for sgn, clear in ((+1, 0.0), (-1, CRADLE_CLEAR)):
+        yi = sv_y[1] + clear
+        yo = sv_y[1] + CRADLE_CLEAR + CRADLE_WALL
+        part += _box((cx, tuple(sorted((sgn * yi, sgn * yo))), cz))
     # Tie the ring back to the bearing carrier, clear of the coupler. Upper
     # only, for the same reason.
     # Ends at -46.5 with POST and YOKE_CROSS, not -45. Three separate boxes
@@ -413,8 +442,8 @@ def roll_bracket():
 
 def main(export=True):
     y, r = yoke(), roll_bracket()
-    gy = y.volume / 1000.0 * PETG_SOLID * INFILL
-    gr = r.volume / 1000.0 * PETG_SOLID * INFILL
+    gy = y.volume / 1000.0 * PRINT_DENSITY * INFILL
+    gr = r.volume / 1000.0 * PRINT_DENSITY * INFILL
     if export:
         OUT.mkdir(exist_ok=True)
         for name, solid in (("ankle_yoke", y), ("roll_bracket", r)):

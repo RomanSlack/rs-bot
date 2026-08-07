@@ -55,10 +55,10 @@ CABLE_CH_R = 3.0
 
 OUT = Path(__file__).parent / "out"
 
-PETG_SOLID = 1.270            # g/cm3
-# A print is not solid plastic. 4 perimeters and ~40% gyroid on a part this
-# size lands near 60% of solid. Measure a real print and correct this.
-INFILL = 0.60
+# PA6-CF, one source. A print is not solid plastic: 4 perimeters and ~40% gyroid
+# on a part this size lands near 60% of solid. Measure a real print and correct
+# INFILL in cad/material.py.
+from cad.material import DENSITY as PRINT_DENSITY, INFILL
 
 # --- geometry, straight from the sim -----------------------------------------
 SPINE_Y, SPY = 21.0, 6.0      # spine centre-line and half-thickness
@@ -114,10 +114,14 @@ BACK = ((0, 47), (PITCH_Y - PITCH_HALF, PITCH_Y + PITCH_HALF), (-114, -102))
 # a leg, off the part with the least mass left to give.
 #
 # WHAT IS STILL HERE AND WHY. The forward carrier - FARM, FPOST, CROSS, DROP,
-# BACK - reaches y = 136 because the deleted BELT forced the ankle-pitch bearing
-# out there, and it is still carrying that bearing. Bringing it inboard is not a
-# deletion, it MOVES THE ANKLE PITCH AXIS, which is a kinematics change and a
-# decision rather than a tidy-up. Flagged, not taken.
+# BACK - reaches y = 76 to hold the ankle-pitch bearing at PITCH_Y = 71, which
+# is where the envelope forces it (see the band note above: outboard 56..80 is
+# the only room, inboard collides with the wheel or pairs the two bearings 6 mm
+# apart). This is not a leftover awaiting a decision. The belt-era claim that it
+# "reaches y = 136 and moving it in is a kinematics decision" was stale from the
+# day the belt left on 2026-08-03: the bore came back on-axis and the carrier
+# came in with it. The number outlived the part in this comment and in two
+# status reports before anyone measured the built shin (15..76 mm).
 #
 # The diagonal relief further down stays too, and it is easy to misread now that
 # its comment mentions the standoff: it clears the WHEEL-DRIVE servo sweeping
@@ -290,7 +294,7 @@ def build():
 def main(export=True):
     p = build()
     solid_cm3 = p.volume / 1000.0
-    solid_g = solid_cm3 * PETG_SOLID
+    solid_g = solid_cm3 * PRINT_DENSITY
     printed_g = solid_g * INFILL
 
     if export:
@@ -302,7 +306,7 @@ def main(export=True):
     bb = p.bounding_box()
     print(f"bounding box   {bb.size.X:.1f} x {bb.size.Y:.1f} x {bb.size.Z:.1f} mm")
     print(f"solid volume   {solid_cm3:.2f} cm3")
-    print(f"solid PETG     {solid_g:.1f} g")
+    print(f"solid PA6-CF   {solid_g:.1f} g")
     print(f"printed @{INFILL:.0%}   {printed_g:.1f} g   <- use this")
     c = p.center()
     print(f"centroid       ({c.X:+.1f}, {c.Y:+.1f}, {c.Z:+.1f}) mm")

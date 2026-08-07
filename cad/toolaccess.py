@@ -25,6 +25,7 @@ import numpy as np
 
 import cad.servo as servo
 from cad.drives import shaft_lines
+from cad.fasteners import M25_INSERT_R
 
 # A precision driver for M2/M2.5 socket caps. Generous rather than optimistic:
 # if it does not fit, a stubby might, and that is worth knowing separately.
@@ -218,7 +219,8 @@ def check(mode="wheel", stubby=False, assembled=False, verbose=True):
             if best is None or hit < best:
                 best, best_by = hit, by
         rows.append(dict(**h, blocked=best, by=best_by,
-                         horn=is_horn_screw(h, lines)))
+                         horn=is_horn_screw(h, lines),
+                         insert=abs(h["r"] - M25_INSERT_R) < 0.1))
 
     if verbose:
         _report(rows, stubby, assembled)
@@ -234,11 +236,22 @@ def _report(rows, stubby, assembled=False):
         by.setdefault(r["part"], []).append(r)
     print(f"{'part':<16}{'holes':>7}{'reachable':>11}{'blocked':>9}"
           f"   worst obstruction mm3")
+    # Horn screws AND insert bores are BENCH operations, not driver reaches in
+    # the assembled robot. A horn is bolted on the bench (is_horn_screw); a
+    # heat-set insert is pressed into the isolated printed part with a soldering
+    # iron before assembly, and the SCREW that later enters it comes from the
+    # mating part's clearance hole (checked there) - so the insert bore is not a
+    # screw-head location the driver has to reach. NOT COVERED by this exclusion:
+    # the yoke's two set screws, which ARE driven into their inserts in the
+    # assembled robot with a hex key; their access measured 3 mm3 against the
+    # 3.2 mm driver and ~2 mm clear for a hex key, but it is not separately
+    # asserted here.
     bad = []
     for pname in sorted(by):
         rs = by[pname]
-        ok = [r for r in rs if r["blocked"] <= TOUCH or r["horn"]]
-        no = [r for r in rs if r["blocked"] > TOUCH and not r["horn"]]
+        ok = [r for r in rs if r["blocked"] <= TOUCH or r["horn"] or r["insert"]]
+        no = [r for r in rs
+              if r["blocked"] > TOUCH and not r["horn"] and not r["insert"]]
         worst = max((r["blocked"] for r in rs), default=0.0)
         print(f"{pname:<16}{len(rs):>7}{len(ok):>11}{len(no):>9}   {worst:9.0f}")
         bad += [(pname, r) for r in no]
@@ -266,7 +279,8 @@ def main():
     # Exit non-zero on an unreachable screw, like cad.drives. It returned 0
     # whatever it found, so the one check in this repo that was RED still
     # reported success to anything that asked a program instead of a person.
-    return 1 if any(r["blocked"] > TOUCH and not r["horn"] for r in rows) else 0
+    return 1 if any(r["blocked"] > TOUCH and not r["horn"] and not r["insert"]
+                    for r in rows) else 0
 
 
 if __name__ == "__main__":

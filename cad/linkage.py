@@ -138,9 +138,12 @@ FLAT_WHEEL_R = float(np.hypot(WHEEL_R, WHEEL_HALF_W))
 # --- sections ------------------------------------------------------------------
 #
 # The rods are in pure tension and compression (a two-force member cannot be
-# anything else), at 38.7 N. They are sized by buckling, not by stress, and by a
-# long way - 18x, see loads() - so 8 x 6 is the smallest section that still
-# prints with four perimeters and does not look like a wire.
+# anything else), at 34 N on the live factored ankle torque (0.95 N.m; it was
+# 38.7 N at the 1.08 the survey read before the robot dropped to PA6-CF). Sized
+# by buckling, not by stress, and by a long way: 20.7x from Euler in loads(),
+# against 2% of allowable at the eye once rod_stress() actually solves it. So
+# 8 x 6 is the smallest section that still prints with four perimeters and does
+# not look like a wire.
 PIN_REACH = 18.0              # pin: its own slice, across the gap, through
                               # the eye and 2 past. Sized on the widest gap
 
@@ -433,7 +436,9 @@ def loads(torque_nm=None, verbose=True):
 
     `torque_nm` defaults to the LIVE survey, which takes a couple of minutes.
     cad/belt.py's 1.68 N.m is a literal that has been in that file since before
-    cad/loads.py could produce the number; it is 1.08 today.
+    cad/loads.py could produce the number; the live survey reads 0.95 N.m now,
+    down from 1.08 when the robot was heavier. Pass a torque only to reproduce an
+    old number; the default is the one that cannot go stale.
     """
     if torque_nm is None:
         from cad.loads import design_pitch_torque
@@ -453,6 +458,53 @@ def loads(torque_nm=None, verbose=True):
         print(f"   Euler buckling, {ROD_T:.0f} x {ROD_W:.0f} mm, "
               f"{SHIN_L:.0f} mm  {p_cr:.0f} N   {p_cr/f:.1f}x")
     return f, p_cr
+
+
+def rod_stress(force=40.0, size=1.6, verbose=True):
+    """Peak von Mises at a rod's pin EYE under axial tension, from cad.fea.
+
+    A two-force member fails two ways. Compression is buckling, and loads()
+    above has it (Euler, 20x). Tension pulls on the eye, whose stress
+    concentration around the pin bore is the one number the net-section hand
+    calc cannot give and the reason cad.stress "never solved a linkage rod" sat
+    on the list. This is that solve: it is the only place cad.fea is pointed at
+    a rod, and it turns "sized by buckling, not stress" from a comment into a
+    result.
+
+    `force` defaults to a round 40 N, comfortably above the live factored 34 N,
+    so the test that calls it stays fast and conservative rather than paying for
+    the two-minute torque survey; the eye stress is linear in the force, so a
+    fixed load over-states it cleanly. Pass loads()[0] for the live number.
+
+    The bore load is spread over the whole ring rather than a cosine bearing
+    patch, so it under-states the true bearing peak by a small factor - but at
+    2% of allowable there is three orders of margin, and modelling pin contact
+    to sharpen a 1 MPa number would be answering a question nobody is asking.
+    """
+    from cad import fea
+    from cad.stress import near_axis, MATERIALS, knockdown
+    OUT.mkdir(exist_ok=True)
+    step = OUT / "lk_rod1_fea.step"
+    bd.export_step(rod1(), str(step))
+    nodes, elems = fea.mesh_step(str(step), size=size)
+    # Eyes at z = 0 and z = -THIGH_L, bores along y, radius PIN_D / 2.
+    fixed = near_axis(nodes, (0, 0, 0), (0, 1, 0), PIN_D / 2 + 0.5, half_len=ROD_W)
+    loaded = near_axis(nodes, (0, 0, -THIGH_L), (0, 1, 0), PIN_D / 2 + 0.5,
+                       half_len=ROD_W)
+    f = fea.distribute(nodes, loaded, np.array([0.0, 0.0, -force]), np.zeros(3))
+    _, s = fea.solve(nodes, elems, E_PA6CF, 0.38, fixed, [(loaded, f)])
+    _, peak, _ = fea.report(fea.von_mises(s), nodes, fixed)
+    # PA6-CF in-plane allowable, knocked for infill - from cad.stress, one source.
+    row = next(r for r in MATERIALS if r[0] == "PA6-CF")
+    allow = row[3] * knockdown("PA6-CF")
+    if verbose:
+        print("--- rod eye, tension")
+        print(f"   axial force              {force:.1f} N")
+        print(f"   mesh                     {len(nodes)} nodes at {size:.1f} mm")
+        print(f"   peak von Mises           {peak:.2f} MPa")
+        print(f"   PA6-CF allowable (x{knockdown('PA6-CF'):.1f})   {allow:.0f} MPa"
+              f"   {peak / allow * 100:.0f}%")
+    return peak, allow
 
 
 # --- the parts -----------------------------------------------------------------

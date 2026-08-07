@@ -98,7 +98,12 @@ SCHEDULE = [
      "the centre screw, from the manufacturer's drawing. Never drawn before."),
     ("rod 2 clamp -> its own nut", "M3 x 12", "M3 nut, captive", 2,
      "the length adjuster, cad/linkage.py. Slots, so no thread in plastic."),
-    ("chassis side plates -> top", "M2.5 x 10", "insert in chassis", 8, ""),
+    # DROPPED 2026-08-06: "chassis side plates -> top", M2.5 x 10, 8 inserts. The
+    # chassis is one fused 193 mm print (chassis.step, qty 1) and printability
+    # passes it whole - there is no separate top to bolt on, so the joint and its
+    # 8 inserts + 8 screws did not exist. inserts_seated was counting bores for
+    # it. If the chassis is ever split for printing, this entry comes back with
+    # bosses on the side-plate top edges to seat the inserts.
     ("Pi 5 -> chassis shelf", "M2.5 x 6", "insert in chassis", 4, ""),
 ]
 
@@ -259,6 +264,77 @@ def bom():
     return counts, inserts
 
 
+# Which printed part hosts each kind of insert, and how to build its solid. The
+# SCHEDULE names the host in the `into` column ("insert in chassis" / "in yoke").
+_INSERT_HOST = {"chassis": ("cad.chassis", "build"),
+                "yoke": ("cad.ankle", "yoke")}
+
+
+def inserts_seated(verbose=True):
+    """Every heat-set insert on the SCHEDULE has a bore to sit in. Returns
+    [(host, wanted, found)] for each part short of its insert bores; [] when the
+    geometry has caught up to the order.
+
+    bom() counts inserts off the schedule - it counts INTENT. This asks the
+    geometry the other question: is there a 3.5 mm bore for each? Nothing did
+    until 2026-08-06, and there was not one. `M25_INSERT_R` was defined and used
+    in no part, the chassis cut a 2.7 mm clearance hole where an insert wants
+    3.5, and 16 inserts on the BOM had nowhere to seat - which reads exactly like
+    a finished bolt list right up until assembly stops. The part-to-part joints
+    (chassis, Pi, ankle-pitch retention) are the ones with no thread otherwise.
+
+    An insert bore is blind, so it is matched by RADIUS, not by being a through
+    hole: part_hole_axes returns a full barrel for a blind bore too. 1.75 is a
+    clean 0.15 mm off the M3 clearance hole at 1.60, so the radius alone tells
+    them apart. Wall thickness round the bore is NOT checked yet - it cannot be
+    wrong while the count is zero, and it wants a real check when the bores go in.
+    """
+    import importlib
+
+    want = {}
+    for iface, screw, into, n, note in SCHEDULE:
+        if "insert" not in into:
+            continue
+        host = next((h for h in _INSERT_HOST if h in into), None)
+        if host is None:
+            raise RuntimeError(f"insert entry names no known host: {into!r}")
+        want[host] = want.get(host, 0) + n
+
+    out = []
+    for host, wanted in sorted(want.items()):
+        modname, fn = _INSERT_HOST[host]
+        solid = getattr(importlib.import_module(modname), fn)()
+        found = sum(1 for r, c, a in part_hole_axes(solid, rmax=2.0)
+                    if abs(r - M25_INSERT_R) < 0.1)
+        if found < wanted:
+            out.append((host, wanted, found))
+
+    if verbose:
+        if out:
+            print("  INSERT BORES MISSING - inserts on the BOM, no bore in the part:")
+            for host, wanted, found in out:
+                print(f"    {host:<10} {wanted} wanted, {found} in the geometry")
+        else:
+            print("  every scheduled insert has a bore")
+    return out
+
+
+def fastener_order():
+    """The COMPLETE order, aggregated the way order-sheet.md lists it: screws,
+    inserts and the captive nuts. bom() is the screw+insert half; the rod-clamp
+    nuts live in the `into` column, so they are added here to keep the order
+    sheet reconcilable against one source. Keys read like the sheet's rows:
+    'M3 x 8', 'M2.5 insert', 'M3 nut'."""
+    counts, inserts = bom()
+    order = dict(counts)
+    order["M2.5 insert"] = inserts
+    nuts = sum(n * (1 if "chassis" in i or "Pi" in i else 2)
+               for i, s, into, n, _ in SCHEDULE if "nut" in into)
+    if nuts:
+        order["M3 nut"] = nuts
+    return order
+
+
 # How finely to look, and how far. 0.1 deg either side of nothing is a servo
 # that is located; 4 deg is far past anything that could be called a fit.
 CAPTURE_STEP, CAPTURE_MAX = 0.1, 4.0
@@ -348,6 +424,8 @@ def main():
     for k in sorted(counts):
         print(f"   {counts[k]:>3} x {k}")
     print(f"   {inserts:>3} x M2.5 heat-set insert (3.5 mm bore, 4.0 deep)")
+    print()
+    inserts_seated()
     print()
     audit()
     print()

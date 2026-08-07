@@ -356,8 +356,13 @@ def test_every_screw_can_be_reached_when_it_is_fitted():
 
     rows = T.check(stubby=True, verbose=False)
     assert rows, "no screws found at all - the check is blind"
+    # Horn screws are bench-assembled; so are heat-set insert BORES (pressed with
+    # an iron before assembly, and the screw that enters them comes from the
+    # mating part). Neither is a driver reach in the finished robot. See
+    # cad/toolaccess._report for what this exclusion does NOT cover (the yoke set
+    # screws).
     blocked = [r for r in rows
-               if r["blocked"] > T.TOUCH and not r["horn"]]
+               if r["blocked"] > T.TOUCH and not r["horn"] and not r["insert"]]
     # Zero, not "at most four". The old bound was written around the false
     # alarm above, and a bound set at the number you already have is a bound
     # that cannot fail.

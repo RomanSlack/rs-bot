@@ -368,6 +368,64 @@ that 1.3 degrees IS this 0.4 mm, measured from the other end. Two checks
 describing one fault in units that do not obviously match is its own way of
 staying invisible.
 
+## 22. A valid solid is not a printable mesh
+
+A seating face was added to the chassis to stop a floating servo, drawn to meet
+the two cradle walls exactly at their starting edge. The solid was correct -
+`floating` seated the servo at 0.000, `assemble_check` found no interference,
+`fitcheck` was clean in both modes, `twin` weighed it to the milligram. Then
+`printability` reported **four open edges**, and it was right: the wall met each
+cradle wall along a single EDGE and no face, which is a valid B-rep and a
+non-manifold mesh. A print service's own checker rejects that before it quotes,
+which here costs a fortnight.
+
+Nothing lied. The geometric checks answer "is this solid well-formed and where
+it should be", and it was. Only `printability` reads the exported STL, so only
+`printability` asks "will this tessellate into a closed surface". A zero-width
+crack interferes with nothing, weighs nothing and stays connected, so it is
+invisible to every check that works on the solid rather than the mesh.
+
+Two things fall out of it. **A face added against existing structure has to
+overlap it or share a full face** - abut it along an edge and every geometric
+check stays green while the mesh comes apart. And it was caught only because the
+loop re-derives the state instead of trusting the last report: the run that
+introduced it never called `printability`, so the summary would have read green
+while `docs/order-sheet.md` pointed at an STL no service would take.
+
+> **Well-formed where the checks look is not the same as manufacturable.** The
+> mesh is a different artifact from the solid, and only one check sees it.
+
+## 23. A check that read a stale copy of the thing it checks
+
+The whole-leg FEA (`leg_assembly`) meshes `leg_assembly.step` off DISK, and
+nothing in the test suite regenerates it - only `cad.stress` main does. So for
+an unknown stretch it was solving an OLD fused leg while the parts underneath it
+moved, and passing. It looked like the most expensive check in the repo; it was
+grading a file. Putting a bore in the yoke and regenerating the STEP is what
+surfaced it, and the failure was not the bore.
+
+That is #3 again - a check validates its logic and forgets its input - one layer
+out: not a wrong number fed in, a wrong VERSION of the geometry, silently,
+because the input is a build artifact nobody re-made. The tell is that a
+geometry change nowhere near the leg's load path changed whether the leg solved
+at all.
+
+**And what the fresh geometry then exposed:** the mesher emitted ONE orphan node,
+referenced by no element, and a single node with zero stiffness leaves the whole
+stiffness matrix singular - the leg came back 34706 connected nodes plus 1, and
+the solve returned nan. The convergence GUARD (added after the inverted-element
+episode, #3) caught it correctly, but the fault it named - "the constraint set
+is too small" - was not the fault. A stray node is a mesh artifact, not a
+structural fact, so `cad/fea.solve` now pins orphan nodes; a genuinely
+disconnected CHUNK still trips the same guard, which is the disconnection that
+would actually matter.
+
+**The wrong fix got built first, and that is the lesson inside the lesson.** The
+bore was blamed, a whole "defeature the yoke for the global mesh" mechanism was
+written to route around it - and the defeatured leg failed identically. The
+thing you changed last is the loudest suspect and usually the wrong one; the
+control (does it still fail WITHOUT my change) is what pointed at the orphan.
+
 ## The shape of all of them
 
 Every entry here is the same mistake in different clothes: **something was
